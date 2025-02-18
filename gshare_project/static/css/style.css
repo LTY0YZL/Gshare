@@ -1,0 +1,10 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: sans-serif;
+    background-color: grey;
+    background-position: center;
+    backdrop-filter: blur;
+    border-bottom: 2px solid rgba(255, 255, 255, .2);
+}
