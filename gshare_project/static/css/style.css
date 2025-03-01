@@ -7,3 +7,12 @@
     background-position: center;
     backdrop-filter: blur;
 }
+
+    .logo {
+        max-width: 50px;
+        height: auto;
+    }
+    .navbar img {
+        max-width: 50px;
+        height: auto;
+    }

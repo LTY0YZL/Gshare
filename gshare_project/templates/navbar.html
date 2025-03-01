@@ -1,8 +1,12 @@
+{% load static %}
 <header class="header">
-    <a href="#" class="logo">Logo</a>
-
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <a href="/" class="logo"><img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo" sizes="(max-width: 50px) 50px, 100px"></a>
+    
     <nav class="navbar">
+        <a href="{% url 'menu' %}"><img src="threeLinesIcon" ></a>
         <a href="/">Home</a>
-        <a href="/aboutus">About</a>
+        <a href="{% url 'aboutus' %}">About Us</a>
+        <a href="{% url 'profile' %}"><img src="ProfileIcon"></a>
     </nav>
 </header>
