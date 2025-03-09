@@ -7,9 +7,43 @@
     <title>Home</title>
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
-<body>
-    {% include "navbar.html" %}
-    <h1>Home Page test.</h1>
+{% include "navbar.html" %}
+<body class="desgin">
+
+    <div class="G-Share Message">
+        <h1 class="title">
+            Grocery Delivery Done Right
+        </h1>
+
+        <h2 class="subtitle">
+           Community Based
+        </h2>
+
+
+    <!--If they are logged in but did not enter their address yet-->
+    <h4>Enter your address to find your neighborhood!</h4>
+    <form action="{% url 'home' %}" method="get">
+        <input type="text" name="address" placeholder="Enter your address">
+        <button type="submit">Search</button>
+    </form>
+
+    <!--If they are logged in and have entered their address-->
+    <h4>You can request to have your cart picked up, or accept someone else's cart!</h4>
     {% include "maps.html" %}
+
+
+    </div>
+
+    <div name="Contains list of stores, maybe make it scrollable">
+        <a href="walmart.html"> <img src="walmartLogo"> </a>
+        <a href="costco.html"> <img src="costcoLogo"> </a>
+        <a href="target.html"> <img src="targetLogo"> </a>
+    </div>
+
 </body>
+
+<footer>
+
+</footer>
+
 </html>

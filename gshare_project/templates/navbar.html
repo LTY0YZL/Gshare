@@ -5,8 +5,13 @@
     
     <nav class="navbar">
         <a href="{% url 'menu' %}"><img src="threeLinesIcon" ></a>
-        <a href="/">Home</a>
+        <a href="/">G-Share</a>
+
+        <a href="{% url 'shoppingcart' %}">My Cart</a>
+        <a href="{% url 'groups' %}">Groups</a>
+
         <a href="{% url 'aboutus' %}">About Us</a>
+
         <a href="{% url 'profile' %}"><img src="ProfileIcon"></a>
     </nav>
 </header>

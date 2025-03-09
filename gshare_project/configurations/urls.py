@@ -24,10 +24,12 @@ from core import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', views.homepage),
+    path('', views.home, name='home'),
     path('aboutus/', views.aboutus, name='aboutus'),
     path('profile/', views.userprofile, name='profile'),
     path('menu/', views.menu, name='menu'),
+    path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
+    path('groups/', views.groups, name='groups'),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
