@@ -7,43 +7,73 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <style>
+        .hidden{ display: none; }
+    </style>
 </head>
 {% include "navbar.html" %}
 <body class="desgin">
 
     <div class="input-container">
-        <h4>User Login</h4>
-        <form>
-        <div>
-            <div name="User Login">
+        <div id="login">
+            <h4>User Login</h4>
+            <form>
+            <div>
+                <div name="User Login">
+                    <img class="username" src="{% static 'media/user.png' %}" alt="User Icon">
+                    <input class="username" type="text" name="username">
+
+                    <img class="password" src="{% static 'media/lock.png' %}" alt="Password Icon">
+                    <input class="password" type="password" name="password" >
+                </div>
+                <div>
+                    <button>Sign Up</button>
+                    <p>Already have an account? <a href="#" onclick="togglefunc()">Login</a></p>                    <a href="{% url 'login' %}"><button type="submit">Forgot Password?</a>
+                </div>
+                <button type="submit">Login</button>
+            </div>
+            </form>
+
+            <div>
+                <h4>Or Login Using</h4>
+
+                <div name="User Login">
+
+                    <img class="facebook" src="{% static 'media/facebook.png' %}" alt="Facebook Icon">
+                    <h4>LOGIN WITH FACEBOOK</h4>
+
+                    <img class="google" src="{% static 'media/google.png' %}" alt="google Icon">
+                    <h4>LOGIN WITH GOOGLE</h4>
+
+                </div>
+            </div>
+        </div>
+
+        <div id="signup" class="hidden">
+            <div name="New user">
                 <img class="username" src="{% static 'media/user.png' %}" alt="User Icon">
                 <input class="username" type="text" name="username">
+
+                <img class="Email" src="{% static 'media/lock.png' %}" alt="Email Icon">
+                <input class="Email" type="Email" name="Email" >
 
                 <img class="password" src="{% static 'media/lock.png' %}" alt="Password Icon">
                 <input class="password" type="password" name="password" >
             </div>
             <div>
-                <a href="{% url 'login' %}"><button type="submit">Signup now</a>
+                <button onclick="togglefunc()">Sign up</button>
                 <a href="{% url 'login' %}"><button type="submit">Forgot Password?</a>
-            </div>
-            <button type="submit">Login</button>
-        </div>
-        </form>
-
-        <div>
-            <h4>Or Login Using</h4>
-
-            <div name="User Login">
-
-                <img class="facebook" src="{% static 'media/facebook.png' %}" alt="Facebook Icon">
-                <h4>LOGIN WITH FACEBOOK</h4>
-
-                <img class="google" src="{% static 'media/google.png' %}" alt="google Icon">
-                <h4>LOGIN WITH GOOGLE</h4>
-
             </div>
         </div>
     </div>
+
+    <script>
+        function togglefunc()
+        {
+            document.GetElementByID("login").classList.toggle("hidden");
+            document.GetElementByID("signup").classList.toggle("hidden");   
+        }
+    </script>
 </body>
 <footer>
 </footer>
