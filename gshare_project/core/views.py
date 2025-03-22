@@ -19,6 +19,9 @@ def shoppingcart(request):
 def groups(request):
     return render(request, "groups.html")
 
+def cart(request):
+    return render(request, "cart.html")
+
 def login(request):
     return render(request, "login.html")
 

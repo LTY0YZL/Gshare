@@ -30,6 +30,7 @@ urlpatterns = [
     path('menu/', views.menu, name='menu'),
     path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
     path('groups/', views.groups, name='groups'),
+    path('cart/', views.cart, name='cart'),
     path('login/', views.login, name='login'),
     path('signup/', views.signup, name='signup'),
 ]
