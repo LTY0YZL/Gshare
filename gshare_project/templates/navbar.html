@@ -1,22 +1,32 @@
 {% load static %}
-<header class="header">
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-    <a href="/" class="logo"><img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo" sizes="(max-width: 50px) 50px, 100px"></a>
+<link rel="stylesheet" href="{% static 'dist/tailwindcss.css' %}">
+<header class="header flex items-center space-x-4">
+    {% comment %} <link rel="stylesheet" href="{% static 'css/style.css' %}"> {% endcomment %}
+    <a href="/" class="logo"><img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo w-12 h-12 rounded-full"></a>
     
-    <nav class="navbar">
-        <a href="{% url 'menu' %}"><img src="threeLinesIcon" ></a>
-        <a href="/">G-Share</a>
+    <nav class="navbar flex-1 flex items-center justify-between space-x-4 md:ml-10">
+        {% comment %} <a href="{% url 'home' %}">Home</a> {% endcomment %}
+        <div class="flex items-center space-x-4">
+            <a href="{% url 'menu' %}"><img src="threeLinesIcon" ></a>
+            <a href="/">G-Share</a>
 
-        <a href="{% url 'shoppingcart' %}">My Cart</a>
-        <a href="{% url 'groups' %}">Groups</a>
+            <a href="{% url 'shoppingcart' %}">My Cart</a>
+            <a href="{% url 'groups' %}">Groups</a>
 
-        <a href="{% url 'aboutus' %}">About Us</a>
+            <a href="{% url 'aboutus' %}">About Us</a>
 
-        <a href="{% url 'cart' %}">Stores_cart</a>
+            <a href="{% url 'cart' %}">Stores_cart</a>
 
-        <a href="{% url 'login' %}">Log in</a>
+        </div>
 
-        <a href="{% url 'profile' %}"><img src="ProfileIcon"></a>
+        <div class="flex items-center space-x-4">
+
+            <a href="{% url 'login' %}">Log in</a>
+
+            <a href="{% url 'profile' %}">
+                <img src="ProfileIcon" class="w-12 h-12 rounded-full">
+            </a>
+        </div>
 
     </nav>
 </header>
