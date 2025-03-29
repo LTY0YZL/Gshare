@@ -6,25 +6,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'dist/tailwindcss.css' %}">
     <style>
         .hidden{ display: none; }
     </style>
 </head>
-{% include "navbar.html" %}
-<body class="desgin">
+<!-- {% include "navbar.html" %} -->
+{% include "navbar.html" with navbar_bg_color="#150931" %}
+<body class="bg-[#150931]">
 
-    <div class="input-container">
+    <div class="border-1 border-purple-200 rounded-lg shadow-lg p-6 m-4 bg-white justify-center items-center flex flex-col">
         <div id="login">
-            <h4>User Login</h4>
+            <h4 class="flex flex-col justify-center ">User Login</h4>
             <form>
             <div>
                 <div name="User Login">
-                    <img class="username" src="{% static 'media/user.png' %}" alt="User Icon">
-                    <input class="username" type="text" name="username">
+                    <div class="flex w-60 border-2 border-gray-300 rounded-lg mb-4">
+                        <img class="w-6 h-6 m-2" src="{% static 'media/user.png' %}" alt="User Icon">
+                        <input type="text" name="username" class="w-full focus:outline-none">
+                    </div>
 
-                    <img class="password" src="{% static 'media/lock.png' %}" alt="Password Icon">
-                    <input class="password" type="password" name="password" >
+                    <div class="flex w-60 border-2 border-gray-300 rounded-lg mb-4">
+                        <img class="w-6 h-6 m-2" src="{% static 'media/lock.png' %}" alt="Password Icon">
+                        <input type="password" name="password" class="w-full focus:outline-none">
+                    </div>
                 </div>
                 <div>
                     <button>Sign Up</button>
@@ -39,10 +44,10 @@
 
                 <div name="User Login">
 
-                    <img class="facebook" src="{% static 'media/facebook.png' %}" alt="Facebook Icon">
+                    <img class="w-8" src="{% static 'media/facebook.png' %}" alt="Facebook Icon">
                     <h4>LOGIN WITH FACEBOOK</h4>
 
-                    <img class="google" src="{% static 'media/google.png' %}" alt="google Icon">
+                    <img class="w-6" src="{% static 'media/google.png' %}" alt="google Icon">
                     <h4>LOGIN WITH GOOGLE</h4>
 
                 </div>

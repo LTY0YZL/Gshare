@@ -5,8 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "watch:css":"npx @tailwindcss/cli -i ./gshare_project/static/css/tailwindcss.css -o ./gshare_project/static/dist/tailwindcss.css --watch"
-
+    "watch:css": "npx @tailwindcss/cli -i ./gshare_project/static/css/tailwindcss.css -o ./gshare_project/static/dist/tailwindcss.css --watch"
   },
   "repository": {
     "type": "git",
