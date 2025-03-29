@@ -1,9 +1,10 @@
 {% load static %}
 <link rel="stylesheet" href="{% static 'dist/tailwindcss.css' %}">
-<header class=" {% if navbar_bg_color %}bg-[{{ navbar_bg_color }}] bg-white text-black navbar flex-1 flex items-center justify-between space-x-4 md:ml-10 {% else %}bg-[#150931] text-white navbar flex-1 flex items-center justify-between space-x-4 md:ml-10 {% endif %}">
-    {% comment %} <link rel="stylesheet" href="{% static 'css/style.css' %}"> {% endcomment %}
-    <nav>
-        <a href="/" class="logo"><img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo w-12 h-12 rounded-full"></a>
+<header class=" {% if navbar_bg_color %}bg-[{{ navbar_bg_color }}] bg-white text-black  {% else %}bg-[#150931] text-white  {% endif %}">
+    <nav class="nav flex-1 flex items-center justify-between space-x-4 md:ml-10" >
+        <a href="/">
+            <img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo w-12 h-12 rounded-full">
+        </a>
         {% comment %} <a href="{% url 'home' %}">Home</a> {% endcomment %}
         <div class="flex items-center space-x-4">
             <a href="{% url 'menu' %}"><img src="threeLinesIcon" ></a>
