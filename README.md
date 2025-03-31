@@ -66,7 +66,8 @@ Depending on what you are making, it can be a good idea to include screenshots o
 
 ## Installation
 
-###Database
+####Database
+
 To make a local server to make use this link http://bit.ly/2DB2T6D.
 
 Download MySQL_workshop to make or edit the tables to, by using this link https://dev.mysql.com/downloads/workbench/
