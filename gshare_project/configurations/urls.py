@@ -34,6 +34,7 @@ urlpatterns = [
     path('login/', views.login, name='login'),
     path('signup/', views.signup, name='signup'),
     path("__reload__/", include("django_browser_reload.urls")),
+    path("maps/", views.maps, name="maps"),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

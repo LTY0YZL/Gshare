@@ -1,0 +1,30 @@
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maps</title>
+    <link rel="stylesheet" href="{% static 'dist/tailwindcss.css' %}">
+    <style>
+    </style>
+</head>
+<body class="bg-[D8D8D8] h-screen style="background-color :#D8D8D8;">
+    
+    {% include "navbar.html" %}
+
+    <div class="h-full flex items-center justify-center">
+        <button id="openPopup" class=bg-[#150931] text-white flex justify-center items-center w-32 h-12 rounded-lg transition-transform duration-300">
+            Open Popup
+        </button>
+    </div>
+
+    <!-- pop up html --> 
+     <div id="popup" class="fixed top-0 right-0 h-full w-1/3 bg-white shadow-lg h-full transform translate-x-full transition-transform duration-300">
+        <div class="flex justify-between items-center border-b">
+            <button class="bg-[#EBE5FA] w-1/2 h-full text-lg font-bold hover:bg-[#B299EA]">Shopping Cart</button>
+            <button id="closepopup" class="text-gray-300 hover:text-gray-700">&times;</button>
+        </div>
+     </div>
+
+
+</body>
