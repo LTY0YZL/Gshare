@@ -1,26 +1,30 @@
 {% load static %}
 <link rel="stylesheet" href="{% static 'dist/tailwindcss.css' %}">
 <header class=" {% if navbar_bg_color %}bg-[{{ navbar_bg_color }}] bg-white text-black  {% else %}bg-[#150931] text-white  {% endif %}">
-    <nav class="nav flex-1 flex items-center justify-between space-x-4 md:ml-10" >
-        <a href="/">
-            <img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo w-12 h-12 rounded-full">
-        </a>
-        {% comment %} <a href="{% url 'home' %}">Home</a> {% endcomment %}
-        <div class="flex items-center space-x-4">
-            <a href="{% url 'menu' %}"><img src="threeLinesIcon" ></a>
-            <a href="/">G-Share</a>
+    <nav class="nav flex-1 flex items-center justify-between space-x-4 " >
+        <div class="flex items-center xpace-x-6">
+            <a href="{% url 'menu' %}"><img src="threeLinesIcon" class="md:ml-2" ></a>
 
-            <a href="{% url 'shoppingcart' %}">My Cart</a>
-
-            <a href="{% url 'cart' %}">Stores_items</a>
-
-            <a href="{% url 'maps' %}">Maps</a>
-
-            <a href="{% url 'groups' %}">Groups</a>
-
-            <a href="{% url 'aboutus' %}">About Us</a>
-
+            <a href="/">
+                <img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo w-12 h-12 rounded-full md:ml-6">
+            </a>
+            {% comment %} <a href="{% url 'home' %}">Home</a> {% endcomment %}
+            <div class="flex items-center space-x-4 md:ml-10">
+                <a href="/">G-Share</a>
+    
+                <a href="{% url 'shoppingcart' %}">My Cart</a>
+    
+                <a href="{% url 'cart' %}">Stores_items</a>
+    
+                <a href="{% url 'maps' %}">Maps</a>
+    
+                <a href="{% url 'groups' %}">Groups</a>
+    
+                <a href="{% url 'aboutus' %}">About Us</a>
+    
+            </div>
         </div>
+        
 
         <div class="flex items-center space-x-4">
 

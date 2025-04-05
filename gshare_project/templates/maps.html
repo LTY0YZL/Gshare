@@ -13,18 +13,78 @@
     {% include "navbar.html" %}
 
     <div class="h-full flex items-center justify-center">
-        <button id="openPopup" class=bg-[#150931] text-white flex justify-center items-center w-32 h-12 rounded-lg transform translate-x-full transition-transform duration-300">
+        <button id="openPopup" class="bg-[#150931] text-white flex justify-center items-center w-32 h-32 rounded-lg transform translate-x-full transition-transform duration-300">
             Open Popup
         </button>
     </div>
 
     <!-- pop up html --> 
-     <div id="popup" class="fixed top-0 right-0 h-full w-1/3 bg-white shadow-lg h-full transform translate-x-full transition-transform duration-300">
+     <div id="popup" class="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg h-full transform translate-x-full transition-transform duration-300">
         <div class="flex justify-between items-center border-b">
-            <button class="bg-[#EBE5FA] w-1/2 h-full text-lg font-bold hover:bg-[#B299EA]">Shopping Cart</button>
-            <button id="closepopup" class="text-gray-300 hover:text-gray-700">&times;</button>
+            <button id="closePopup" class="text-gray-500 hover:text-gray-700 ml-auto">&times;</button>
         </div>
+
+        <div class="flex items-center justify-center border-b-gray">
+            <button id="shop" class="bg-[#EBE5FA] w-1/2 h-1/14 text-lg font-bold">Shopping Cart</button>
+            <button id="person" class="bg-white w-1/2 h-1/14 text-lg font-bold hover:bg-[#B299EA]">People</button>
+        </div>
+
+        <div id="shoppingcart">
+            <h1 class="text-5xl font-bold">I am inside the shopping cart information area</h1>
+            <p> blah blah blah, I am just trying to fill the space to test what it looks like when it is using the entire space
+                fdsklafjdkslafjdsklfjkdslfjlks djfksjfkdsjkflsaj sfk r732 32759837n58q27 
+            </p>
+        </div>
+
+        <div id="people" class="hidden">
+            <h2>I am inside the people button information</h2>
+        </div>
+
+
      </div>
 
+     <script>
+        const openPopup = document.getElementById('openPopup');
+        const closePopup = document.getElementById('closePopup');
+        const shop = document.getElementById('shop');
+        const person = document.getElementById('person');
+
+        openPopup.addEventListener('click', () => {
+            popup.classList.remove('translate-x-full');
+            openPopup.classList.add('-translate-x-10');
+        });
+
+        closePopup.addEventListener('click', () => {
+            popup.classList.add('translate-x-full');
+            openPopup.classList.remove('-translate-x-10');
+        });
+
+        shop.addEventListener('click', () => {
+            console.log('person clicked');
+            shop.classList.add('bg-[#EBE5FA]');
+            person.classList.remove('bg-[#EBE5FA]');
+            shop.classList.remove('bg-white');
+            person.classList.add('bg-white');
+            shoppingcart.classList.remove('hidden');
+            people.classList.add('hidden');
+            shop.classList.remove('hover:bg-[#B299EA]');
+            person.classList.add('hover:bg-[#B299EA]');
+
+        });
+
+        person.addEventListener('click', () => {
+            console.log('person clicked');
+            person.classList.add('bg-[#EBE5FA]');
+            shop.classList.remove('bg-[#EBE5FA]');
+            person.classList.remove('bg-white');
+            shop.classList.add('bg-white');
+            shoppingcart.classList.add('hidden');
+            people.classList.remove('hidden');
+            person.classList.remove('hover:bg-[#B299EA]');
+            shop.classList.add('hover:bg-[#B299EA]');
+
+        });
+
+     </script>
 
 </body>
