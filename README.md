@@ -72,6 +72,8 @@ To make a local server to make use this link http://bit.ly/2DB2T6D.
 
 Download MySQL_workshop to make or edit the tables to, by using this link https://dev.mysql.com/downloads/workbench/
 
+To connect to the remote server connect to host"aws-g-sharedb.c5a6u4omwgaa.us-east-2.rds.amazonaws.com"
+
 Instructions (need to be deleted after udating the README)
 Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
 
