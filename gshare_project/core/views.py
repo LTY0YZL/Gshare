@@ -27,3 +27,6 @@ def login(request):
 
 def signup(request):
     return render(request, "signup.html")
+
+def maps(request):
+    return render(request, "maps.html")
