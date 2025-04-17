@@ -34,4 +34,8 @@ def signup(request):
     return render(request, "signup.html")
 
 def maps(request):
-    return render(request, "maps.html")
+    context = {
+        'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
+        'location':{'lat': 40.7607, 'lng': -111.8939},
+    }
+    return render(request, "maps.html", context)
