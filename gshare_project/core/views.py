@@ -1,12 +1,19 @@
+<<<<<<< gshare_project/core/views.py
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from django.conf import settings
 
 # Create your views here.
 def home(request):
-    return render(request, 'home.html')
+    context = {
+        'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
+        'location':{'lat': 40.7607, 'lng': -111.8939},
+    }
+    return render(request, 'home.html', context)
 
 def aboutus(request):
     return render(request, "aboutus.html")
@@ -70,4 +77,8 @@ def logout_view(request):
 
 @login_required
 def maps(request):
-    return render(request, "maps.html")
+    context = {
+        'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
+        'location':{'lat': 40.7607, 'lng': -111.8939},
+    }
+    return render(request, "maps.html", context)
