@@ -10,26 +10,39 @@
 {% include "navbar.html" %}
 <body class="desgin">
 
-    <div class="G-Share Message">
-        <h1 class="title">
+    <div class="flex flex-col items-center mb-16">
+        <h1 class="mb-4 text-4xl font-bold text-center">
             Grocery Delivery Done Right
         </h1>
 
-        <h2 class="subtitle">
-           Community Based
+        <h2 class="mb-4 text-2xl font-semibold text-center">
+            Find your local grocery store and get your groceries delivered to you by a neighbor.
+        </h2>
+        <h2 class="mb-4 text-2xl font-semibold text-center">
+            Community Based.
         </h2>
 
 
     <!--If they are logged in but did not enter their address yet-->
-    <h4>Enter your address to find your neighborhood!</h4>
-    <form action="{% url 'home' %}" method="get">
-        <input type="text" name="address" placeholder="Enter your address">
-        <button type="submit">Search</button>
-    </form>
+    <div class="flex flex-col items-center mb-12">
+        <h4 class="mb-4">
+            Enter your address to find your neighborhood!
+        </h4>
+        <form onsubmit="geocodeAddress(); return false;">
+            <input id="input_location" class="border border-gray-300 rounded-lg shadow-lg"type="text" name="address" placeholder="Enter your address">
+            <button type="submit" class="border border-gray-300 rounded-lg shadow-lg">Search</button>
+        </form>
+    </div class="mb-12">
+    <div class="flex justify-center items-center w-full">
+        <div id='map' class="w-2/5 h-96 mt-4 border border-gray-300 rounded-lg shadow-lg">
+
+        </div>
+    </div>
 
     <!--If they are logged in and have entered their address-->
-    <h4>You can request to have your cart picked up, or accept someone else's cart!</h4>
-    {% comment %} {% include "maps.html" %} {% endcomment %}
+    <h4 class="mt-8">
+        You can request to have your cart picked up, or accept someone else's cart!
+    </h4>
 
 
     </div>
@@ -40,6 +53,40 @@
         <a href="target.html"> <img src="targetLogo"> </a>
     </div>
 
+    <script>
+        {% comment %} let map;
+        let geocoder;
+
+        function initMap() {
+            // Create a map centered at a specific location
+            const location = { lat: {{location.lat}}, lng: {{location.lng}} };
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: location,
+                zoom: 10
+            });
+            geocoder = new google.maps.Geocoder();
+        }
+
+        function geocodeAddress() {
+            const address = document.getElementById('input_location').value;
+            geocoder.geocode({ 'address': address }, (results, status) => {
+                if (status === 'OK') {
+                    const location = results[0].geometry.location;
+                    map.setCenter(location);
+                    document.getElementById('input_location').value = '';
+
+
+                } else {
+                    alert('Geocode was not successful for the following reason: ' + status);
+                }
+            });
+        } {% endcomment %}
+    </script>
+
+    {% comment %} <script async defer 
+        src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap">
+
+    </script> {% endcomment %}
 </body>
 
 <footer>
