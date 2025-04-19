@@ -27,8 +27,11 @@
         
 
         <div class="flex items-center space-x-4">
-
-            <a href="{% url 'login' %}">Log in</a>
+            {% if user.is_authenticated %}
+                <a href="{% url 'logout' %}">Log out</a>
+            {% else %}
+                <a href="{% url 'login' %}">Log in</a>
+            {% endif %}
 
             <a href="{% url 'profile' %}">
                 <img src="ProfileIcon" class="w-12 h-12 rounded-full">

@@ -19,8 +19,6 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from core import views
-# from . import views
-# from core import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -31,8 +29,9 @@ urlpatterns = [
     path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
     path('groups/', views.groups, name='groups'),
     path('cart/', views.cart, name='cart'),
-    path('login/', views.login, name='login'),
-    path('signup/', views.signup, name='signup'),
+    path('login/', views.login_view, name='login'),
+    path('signup/', views.signup_view, name='signup'),
+    path('logout/', views.logout_view, name='logout'),
     path("__reload__/", include("django_browser_reload.urls")),
     path("maps/", views.maps, name="maps"),
 ]
