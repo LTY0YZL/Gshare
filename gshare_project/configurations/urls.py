@@ -36,6 +36,7 @@ urlpatterns = [
     path('cart/', views.cart, name='shoppingcart'),
     path('cart/add/<int:item_id>/', views.add_to_cart, name='add_to_cart'),
     path('checkout/', views.checkout, name='checkout'),
+    path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
     path("__reload__/", include("django_browser_reload.urls")),
 ]
 

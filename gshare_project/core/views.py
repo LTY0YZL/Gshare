@@ -214,3 +214,7 @@ def maps(request):
         # 'delivery_persons': delivery_people,
         'custom_user': get_custom_user(request),
     })
+    
+@login_required
+def shoppingcart(request):
+    return render(request, "shoppingcart.html")
