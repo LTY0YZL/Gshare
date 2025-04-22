@@ -14,7 +14,7 @@ from django.conf import settings
 from core.models import Items, Stores
 from django.db.models import Q
 
-from .models import (
+from core.models import (
     Users as ProfileUser,
     Stores, Items,
     Orders, OrderItems,
@@ -60,7 +60,7 @@ def signup_view(request):
             messages.error(request, "Username taken")
             return redirect('signup')
         user = AuthUser.objects.create_user(username=u, email=e, password=p)
-        ProfileUser.objects.create(name=u, email=e, user_type='customer')
+        ProfileUser.objects.create(name=u, email=e)
         auth_login(request, user)
         return redirect('home')
     return render(request, 'signup.html')
@@ -87,11 +87,8 @@ def menu(request):
 
 @login_required
 def groups(request):
-    delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
-    return render(request, "groups.html", {
-        'delivery_persons': delivery_people,
-        'custom_user': get_custom_user(request),
-    })
+    # delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
+    return render(request, "groups.html")
 
 @login_required
 def browse_items(request):
@@ -201,11 +198,10 @@ def checkout(request):
 @login_required
 def maps(request):
     stores = Stores.objects.all()
-    delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
+    #delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
     return render(request, "maps.html", {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
         'location': {'lat': 40.7607, 'lng': -111.8939},
         'stores_for_map': stores,
-        'delivery_persons': delivery_people,
-        'custom_user': get_custom_user(request),
+
     })
