@@ -1,178 +1,79 @@
 from django.db import models
 
-class User(models.Model):
+class Users(models.Model):
+    id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
-    email = models.EmailField(max_length=100, unique=True)
-    phone = models.CharField(max_length=20, blank=True, null=True)
-    address = models.CharField(max_length=255, blank=True, null=True)
-    user_type = models.CharField(
-        max_length=10,
-        choices=[
-            ('customer', 'Customer'),
-            ('delivery', 'Delivery'),
-            ('both', 'Both'),
-        ]
-    )
+    email = models.CharField(unique=True, max_length=100, null=True, blank=True)
+    phone = models.CharField(max_length=20, null=True, blank=True)
+    address = models.CharField(max_length=255)
 
     class Meta:
-        managed = True
+        managed = False
         db_table = 'users'
 
-    def __str__(self):
-        return self.name
-
-
-class Store(models.Model):
-    name     = models.CharField(max_length=100)
-    location = models.CharField(max_length=255, blank=True, null=True)
+class Stores(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100)
+    location = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
-        managed = True
+        managed = False
         db_table = 'stores'
 
-    def __str__(self):
-        return self.name
-
-
-class Item(models.Model):
-    store = models.ForeignKey(
-        Store,
-        on_delete=models.CASCADE,
-        related_name='items'
-    )
-    name  = models.CharField(max_length=100)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    stock = models.IntegerField()
+class Items(models.Model):
+    id = models.AutoField(primary_key=True)
+    store = models.ForeignKey('Stores', on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    stock = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        managed = True
+        managed = False
         db_table = 'items'
 
-    def __str__(self):
-        return f"{self.name} ({self.store.name})"
-
-
-class Order(models.Model):
-    user = models.ForeignKey(
-                User,
-                on_delete=models.SET_NULL,
-                null=True,
-                blank=True,
-                related_name='orders_placed'
-            )
-    store = models.ForeignKey(
-                Store,
-                on_delete=models.SET_NULL,
-                null=True,
-                blank=True,
-                related_name='orders_at_store'
-            )
-    order_date = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(
-                max_length=50,
-                choices=[
-                    ('cart', 'In Cart'),
-                    ('pending', 'Pending Pickup'),
-                    ('delivering', 'Out for Delivery'),
-                    ('completed', 'Completed'),
-                    ('cancelled', 'Cancelled'),
-                    ],
-                    default='cart',
-                )
-    total_amount = models.DecimalField(
-                        max_digits=10,
-                        decimal_places=2,
-                        blank=True,
-                        null=True
-                    )
-    delivery_address = models.CharField(max_length=255, blank=True, null=True)
+class Orders(models.Model):
+    id = models.AutoField(primary_key=True)
+    user = models.ForeignKey('Users', on_delete=models.DO_NOTHING)
+    store = models.ForeignKey('Stores', on_delete=models.DO_NOTHING)
+    order_date = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=50, null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    delivery_address = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
-        managed = True
+        managed = False
         db_table = 'orders'
-        ordering = ['-order_date']
 
-    def __str__(self):
-        uname = self.user.name if self.user else "Unknown"
-        return f"Order {self.id} by {uname}"
-
-
-class OrderItem(models.Model):
-    order = models.ForeignKey(
-                Order,
-                on_delete=models.CASCADE,
-                related_name='order_items'
-            )
-    item = models.ForeignKey(
-                Item,
-                on_delete=models.PROTECT,
-                related_name='item_order_entries'
-            )
-    quantity = models.PositiveIntegerField(default=1)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+class Feedback(models.Model):
+    reviewee = models.ForeignKey('Users', on_delete=models.CASCADE, null=True, blank=True)
+    reviewer = models.ForeignKey('Users', on_delete=models.CASCADE, related_name='feedback_reviewer_set', null=True, blank=True)
+    feedback = models.CharField(max_length=255, null=True, blank=True)
+    order = models.OneToOneField('Orders', on_delete=models.CASCADE, primary_key=True)
 
     class Meta:
-        managed = True
+        managed = False
+        db_table = 'FEEDBACK'
+        unique_together = (('reviewee', 'reviewer'),)
+
+class OrderItems(models.Model):
+    order = models.ForeignKey('Orders', on_delete=models.CASCADE)
+    item = models.ForeignKey('Items', on_delete=models.CASCADE)
+    quantity = models.IntegerField(null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        managed = False
         db_table = 'order_items'
         unique_together = (('order', 'item'),)
 
-    def __str__(self):
-        return f"{self.quantity} x {self.item.name} (Order {self.order.id})"
-
-
-class Delivery(models.Model):
-    order = models.OneToOneField(
-                Order,
-                on_delete=models.CASCADE,
-                related_name='delivery'
-            )
-    delivery_person = models.ForeignKey(
-                        User,
-                        on_delete=models.SET_NULL,
-                        null=True,
-                        blank=True,
-                        limit_choices_to={'user_type__in': ['delivery', 'both']},
-                        related_name='deliveries_assigned'
-                    )
-    status = models.CharField(max_length=50, blank=True, null=True)
-    pickup_time = models.DateTimeField(blank=True, null=True)
-    delivery_time = models.DateTimeField(blank=True, null=True)
+class Deliveries(models.Model):
+    id = models.AutoField(primary_key=True)
+    order = models.ForeignKey('Orders', on_delete=models.CASCADE)
+    delivery_person = models.ForeignKey('Users', on_delete=models.CASCADE, null=True, blank=True)
+    status = models.CharField(max_length=50, null=True, blank=True)
+    pickup_time = models.DateTimeField(null=True, blank=True)
+    delivery_time = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        managed = True
+        managed = False
         db_table = 'deliveries'
-
-    def __str__(self):
-        return f"Delivery for Order {self.order.id}"
-
-
-class Feedback(models.Model):
-    order = models.OneToOneField(
-                Order,
-                on_delete=models.CASCADE,
-                primary_key=True,
-                related_name='feedback'
-            )
-    reviewee = models.ForeignKey(
-                User,
-                on_delete=models.CASCADE,
-                related_name='feedback_received'
-            )
-    reviewer = models.ForeignKey(
-                User,
-                on_delete=models.CASCADE,
-                related_name='feedback_given'
-            )
-    feedback = models.TextField()
-    rating = models.PositiveSmallIntegerField(
-                choices=[(i, str(i)) for i in range(1, 6)],
-                blank=True,
-                null=True
-            )
-
-    class Meta:
-        managed = True
-        db_table = 'feedback'
-
-    def __str__(self):
-        return f"Feedback for Order {self.order.id} by {self.reviewer.name}"

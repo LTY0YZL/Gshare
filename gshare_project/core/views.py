@@ -15,10 +15,10 @@ from core.models import Items, Stores
 from django.db.models import Q
 
 from .models import (
-    User as ProfileUser,
-    Store, Item,
-    Order, OrderItem,
-    Delivery, Feedback
+    Users as ProfileUser,
+    Stores, Items,
+    Orders, OrderItems,
+    Deliveries, Feedback
 )
 
 def get_custom_user(request):
@@ -30,7 +30,7 @@ def get_custom_user(request):
         return None
 
 def home(request):
-    stores = Store.objects.all().order_by('name')
+    stores = Stores.objects.all().order_by('name')
     return render(request, 'home.html', {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
         'location': {'lat': 40.7607, 'lng': -111.8939},
@@ -95,7 +95,7 @@ def groups(request):
 
 @login_required
 def browse_items(request):
-    items = Item.objects.select_related('store').all()
+    items = Items.objects.select_related('store').all()
     q = request.GET.get('search','').strip()
     if q:
         items = items.filter(name__icontains=q)
@@ -108,7 +108,7 @@ def browse_items(request):
     store_id = request.GET.get('store')
     if store_id and store_id.isdigit():
         items = items.filter(store_id=int(store_id))
-    stores = Store.objects.all()
+    stores = Stores.objects.all()
     return render(request, "cart.html", {
         'items': items.order_by('store_name','name'),
         'all_stores': stores,
@@ -118,8 +118,8 @@ def browse_items(request):
 @login_required
 def add_to_cart(request, item_id):
     profile = get_custom_user(request)
-    item = get_object_or_404(Item, pk=item_id)
-    order, _ = Order.objects.get_or_create(
+    item = get_object_or_404(Items, pk=item_id)
+    order, _ = Orders.objects.get_or_create(
         user=profile,
         status='cart',
         defaults={
@@ -127,7 +127,7 @@ def add_to_cart(request, item_id):
             'store': item.store
         }
     )
-    oi, created = OrderItem.objects.get_or_create(
+    oi, created = OrderItems.objects.get_or_create(
         order=order,
         item=item,
         defaults={'quantity':1, 'price':item.price}
@@ -181,7 +181,7 @@ def cart(request):
 @login_required
 def checkout(request):
     profile = get_custom_user(request)
-    order = get_object_or_404(Order, user=profile, status='cart')
+    order = get_object_or_404(Orders, user=profile, status='cart')
     if request.method == 'POST':
         addr = request.POST.get('delivery_address','').strip()
         order.delivery_address = addr
@@ -189,7 +189,7 @@ def checkout(request):
         total = sum(oi.quantity * oi.price for oi in order.order_items.all())
         order.total_amount = total
         order.save()
-        Delivery.objects.create(order=order, status='pending')
+        Deliveries.objects.create(order=order, status='pending')
         messages.success(request, "Order placed successfully!")
         return redirect('userprofile')
     return render(request, "checkout.html", {
@@ -200,7 +200,7 @@ def checkout(request):
 
 @login_required
 def maps(request):
-    stores = Store.objects.all()
+    stores = Stores.objects.all()
     delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
     return render(request, "maps.html", {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
