@@ -18,24 +18,26 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from core import views
+from core import views 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.home, name='home'),
-    path('aboutus/', views.aboutus, name='aboutus'),
+    path('about/', views.aboutus, name='aboutus'),
     path('profile/', views.userprofile, name='profile'),
     path('menu/', views.menu, name='menu'),
-    path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
     path('groups/', views.groups, name='groups'),
-    path('cart/', views.cart, name='cart'),
+    path('maps/', views.maps, name="maps"),
     path('login/', views.login_view, name='login'),
-    path('signup/', views.signup_view, name='signup'),
+    path('signup/', views.signup_view, name='signup'), 
     path('logout/', views.logout_view, name='logout'),
+    path('browse/', views.browse_items, name='browse_items'),
+    path('cart/', views.cart, name='cart'),
+    path('cart/', views.cart, name='shoppingcart'),
+    path('cart/add/<int:item_id>/', views.add_to_cart, name='add_to_cart'),
+    path('checkout/', views.checkout, name='checkout'),
     path("__reload__/", include("django_browser_reload.urls")),
-    path("maps/", views.maps, name="maps"),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0])
