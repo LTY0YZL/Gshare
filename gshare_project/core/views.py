@@ -1,6 +1,7 @@
 from decimal import Decimal, InvalidOperation
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
+from django.core.paginator import Paginator
 
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
@@ -158,9 +159,16 @@ def cart(request):
 
     if search_query:
         items = items.filter(name__icontains=search_query)
+        
+    paginator = Paginator(items, 10)  # Show 10 items per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
     context = {
-        'items': items
+        'page_obj': page_obj,
+        'store_filter': store_filter,
+        'price_filter': price_filter,
+        'search_query': search_query,
     }
     
     return render(request, "cart.html", context)
@@ -201,11 +209,11 @@ def checkout(request):
 @login_required
 def maps(request):
     stores = Stores.objects.all()
-    delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
+    # delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
     return render(request, "maps.html", {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
         'location': {'lat': 40.7607, 'lng': -111.8939},
         'stores_for_map': stores,
-        'delivery_persons': delivery_people,
+        # 'delivery_persons': delivery_people,
         'custom_user': get_custom_user(request),
     })

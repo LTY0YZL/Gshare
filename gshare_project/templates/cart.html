@@ -5,60 +5,98 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stores_cart</title>
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    {% comment %} <link rel="stylesheet" href="{% static 'css/style.css' %}"> {% endcomment %}
 </head>
 {% include "navbar.html" %}
 <body class="Stores_desgin">
 
-    <form action="{% url 'cart' %}" method="get">
-        <p>Price Range</p>
-        <div name="PriceButtons">
-            <input type="radio" id="Any" name="Price-Range" value="Any" checked>
-            <label for="Any">Any</label>
-    
-            <input type="radio" id="0-10" name="Price-Range" value="0-10">
-            <label for="0-10">0-$10</label>
-    
-            <input type="radio" id="10-25" name="Price-Range" value="10-25">
-            <label for="10-25">$10-$25</label>
-    
-            <input type="radio" id="25-50" name="Price-Range" value="25-50">
-            <label for="25-50">$25-$50</label>
-    
-            <input type="radio" id="50-100" name="Price-Range" value="50-100">
-            <label for="50-100">$50-$100</label>
-    
-            <input type="radio" id="100+" name="Price-Range" value="100+">
-            <label for="100+">100+</label>
-        </div>
-    
-        <p>Stores</p>
-        <div name="StoresButtons">
-            <input type="radio" id="Walmart" name="Stores" value="Walmart">
-            <label for="Walmart">Walmart</label>
-            <input type="radio" id="Target" name="Stores" value="Target">
-            <label for="Target">Target</label>
-            <input type="radio" id="Costco" name="Stores" value="Costco">
-            <label for="Costco">Costco</label>
-            <input type="radio" id="All" name="Stores" value="All" checked>
-            <label for="All">All</label>
-        </div>
-    
-        <input type="text" name="Item_Search_Bar" placeholder="Search for an item">
-        <button type="submit">Search</button>
-    </form>
+    <div class="container py-8">
+        <div class="flex justify-center mt-2">
+            <form action="{% url 'cart' %}" method="get" class="mb-6 border border-gray-300 p-4 rounded-lg bg-white shadow-md w-1/2 flex flex-row gap-8 items-start ml-16">
+                <div class="flex flex0-col items-start">
+                    <p class="font-bold mb-2">Price Range</p>
+                    <div name="PriceButtons flex flex-wrap gap-4 mb-4">
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="Any" name="Price-Range" value="Any" checked class="mr-2">
+                            Any
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="0-10" name="Price-Range" value="0-10" class="mr-2">
+                            0-$10
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="10-25" name="Price-Range" value="10-25" class="mr-2">
+                            $10-$25
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="25-50" name="Price-Range" value="25-50" class="mr-2">
+                            $25-$50
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="50-100" name="Price-Range" value="50-100" class="mr-2">
+                            $50-$100
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="100+" name="Price-Range" value="100+" class="mr-2">
+                            $100+
+                        </label>
+                    </div>
+                </div>
+            
+                <div class="flex flex-cols items-start">
+                    <p class = "font-bold mb-2">Stores</p>
+                    <div name="StoresButtons" class="flex flex-col gap-2 mb-4">
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="Walmart" name="Stores" value="Walmart" class="mr-2">
+                            Walmart
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="Target" name="Stores" value="Target" class="mr-2">
+                            Target
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="Costco" name="Stores" value="Costco" class="mr-2">
+                            Costco
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="All" name="Stores" value="All" checked class="mr-2">
+                            All
+                        </label>
+                    </div>
+                </div>
+            
+                <div class="flex items-center gap-4 mb-6">
+                    <input type="text" name="Item_Search_Bar" placeholder="Search for an item" class="border border-gray-300 rounded-lg px-4 py-2 mb-4 w-full">
+                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">Search</button>
 
-    <div name="Items_list">
-        {% for item in items %}
-            <div>
-                <h3>{{ item.name }}</h3>
-                <p>Price: ${{ item.price }}</p>
-                <p>Store: {{ item.store.name }}</p>
-                <p>Stock: {{ item.stock }}</p>
-            </div>
-        {% empty %}
-            <p>No items match your criteria.</p>
-        {% endfor %}
+                </div>
+            </form>
+        </div>
+
+        {% comment %} <div name="Items_list" class="grid grid-cols-1 md:grud-cols-2 lg:grid-cols-3 gap-6">
+            {% for item in page_obj %}
+                <div class="border border-gray-300 rounded-lg p-4 shadow-md">
+                    <h3 class="text-lg font-bold mb-2">{{ item.name }}</h3>
+                    <p class="text-gray-700">Price: ${{ item.price }}</p>
+                    <p class="text-gray-700">Store: {{ item.store.name }}</p>
+                    <p class="text-gray-700">Stock: {{ item.stock }}</p>
+                </div>
+            {% empty %}
+                <p class="col-span-full text-center text-gray-500">No items match your criteria.</p>
+            {% endfor %}
+        </div> {% endcomment %}
+        <div name="Items_list" class="grid gap-4 mt-8">
+            {% for item in page_obj %}
+                <div class="grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center">
+                    <div class="text-lg font-bold">{{ item.name }}</div>
+                    <div class="text-gray-700">Price: ${{ item.price }}</div>
+                    <div class="text-gray-700">Store: {{ item.store.name }}</div>
+                    <div class="text-gray-700">Stock: {{ item.stock }}</div>
+                </div>
+            {% empty %}
+                <p class="text-center text-gray-500">No items match your criteria.</p>
+            {% endfor %}
+        </div>
     </div>
 
 </body>
