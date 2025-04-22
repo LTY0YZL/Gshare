@@ -54,7 +54,7 @@
     </div>
 
     <script>
-        {% comment %} let map;
+        let map;
         let geocoder;
 
         function initMap() {
@@ -80,13 +80,13 @@
                     alert('Geocode was not successful for the following reason: ' + status);
                 }
             });
-        } {% endcomment %}
+        } 
     </script>
 
-    {% comment %} <script async defer 
+    <script async defer 
         src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap">
 
-    </script> {% endcomment %}
+    </script>
 </body>
 
 <footer>
