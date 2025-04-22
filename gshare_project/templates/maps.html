@@ -49,16 +49,16 @@
      </div>
 
      <script>
-        {% comment %} const openPopup = document.getElementById('openPopup'); {% endcomment %}
+        //const openPopup = document.getElementById('openPopup'); 
         const closePopup = document.getElementById('closePopup');
         const shop = document.getElementById('shop');
         const person = document.getElementById('person');
         const map_popup = document.getElementById('map_popup');
 
-        {% comment %} openPopup.addEventListener('click', () => {
-            popup.classList.remove('translate-x-full');
-            openPopup.classList.add('-translate-x-10');
-        }); {% endcomment %}
+        // openPopup.addEventListener('click', () => {
+        //     popup.classList.remove('translate-x-full');
+        //     openPopup.classList.add('-translate-x-10');
+        // }); 
 
 
         shop.addEventListener('click', () => {
@@ -87,13 +87,13 @@
 
         });
 
-        {% comment %} let map;
+        let map;
         let geocoder;
         let marker;
 
         function initMap() {
             // Create a map centered at a specific location
-            const location = { lat: {{location.lat}}, lng: {{location.lng}} };
+            const location = { lat: 40.7607, lng: -111.8939 };
             map = new google.maps.Map(document.getElementById('map'), {
                 center: location,
                 zoom: 14
@@ -130,12 +130,12 @@
                     alert('Geocode was not successful for the following reason: ' + status);
                 }
             });
-        } {% endcomment %}
+        } 
     </script>
-{% comment %} 
+ 
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap">
 
-    </script> {% endcomment %}
+    </script>
 
 </body>
