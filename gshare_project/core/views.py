@@ -6,6 +6,8 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.conf import settings
+from core.models import Items, Stores
+from django.db.models import Q
 
 # Create your views here.
 def home(request):
@@ -36,7 +38,31 @@ def groups(request):
 
 @login_required
 def cart(request):
-    return render(request, "cart.html")
+    store_filter = request.GET.get('Stores', 'All')
+    price_filter = request.GET.get('Price-Range', 'Any')
+    search_query = request.GET.get('Item_Search_Bar', '')
+
+    items = Items.objects.using('gsharedb').all()
+
+    if store_filter and store_filter != 'All':
+        items = items.filter(store__name=store_filter)
+
+    if price_filter and price_filter != 'Any':
+        if price_filter == '100+':
+            items = items.filter(price__gte=100)
+        else:
+            low, high = map(float, price_filter.split('-'))
+            items = items.filter(price__gte=low, price__lte=high)
+
+    if search_query:
+        items = items.filter(name__icontains=search_query)
+
+    context = {
+        'items': items
+    }
+    
+    return render(request, "cart.html", context)
+
 
 def login_view(request):
     if request.method == 'POST':

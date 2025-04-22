@@ -10,51 +10,55 @@
 {% include "navbar.html" %}
 <body class="Stores_desgin">
 
-    <div>
+    <form action="{% url 'cart' %}" method="get">
         <p>Price Range</p>
         <div name="PriceButtons">
             <input type="radio" id="Any" name="Price-Range" value="Any" checked>
             <label for="Any">Any</label>
-
+    
             <input type="radio" id="0-10" name="Price-Range" value="0-10">
             <label for="0-10">0-$10</label>
-
+    
             <input type="radio" id="10-25" name="Price-Range" value="10-25">
             <label for="10-25">$10-$25</label>
-
+    
             <input type="radio" id="25-50" name="Price-Range" value="25-50">
             <label for="25-50">$25-$50</label>
-
+    
             <input type="radio" id="50-100" name="Price-Range" value="50-100">
             <label for="50-100">$50-$100</label>
-
+    
             <input type="radio" id="100+" name="Price-Range" value="100+">
             <label for="100+">100+</label>
         </div>
-
+    
         <p>Stores</p>
-        <div name=StoresButtons>
+        <div name="StoresButtons">
             <input type="radio" id="Walmart" name="Stores" value="Walmart">
             <label for="Walmart">Walmart</label>
             <input type="radio" id="Target" name="Stores" value="Target">
             <label for="Target">Target</label>
             <input type="radio" id="Costco" name="Stores" value="Costco">
             <label for="Costco">Costco</label>
-            <input type="radio" id="All" name="Stores" value="All">
+            <input type="radio" id="All" name="Stores" value="All" checked>
             <label for="All">All</label>
         </div>
-
-        <div>
-            <form action="{% url 'cart' %}" method="get">
-                <input type="text" name="Item_Search_Bar" placeholder="Search for an item">
-                <button type="submit">Search</button>
-            </form>
-        </div>
-
-    </div>
+    
+        <input type="text" name="Item_Search_Bar" placeholder="Search for an item">
+        <button type="submit">Search</button>
+    </form>
 
     <div name="Items_list">
-        <!-- add python code to loop through every value in database with corresponding valuse from the buttons above -->
+        {% for item in items %}
+            <div>
+                <h3>{{ item.name }}</h3>
+                <p>Price: ${{ item.price }}</p>
+                <p>Store: {{ item.store.name }}</p>
+                <p>Stock: {{ item.stock }}</p>
+            </div>
+        {% empty %}
+            <p>No items match your criteria.</p>
+        {% endfor %}
     </div>
 
 </body>
