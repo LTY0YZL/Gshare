@@ -26,7 +26,7 @@ def get_custom_user(request):
     if not request.user.is_authenticated:
         return None
     try:
-        return ProfileUser.objects.get(email=request.user.email)
+        return ProfileUser.objects.using('gsharedb').get(email=request.user.email)
     except ProfileUser.DoesNotExist:
         return None
 
@@ -54,16 +54,18 @@ def login_view(request):
 
 def signup_view(request):
     if request.method == 'POST':
-        u = request.POST.get('username','').strip()
-        e = request.POST.get('email','').strip()
-        p = request.POST.get('password','')
-        if AuthUser.objects.filter(username=u).exists():
+        u = request.POST.get('username', '').strip()
+        e = request.POST.get('email', '').strip()
+        p = request.POST.get('password', '')
+
+        if User.objects.filter(username=u).exists():
             messages.error(request, "Username taken")
             return redirect('signup')
-        user = AuthUser.objects.create_user(username=u, email=e, password=p)
-        ProfileUser.objects.create(name=u, email=e)
+
+        user = User.objects.create_user(username=u, email=e, password=p)
         auth_login(request, user)
         return redirect('home')
+
     return render(request, 'signup.html')
 
 def logout_view(request):
@@ -115,26 +117,26 @@ def browse_items(request):
 
 @login_required
 def add_to_cart(request, item_id):
-    profile = get_custom_user(request)
-    item = get_object_or_404(Items, pk=item_id)
-    order, _ = Orders.objects.get_or_create(
-        user=profile,
-        status='cart',
-        defaults={
-            'order_date': timezone.now(),
-            'store': item.store
-        }
-    )
-    oi, created = OrderItems.objects.get_or_create(
-        order=order,
-        item=item,
-        defaults={'quantity':1, 'price':item.price}
-    )
-    if not created:
-        oi.quantity += 1
-        oi.save()
-    messages.success(request, f"Added {item.name} to cart")
-    return redirect('cart')
+    # profile = get_custom_user(request)
+    # item = get_object_or_404(Items, pk=item_id)
+    # order, _ = Orders.objects.get_or_create(
+    #     user=profile,
+    #     status='cart',
+    #     defaults={
+    #         'order_date': timezone.now(),
+    #         'store': item.store
+    #     }
+    # )
+    # oi, created = OrderItems.objects.get_or_create(
+    #     order=order,
+    #     item=item,
+    #     defaults={'quantity':1, 'price':item.price}
+    # )
+    # if not created:
+    #     oi.quantity += 1
+    #     oi.save()
+    # messages.success(request, f"Added {item.name} to cart")
+     return redirect('cart')
 
 @login_required
 def cart(request):
