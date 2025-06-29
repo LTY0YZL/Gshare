@@ -60,7 +60,7 @@ def signup_view(request):
 
         if User.objects.filter(username=u).exists():
             messages.error(request, "Username taken")
-            return redirect('signup')
+            return redirect('home')
 
         user = User.objects.create_user(username=u, email=e, password=p)
         auth_login(request, user)
