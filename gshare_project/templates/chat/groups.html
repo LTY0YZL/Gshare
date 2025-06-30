@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group</title>
+
+</head>
+{% include "navbar.html" %}
+<body >
+    <h1 class="text-4xl font-bold text-center mt-8">Your Groups</h1>
+    <a href="{% url 'create_group' %}" class="block text-center mt-4 text-blue-500 hover:underline">Create a New Group</a>
+    <ul>
+        {% for group in groups %}
+        <li>
+            <a href="{% url 'chat_room' group.slug %}">{{ group.name }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

@@ -220,3 +220,4 @@ def maps(request):
 @login_required
 def shoppingcart(request):
     return render(request, "shoppingcart.html")
+
