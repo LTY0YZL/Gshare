@@ -13,5 +13,11 @@
         <input type="text" name="message" placeholder="Type your message here...">
         <button type="submit">Send</button>
     </form>
+
+    <script>
+        const roomName = "{{ room_name }}";
+        const chatSocket = new WebSocket(
+            'ws://' + window.location.host + '/ws/chat/' + roomName + '/'
+        );
 </body>
 </html>
