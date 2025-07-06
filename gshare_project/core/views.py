@@ -91,7 +91,7 @@ def menu(request):
 @login_required
 def groups(request):
     # delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
-    return render(request, "groups.html")
+    return render(request, "chat/groups.html")
 
 @login_required
 def browse_items(request):
