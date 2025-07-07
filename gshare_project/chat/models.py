@@ -1,10 +1,12 @@
 from django.db import models
 from django.contrib.auth.models import User
+import uuid
 
 # Create your models here.
 class ChatGroup(models.Model):
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
+    group_code = models.CharField(max_length=8, unique=True, default=uuid.uuid4().hex[:8])
     members = models.ManyToManyField(User, related_name='chat_groups')
     
     def __str__(self):

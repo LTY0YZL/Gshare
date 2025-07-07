@@ -43,4 +43,4 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'username': username,
             'message': message
-    }))
+        }))

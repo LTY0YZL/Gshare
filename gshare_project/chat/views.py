@@ -12,8 +12,12 @@ def groups_page(request):
 
 @login_required
 def chat_room(request, room_name):
-    
-    return render(request, 'chat/chat_room.html', {'room_name': room_name})
+    try:
+        room = ChatGroup.objects.get(slug=room_name)
+        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code})
+    except ChatGroup.DoesNotExist:
+        messages.error(request, "Chat room does not exist.")
+        return redirect('groups_page')
 
 @login_required
 def create_group(request):
@@ -29,7 +33,23 @@ def create_group(request):
         
         group = ChatGroup.objects.create(name=group_name, slug=slugify(group_name))
         group.members.add(request.user)
-        messages.success(request, f"Group '{group_name}' created successfully.")
+        messages.success(request, f"Group '{group_name}' created successfully. Group Code: {group.group_code}")
         return redirect('chat_room', room_name=group.slug)
 
     return render(request, 'chat/create_group.html')
+
+@login_required
+def join_group(request):
+    if request.method == 'POST':
+        group_code = request.POST.get('group_code', '').strip()
+        try:
+            group = ChatGroup.objects.get(group_code=group_code)
+            group.members.add(request.user)
+            messages.success(request, f"you have successfully joined the group '{group.name}'.")
+            return redirect('chat_room', room_name=group.slug)
+        except ChatGroup.DoesNotExist:
+            messages.error(request, "Invalid group code.")
+            return redirect('join_group')
+    
+    return render(request, 'chat/join_group.html')
+

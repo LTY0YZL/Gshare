@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join Group</title>
+</head>
+<body>
+    <h1>Join a Group</h1>
+    <form method="post">
+        {% csrf_token %}
+        <label for="group_code">Group Code</label>
+        <input type="text" id="group_code" name="group_code" required>
+        <button type="submit">Join Group</button>
+        </form>
+        <a href="{% url 'groups_page' %}">Back to Groups</a>
+</body>
+</html>
