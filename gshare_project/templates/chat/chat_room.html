@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Room</title>
 </head>
+{% include "navbar.html" %}
 <body>
-    <h1>Room: {{ room_name }}</h1>
-    <h1>Room Code: {{ room_code }}</h1>
-    <div id="chat-log"></div>
-    <input id="chat-message-input" type="text" placeholder="Type your message here">
+    <h1 class="text-4xl">Room: {{ room_name }}</h1>
+    <h1 class="text-4xl">Room Code: {{ room_code }}</h1>
+    <div id="chat-log" class="text-4xl"></div>
+    <input id="chat-message-input" class="border border-black-300 p-2" type="text" placeholder="Type your message here">
     <button id="chat-message-submit">Send</button>
 
     <script>

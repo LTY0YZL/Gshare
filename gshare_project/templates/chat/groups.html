@@ -17,6 +17,8 @@
         <li>
             <a href="{% url 'chat_room' group.slug %}">{{ group.name }}</a>
         </li>
+        {% empty %}
+        <p>You are not part of any groups.</p>
         {% endfor %}
     </ul>
 </body>

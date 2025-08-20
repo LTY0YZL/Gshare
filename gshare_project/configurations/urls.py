@@ -26,7 +26,7 @@ urlpatterns = [
     path('about/', views.aboutus, name='aboutus'),
     path('profile/', views.userprofile, name='profile'),
     path('menu/', views.menu, name='menu'),
-    path('groups/', views.groups, name='groups'),
+    path('groups/', include('chat.urls')),
     path('maps/', views.maps, name="maps"),
     path('login/', views.login_view, name='login'),
     path('signup/', views.signup_view, name='signup'), 
@@ -37,7 +37,7 @@ urlpatterns = [
     path('cart/add/<int:item_id>/', views.add_to_cart, name='add_to_cart'),
     path('checkout/', views.checkout, name='checkout'),
     path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
-    path('chat/', include('chat.urls')),
+    # path('chat/', include('chat.urls')),
     path("__reload__/", include("django_browser_reload.urls")),
 ]
 

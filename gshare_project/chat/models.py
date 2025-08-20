@@ -3,10 +3,14 @@ from django.contrib.auth.models import User
 import uuid
 
 # Create your models here.
+
+def generate_group_code():
+    return uuid.uuid4().hex[:8]  # Generates a random 8-character code
+
 class ChatGroup(models.Model):
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
-    group_code = models.CharField(max_length=8, unique=True, default=uuid.uuid4().hex[:8])
+    group_code = models.CharField(max_length=8, unique=True, default=generate_group_code)
     members = models.ManyToManyField(User, related_name='chat_groups')
     
     def __str__(self):
