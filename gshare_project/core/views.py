@@ -3,6 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.core.paginator import Paginator
 
+from django.db import IntegrityError, transaction
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
@@ -12,7 +13,7 @@ from django.contrib.auth.models import User as AuthUser
 from django.contrib import messages
 from django.utils import timezone
 from django.conf import settings
-from core.models import Items, Stores
+from core.models import Items, Stores, Users
 from django.db.models import Q
 
 from core.models import (
@@ -22,13 +23,34 @@ from core.models import (
     Deliveries, Feedback
 )
 
-def get_custom_user(request):
-    if not request.user.is_authenticated:
-        return None
+def get_user(field: str, value: str): 
+    """Helper function to get a user by username or email."""
     try:
-        return ProfileUser.objects.using('gsharedb').get(email=request.user.email)
-    except ProfileUser.DoesNotExist:
+        return Users.objects.get(Q(field = value))
+    except Users.DoesNotExist:
         return None
+    
+def create_user(name, email):
+    """Helper function to create a new user."""
+    user = Users.objects.create(username=name, email=email)
+    user.save()
+    return user    
+
+def create_user(name: str, email: str, address: str = "Not provided", phone: str | None = None):
+    """
+    Create a row in the gsharedb.users table.
+    """
+    try:
+        with transaction.atomic(using='gsharedb'):
+            return Users.objects.using('gsharedb').create(
+                name=name,
+                email=email,     # email is unique but nullable
+                phone=phone,     # optional
+                address=address  # REQUIRED by your schema
+            )
+    except IntegrityError as e:
+        # e.g., duplicate email or other constraint violations
+        raise
 
 def home(request):
     stores = Stores.objects.all().order_by('name')
@@ -62,11 +84,11 @@ def signup_view(request):
             messages.error(request, "Username taken")
             return redirect('home')
 
+        create_user(u, e)
         user = User.objects.create_user(username=u, email=e, password=p)
+        
         auth_login(request, user)
         return redirect('home')
-
-    return render(request, 'signup.html')
 
 def logout_view(request):
     auth_logout(request)
@@ -95,25 +117,25 @@ def groups(request):
 
 @login_required
 def browse_items(request):
-    items = Items.objects.select_related('store').all()
-    q = request.GET.get('search','').strip()
-    if q:
-        items = items.filter(name__icontains=q)
-    try:
-        lo = request.GET.get('min_price'); hi = request.GET.get('max_price')
-        if lo: items = items.filter(price__gte=Decimal(lo))
-        if hi: items = items.filter(price__lte=Decimal(hi))
-    except (InvalidOperation, ValueError):
-        messages.error(request, "Bad price filter")
-    store_id = request.GET.get('store')
-    if store_id and store_id.isdigit():
-        items = items.filter(store_id=int(store_id))
-    stores = Stores.objects.all()
-    return render(request, "cart.html", {
-        'items': items.order_by('store_name','name'),
-        'all_stores': stores,
-        'custom_user': get_custom_user(request),
-    })
+    # items = Items.objects.select_related('store').all()
+    # q = request.GET.get('search','').strip()
+    # if q:
+    #     items = items.filter(name__icontains=q)
+    # try:
+    #     lo = request.GET.get('min_price'); hi = request.GET.get('max_price')
+    #     if lo: items = items.filter(price__gte=Decimal(lo))
+    #     if hi: items = items.filter(price__lte=Decimal(hi))
+    # except (InvalidOperation, ValueError):
+    #     messages.error(request, "Bad price filter")
+    # store_id = request.GET.get('store')
+    # if store_id and store_id.isdigit():
+    #     items = items.filter(store_id=int(store_id))
+    # stores = Stores.objects.all()
+    return # render(request, "cart.html", {
+    #     'items': items.order_by('store_name','name'),
+    #     'all_stores': stores,
+    #     'custom_user': get_custom_user(request),
+    # })
 
 @login_required
 def add_to_cart(request, item_id):
@@ -136,7 +158,7 @@ def add_to_cart(request, item_id):
     #     oi.quantity += 1
     #     oi.save()
     # messages.success(request, f"Added {item.name} to cart")
-     return redirect('cart')
+     return # redirect('cart')
 
 @login_required
 def cart(request):
