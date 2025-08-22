@@ -9,13 +9,20 @@
 <body>
     <h1 class="text-4xl">Room: {{ room_name }}</h1>
     <h1 class="text-4xl">Room Code: {{ room_code }}</h1>
-    <div id="chat-log" class="text-4xl"></div>
+    <div id="chat-log" class="text-4xl">
+        <p>
+            {% for message in messages %}
+                <strong>{{ message.sender.username }}:</strong> {{ message.content }} <br>
+            {% endfor %}
+        </p>
+    </div>
     <input id="chat-message-input" class="border border-black-300 p-2" type="text" placeholder="Type your message here">
     <button id="chat-message-submit">Send</button>
 
     <script>
         const roomName = "{{ room_name }}";
         const username = "{{ user.username  }}"; // pass in the username from Django context
+
         const chatSocket = new WebSocket(
             'ws://' + window.location.host + '/ws/chat/' + roomName + '/'
         );
