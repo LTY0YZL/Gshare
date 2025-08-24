@@ -3,7 +3,9 @@
 <header class=" {% if navbar_bg_color %}bg-[{{ navbar_bg_color }}] bg-white text-black  {% else %}bg-[#150931] text-white  {% endif %}">
     <nav class="nav flex-1 flex items-center justify-between space-x-4 " >
         <div class="flex items-center xpace-x-6">
-            <a href="{% url 'menu' %}"><img src="threeLinesIcon" class="md:ml-2 mr-4" ></a>
+            <a href="{% url 'menu' %}">
+                <img src="{% static 'media/Three_lines_menu.png' %}" class="md: mr-4 w-12" >
+            </a>
 
             <a href="/">
                 <img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo w-12 h-12 rounded-full md: mr-4">
@@ -34,7 +36,7 @@
             {% endif %}
 
             <a href="{% url 'profile' %}">
-                <img src="ProfileIcon" class="w-12 h-12 rounded-full">
+                <img src="{% static 'media/user.png' %}" class="w-12 h-12 rounded-full">
             </a>
         </div>
 
