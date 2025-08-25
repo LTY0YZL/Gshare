@@ -5,19 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Room</title>
 </head>
-{% include "navbar.html" %}
 <body>
-    <h1 class="text-4xl">Room: {{ room_name }}</h1>
-    <h1 class="text-4xl">Room Code: {{ room_code }}</h1>
-    <div id="chat-log" class="text-4xl">
-        <p>
-            {% for message in messages %}
-                <strong>{{ message.sender.username }}:</strong> {{ message.content }} <br>
-            {% endfor %}
-        </p>
+    {% include "navbar.html" %}
+
+    <div class="grid grid-cols-[1fr_3fr] min-h-screen">
+
+        <aside class="col-span-1 bg-blue-200 p-4">
+            <h2 class="text-2xl font-bold mb-4">Groups</h2>
+            <ul>
+                {% for group in groups %}
+                    <li class="mb-2">
+                        <a href="{% url 'chat_room' group.slug %}" class="text-black-500 hover:bg-orange-400">{{ group.name }}</a>
+                    </li>
+                {% empty %}
+                    <p>You are not part of any groups.</p>
+                {% endfor %}
+            </ul>
+
+        </aside>
+        <div class=" bg-gray-300">
+            <h1 class="text-4xl">Room: {{ room_name }}</h1>
+            <h1 class="text-4xl">Room Code: {{ room_code }}</h1>
+            <div id="chat-log" class="text-4xl">
+                <p>
+                    {% for message in messages %}
+                        <strong>{{ message.sender.username }}:</strong> {{ message.content }} <br>
+                    {% endfor %}
+                </p>
+            </div>
+            <input id="chat-message-input" class="border border-black-300 p-2" type="text" placeholder="Type your message here">
+            <button id="chat-message-submit">Send</button>
+        </div>
     </div>
-    <input id="chat-message-input" class="border border-black-300 p-2" type="text" placeholder="Type your message here">
-    <button id="chat-message-submit">Send</button>
 
     <script>
         const roomName = "{{ room_name }}";
