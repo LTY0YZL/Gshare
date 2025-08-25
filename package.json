@@ -1,11 +1,11 @@
 {
   "name": "g-share",
   "version": "1.0.0",
-  "description": "To make it easy for you to get started with GitLab, here's a list of recommended next steps.",
+  "description": "G-Share - Grocery Sharing Platform",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "watch:css": "npx @tailwindcss/cli -i ./gshare_project/static/css/tailwindcss.css -o ./gshare_project/static/dist/tailwindcss.css --watch"
+    "dev": "npx tailwindcss -i ./gshare_project/static/css/input.css -o ./gshare_project/static/dist/tailwindcss.css --watch",
+    "build": "npx tailwindcss -i ./gshare_project/static/css/input.css -o ./gshare_project/static/dist/tailwindcss.css --minify"
   },
   "repository": {
     "type": "git",
@@ -15,11 +15,8 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "autoprefixer": "^10.4.21",
-    "postcss": "^8.5.3",
-    "tailwindcss": "^4.0.17"
-  },
-  "dependencies": {
-    "@tailwindcss/cli": "^4.0.17"
+    "autoprefixer": "^10.4.17",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1"
   }
 }
