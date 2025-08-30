@@ -24,6 +24,7 @@ def chat_room(request, room_name):
 
 @login_required
 def create_group(request):
+    user_groups = ChatGroup.objects.filter(members=request.user)
     if request.method == 'POST':
         group_name = request.POST.get('group_name', '').strip()
         if not group_name:
@@ -39,7 +40,7 @@ def create_group(request):
         messages.success(request, f"Group '{group_name}' created successfully. Group Code: {group.group_code}")
         return redirect('chat_room', room_name=group.slug)
 
-    return render(request, 'chat/create_group.html')
+    return render(request, 'chat/create_group.html', {'groups': user_groups})
 
 @login_required
 def join_group(request):
