@@ -15,7 +15,8 @@ def chat_room(request, room_name):
     try:
         room = ChatGroup.objects.get(slug=room_name)
         messages = room.messages.all().order_by('timestamp')
-        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code, 'messages': messages})
+        user_groups = ChatGroup.objects.filter(members=request.user)
+        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code, 'messages': messages, 'groups': user_groups})
     except ChatGroup.DoesNotExist:
         messages.error(request, "Chat room does not exist.")
         return redirect('groups_page')
