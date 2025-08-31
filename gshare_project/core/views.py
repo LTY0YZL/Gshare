@@ -72,14 +72,55 @@ def logout_view(request):
     auth_logout(request)
     return redirect('login')
 
+def validatePasswordChange(request, currentPassword, newPassword1, newPassword2):
+
+    if not request.user.check_password(currentPassword):
+        return False, 'Your current password was entered incorrectly.'
+    
+    if newPassword1 != newPassword2:
+        return False, 'The two password fields didn\'t match.'
+    
+    if len(newPassword1) < 5:
+        return False, 'This password is too short. It must contain at least 5 characters.'
+    
+    return True, None
+
+def handlePasswordChange(request, newPassword):
+    request.user.set_password(newPassword)
+    request.user.save()
+
 @login_required
 def userprofile(request):
     profile = get_custom_user(request)
     orders = profile.orders_placed.select_related('store')\
                 .prefetch_related('order_items__item') if profile else []
+    
+    errors = []
+    if request.method == 'POST' and 'change_password' in request.POST:
+        currentPassword = request.POST.get('current_password', '')
+        newPassword1 = request.POST.get('new_password1', '')
+        newPassword2 = request.POST.get('new_password2', '')
+        
+        isValid, errorMessage = validatePasswordChange(
+            request, currentPassword, newPassword1, newPassword2
+        )
+        
+        if isValid:
+            handlePasswordChange(request, newPassword1)
+            errors.append({
+                'message': 'Your password was successfully updated!',
+                'is_success': True
+            })
+        else:
+            errors.append({
+                'message': errorMessage,
+                'is_success': False
+            })
+    
     return render(request, "profile.html", {
         'custom_user': profile,
         'user_orders': orders,
+        'errors': errors
     })
 
 @login_required

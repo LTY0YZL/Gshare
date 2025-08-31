@@ -1,4 +1,4 @@
-<!DOCTYPE html/>
+<!DOCTYPE html>
 {% load static %}
 <html lang="en">
 <head>
@@ -28,10 +28,11 @@
                         <span class="text-yellow-500">★★★★★</span>
                         <span class="text-sm text-gray-500">(0 reviews)</span>
                     </div>
+                    <!-- About Me -->
+                    <div class="form-group">
+                        <label for="about_me" class="block text-gray-800 mb-6 mt-10">About Me: </label>
+                        <textarea id="about_me" name="about_me" class="w-full h-32 p-2 border rounded" placeholder="Tell us about yourself...">{{ user.about_me|default:'' }}</textarea>
                 </div>
-                <div>
-                    <label class="block text-gray-800 mb-6 mt-10">About Me: </label>
-                    <textarea class="w-full h-32 p-2 border rounded" placeholder="Type here..."></textarea>
                 </div>
             </div>
 
@@ -39,52 +40,47 @@
             <div class="w-full md:w-2/3 bg-white rounded-lg shadow-md p-6">
                 <h1 class="text-2xl font-bold text-gray-800 mb-6 pb-2 border-b">Account Information</h1>
                 
-                <form class="space-y-6">
+                <form method="post" action="{% url 'profile' %}" class="space-y-6">
+                    {% csrf_token %}
                     <!-- Name Field -->
                     <div class="form-group">
-                        <label class="block text-gray-700 text-sm font-medium mb-1">Display Name</label>
-                        <div class="flex items-center space-x-2">
-                            <input type="text" value="{{ user.username }}" 
-                                   class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <button type="button" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm">
-                                {{ user.profile.is_public|yesno:"Public,Private" }}
-                            </button>
-                        </div>
+                        <label for="username" class="block text-gray-700 text-sm font-medium mb-1">Display Name</label>
+                        <input type="text" id="username" name="username" value="{{ user.username }}" 
+                               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     </div>
                     
                     <!-- Email Field -->
                     <div class="form-group">
-                        <label class="block text-gray-700 text-sm font-medium mb-1">Email</label>
-                        <input type="email" value="{{ user.email }}" 
+                        <label for="email" class="block text-gray-700 text-sm font-medium mb-1">Email</label>
+                        <input type="email" id="email" name="email" value="{{ user.email }}" 
                                class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     </div>
                     
                     <!-- Phone Number -->
                     <div class="form-group">
-                        <label class="block text-gray-700 text-sm font-medium mb-1">Phone Number</label>
-                        <input type="tel" value="{{ user.phone_number|default:'Not set' }}" 
+                        <label for="phone_number" class="block text-gray-700 text-sm font-medium mb-1">Phone Number</label>
+                        <input type="tel" id="phone_number" name="phone_number" value="{{ user.phone_number|default:'' }}" 
+                               placeholder="Enter phone number"
                                class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     </div>
                     
                     <!-- Delivery Address -->
                     <div class="form-group">
-                        <label class="block text-gray-700 text-sm font-medium mb-1">Delivery Address</label>
+                        <label for="address" class="block text-gray-700 text-sm font-medium mb-1">Delivery Address</label>
                         <div class="flex items-center space-x-2">
-                            <input type="text" value="{{ user.address|default:'Not set' }}" 
+                            <input type="text" id="address" name="address" value="{{ user.address|default:'' }}" 
+                                   placeholder="Enter delivery address"
                                    class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <button type="button" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">
-                                Save
-                            </button>
                         </div>
                     </div>
                     
                     <!-- Payment Method -->
                     <div class="form-group">
-                        <label class="block text-gray-700 text-sm font-medium mb-1">Payment Method</label>
-                        <select class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <option {% if not user.payment_method %}selected{% endif %} disabled>Select payment method</option>
-                            <option {% if user.payment_method == 'Credit Card' %}selected{% endif %}>Credit Card</option>
-                            <option {% if user.payment_method == 'PayPal' %}selected{% endif %}>PayPal</option>
+                        <label for="payment_method" class="block text-gray-700 text-sm font-medium mb-1">Payment Method</label>
+                        <select id="payment_method" name="payment_method" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="" {% if not user.payment_method %}selected{% endif %} disabled>Select payment method</option>
+                            <option value="Credit Card" {% if user.payment_method == 'Credit Card' %}selected{% endif %}>Credit Card</option>
+                            <option value="PayPal" {% if user.payment_method == 'PayPal' %}selected{% endif %}>PayPal</option>
                         </select>
                     </div>
                     
@@ -94,23 +90,30 @@
                         <!-- Password Change -->
                         <div class="form-group">
                             <label class="block text-gray-700 text-sm font-medium mb-1">Change Password</label>
+                            {% if errors %}
+                                {% for error in errors %}
+                                    <div class="mb-4 p-3 text-sm rounded-lg {% if error.is_success %}bg-green-100 text-green-700{% else %}bg-red-100 text-red-700{% endif %}">
+                                        {{ error.message }}
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
                             <div class="space-y-3">
-                                <input type="password" placeholder="Current Password" 
+                                <input type="password" name="current_password" placeholder="Current Password" 
                                        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                <input type="password" placeholder="New Password" 
+                                <input type="password" name="new_password1" placeholder="New Password" 
                                        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                <input type="password" placeholder="Confirm New Password" 
+                                <input type="password" name="new_password2" placeholder="Confirm New Password" 
                                        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                             </div>
-                            <button type="button" class="mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">
+                            <button type="submit" name="change_password" value="true" class="mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">
                                 Update Password
                             </button>
                         </div>
                     </div>
                     
-                    <!-- Save Changes Button -->
+                    <!-- Form Actions -->
                     <div class="flex justify-end space-x-3 pt-4">
-                        <button type="button" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                        <button type="button" onclick="window.location.reload()" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
                             Cancel
                         </button>
                         <button type="submit" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
