@@ -1,8 +1,8 @@
+from django.db import transaction
 from decimal import Decimal, InvalidOperation
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.core.paginator import Paginator
-
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
@@ -12,23 +12,130 @@ from django.contrib.auth.models import User as AuthUser
 from django.contrib import messages
 from django.utils import timezone
 from django.conf import settings
-from core.models import Items, Stores
+from pymysql import IntegrityError
 from django.db.models import Q
 
 from core.models import (
-    Users as ProfileUser,
+    Users,
     Stores, Items,
     Orders, OrderItems,
     Deliveries, Feedback
 )
 
-def get_custom_user(request):
-    if not request.user.is_authenticated:
-        return None
+"""helper functions"""
+
+
+"""
+Retrieve a user from the 'gsharedb' database based on a specific field and value.
+
+Args:
+    field (str): The name of the field to filter by (e.g., 'username', 'email').
+    value (str): The value of the field to match.
+
+Returns:
+    Users: The user object if found, otherwise None.
+"""
+def get_user(field: str, value):
+    
     try:
-        return ProfileUser.objects.using('gsharedb').get(email=request.user.email)
-    except ProfileUser.DoesNotExist:
+       # dynamic lookup: **{field: value}
+        return Users.objects.using('gsharedb').get(**{field: value})
+    except Users.DoesNotExist:
         return None
+
+# edits phone, email, address with value based on the field selected.
+def edit_user(user_email: str, field : str, value: str):
+
+    try: 
+
+        user = Users.objects.using("gshare").get(email = user_email)# change this to email later
+
+        setattr(user, field, value)
+
+        user.save(using = 'gsharedb')
+        return user
+
+    except Users.DoesNotExist:
+        return None
+
+"""
+Edit a specific field of a user in the 'gsharedb' database.
+
+Args:
+    user_id (int): The ID of the user to be updated.
+    field (str): The name of the field to be updated (e.g., 'email', 'phone').
+    value (str): The new value to set for the specified field.
+
+Returns:
+    Users: The updated user object if the user exists, otherwise None.
+"""
+def create_user_signin(name: str, email: str, address: str = "Not provided", phone: str | None = None):
+  
+    try:
+        with transaction.atomic(using='gsharedb'):
+            return Users.objects.using('gsharedb').create(
+                name=name,
+                email=email,     # email is unique but nullable
+                phone=phone,     # optional
+                address=address  # REQUIRED by your schema
+            )
+    except IntegrityError as e:
+        # e.g., duplicate email or other constraint violations
+        raise
+
+    """
+    Create a new order for a user at a specific store with given items and quantities.
+
+    Args:
+        user (Users): The user placing the order.
+        store (Stores): The store from which the order is being placed.
+        items (list[Items]): A list of item objects to be included in the order.
+        quantities (list[int]): A list of quantities corresponding to each item.
+
+    Returns:
+        Orders: The created order object.
+    """
+def create_order(user: Users, store: Stores, items: list[Items], quantities: list[int]) -> Orders:
+
+    if len(items) != len(quantities):
+        raise ValueError("Items and quantities lists must have the same length.")
+
+    with transaction.atomic(using='gsharedb'):
+        order = Orders.objects.using('gsharedb').create(
+            user=user,
+            store=store,
+            status='placed',  # or 'cart' if you want to create a cart first
+            order_time=timezone.now()
+        )
+
+        order_items = [
+            OrderItems(
+                order=order,
+                item=item,
+                quantity=qty
+            ) for item, qty in zip(items, quantities)
+        ]
+        OrderItems.objects.using('gsharedb').bulk_create(order_items)
+
+    return order
+
+"""
+Retrieve all orders for a specific user from the 'gsharedb' database.
+
+Args:
+    user (Users): The user object for whom the orders are being retrieved.
+
+Returns:
+    QuerySet or list: A QuerySet of orders if orders exist, otherwise an empty list.
+"""
+def get_orders(user: Users):
+
+    orders = Orders.objects.using('gsharedb').filter(user_id = user.id) # Getting all the orders related to this user.
+    if not orders.exists():  # Checking if the queryset is empty.
+        return []
+    return orders
+
+"""Main functions"""
 
 def home(request):
     stores = Stores.objects.all().order_by('name')
@@ -55,18 +162,44 @@ def login_view(request):
 def signup_view(request):
     if request.method == 'POST':
         u = request.POST.get('username', '').strip()
+        f = request.POST.get('first_name', '').strip()
+        l = request.POST.get('last_name', '').strip()
         e = request.POST.get('email', '').strip()
         p = request.POST.get('password', '')
+        addr = (request.POST.get('address', '') or '').strip() or "Not provided"
+        phone = (request.POST.get('phone', '') or '').strip() or None
+
 
         if User.objects.filter(username=u).exists():
             messages.error(request, "Username taken")
             return redirect('home')
 
-        user = User.objects.create_user(username=u, email=e, password=p)
-        auth_login(request, user)
-        return redirect('home')
 
+        # Create auth user in default DB
+        auth_user = User.objects.create_user(username=u, email=e, password=p)
+        # save first/last to auth user (optional but you collected them)
+        if f: auth_user.first_name = f
+        if l: auth_user.last_name = l
+        if f or l: auth_user.save()
+
+
+        # Create business profile in gsharedb
+        full_name = " ".join(part for part in [f, l] if part) or u  # fallback to username
+        try:
+            create_user_signin(full_name, e, address=addr, phone=phone)
+        except IntegrityError as ex:
+            # roll back auth user if business insert fails
+            auth_user.delete()
+            messages.error(request, f"Could not create profile: {ex}")
+            return redirect('home')
+
+
+        # Login and redirect
+        auth_login(request, auth_user)
+        return redirect('home')
+    
     return render(request, 'signup.html')
+
 
 def logout_view(request):
     auth_logout(request)
@@ -117,8 +250,15 @@ def userprofile(request):
                 'is_success': False
             })
     
+
+    profile = get_user("email", request.user.email)
+
+    orders = get_orders(profile)
+    
+    # profile.orders_placed.select_related('store')\
+    #             .prefetch_related('order_items__item') if profile else []
     return render(request, "profile.html", {
-        'custom_user': profile,
+        'user': profile,
         'user_orders': orders,
         'errors': errors
     })
@@ -126,7 +266,7 @@ def userprofile(request):
 @login_required
 def menu(request):
     return render(request, "menu.html", {
-        'custom_user': get_custom_user(request),
+        'user': get_user("email", request.user.email),
     })
 
 @login_required
@@ -136,25 +276,25 @@ def groups(request):
 
 @login_required
 def browse_items(request):
-    items = Items.objects.select_related('store').all()
-    q = request.GET.get('search','').strip()
-    if q:
-        items = items.filter(name__icontains=q)
-    try:
-        lo = request.GET.get('min_price'); hi = request.GET.get('max_price')
-        if lo: items = items.filter(price__gte=Decimal(lo))
-        if hi: items = items.filter(price__lte=Decimal(hi))
-    except (InvalidOperation, ValueError):
-        messages.error(request, "Bad price filter")
-    store_id = request.GET.get('store')
-    if store_id and store_id.isdigit():
-        items = items.filter(store_id=int(store_id))
-    stores = Stores.objects.all()
-    return render(request, "cart.html", {
-        'items': items.order_by('store_name','name'),
-        'all_stores': stores,
-        'custom_user': get_custom_user(request),
-    })
+    # items = Items.objects.select_related('store').all()
+    # q = request.GET.get('search','').strip()
+    # if q:
+    #     items = items.filter(name__icontains=q)
+    # try:
+    #     lo = request.GET.get('min_price'); hi = request.GET.get('max_price')
+    #     if lo: items = items.filter(price__gte=Decimal(lo))
+    #     if hi: items = items.filter(price__lte=Decimal(hi))
+    # except (InvalidOperation, ValueError):
+    #     messages.error(request, "Bad price filter")
+    # store_id = request.GET.get('store')
+    # if store_id and store_id.isdigit():
+    #     items = items.filter(store_id=int(store_id))
+    # stores = Stores.objects.all()
+    return # render(request, "cart.html", {
+    #     'items': items.order_by('store_name','name'),
+    #     'all_stores': stores,
+    #     'custom_user': get_custom_user(request),
+    # })
 
 @login_required
 def add_to_cart(request, item_id):
@@ -177,7 +317,7 @@ def add_to_cart(request, item_id):
     #     oi.quantity += 1
     #     oi.save()
     # messages.success(request, f"Added {item.name} to cart")
-     return redirect('cart')
+     return # redirect('cart')
 
 @login_required
 def cart(request):
@@ -228,7 +368,7 @@ def cart(request):
 
 @login_required
 def checkout(request):
-    profile = get_custom_user(request)
+    profile = get_user("email", request.user.email)
     order = get_object_or_404(Orders, user=profile, status='cart')
     if request.method == 'POST':
         addr = request.POST.get('delivery_address','').strip()
@@ -255,7 +395,7 @@ def maps(request):
         'location': {'lat': 40.7607, 'lng': -111.8939},
         'stores_for_map': stores,
         # 'delivery_persons': delivery_people,
-        'custom_user': get_custom_user(request),
+        'custom_user': get_user("email", request.user.email),
     })
     
 @login_required
