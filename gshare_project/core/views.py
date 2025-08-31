@@ -44,18 +44,16 @@ def get_user(field: str, value):
         return None
 
 # edits phone, email, address with value based on the field selected.
-def edit_user(user_email: str, field : str, value: str):
-
+def edit_user(user_email: str, field: str, value: str):
     try: 
-
-        user = Users.objects.using("gshare").get(email = user_email)# change this to email later
-
+        user = Users.objects.using("gsharedb").get(email=user_email)
         setattr(user, field, value)
-
-        user.save(using = 'gsharedb')
+        user.save(using='gsharedb')
         return user
-
     except Users.DoesNotExist:
+        return None
+    except Exception as e:
+        print(f"Error updating user: {e}")
         return None
 
 """
@@ -139,24 +137,35 @@ def get_orders(user: Users):
 
 def home(request):
     stores = Stores.objects.all().order_by('name')
-    return render(request, 'home.html', {
+    context = {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
         'location': {'lat': 40.7607, 'lng': -111.8939},
         'all_stores': stores,
-    })
+    }
+    
+    if request.user.is_authenticated:
+        profile = get_user("email", request.user.email)
+        if profile:
+            context['user'] = profile
+    
+    return render(request, 'home.html', context)
 
 def aboutus(request):
     return render(request, "aboutus.html")
 
 def login_view(request):
+    if request.user.is_authenticated:
+        return redirect('home')
+        
     if request.method == 'POST':
         u = request.POST.get('username','').strip()
         p = request.POST.get('password','')
         user = authenticate(request, username=u, password=p)
-        if user:
-            auth_login(request, user)
-            return redirect(request.GET.get('next','home'))
-        messages.error(request, "Invalid credentials")
+        if user is not None:
+            login(request, user)
+            request.session.save()
+            return redirect(request.GET.get('next', 'home'))
+        messages.error(request, "Invalid username or password")
     return render(request, 'login.html')
 
 def signup_view(request):
@@ -172,7 +181,7 @@ def signup_view(request):
 
         if User.objects.filter(username=u).exists():
             messages.error(request, "Username taken")
-            return redirect('home')
+            return redirect('login')
 
 
         # Create auth user in default DB
@@ -222,37 +231,111 @@ def handlePasswordChange(request, newPassword):
     request.user.set_password(newPassword)
     request.user.save()
 
+def updateProfile(profile, data, files):
+    if 'name' in data:
+        profile.name = data['name']
+    
+    if 'email' in data:
+        profile.email = data['email']
+    
+    if 'phone' in data:
+        profile.phone = data['phone']
+    
+    if 'address' in data:
+        profile.address = data['address']
+    
+    if 'about_me' in data:
+        profile.about_me = data['about_me']
+    
+    if 'profile_picture' in files:
+        profile_picture = files.get('profile_picture')
+        if profile_picture:
+            profile.profile_picture = profile_picture
+    
+    # Save the profile
+    profile.save(using='gsharedb')
+    return True
+
 @login_required
 def userprofile(request):
-    profile = get_custom_user(request)
-    orders = profile.orders_placed.select_related('store')\
-                .prefetch_related('order_items__item') if profile else []
+    # profile = get_custom_user(request)
+    # orders = profile.orders_placed.select_related('store')\
+    #             .prefetch_related('order_items__item') if profile else []
+    user_email = request.user.email
+    if not user_email:
+        messages.error(request, 'No email associated with your account')
+        return redirect('home')
+        
+    profile = get_user("email", user_email)
+    if not profile:
+        messages.error(request, 'User profile not found')
+        return redirect('login')
     
     errors = []
-    if request.method == 'POST' and 'change_password' in request.POST:
-        currentPassword = request.POST.get('current_password', '')
-        newPassword1 = request.POST.get('new_password1', '')
-        newPassword2 = request.POST.get('new_password2', '')
-        
-        isValid, errorMessage = validatePasswordChange(
-            request, currentPassword, newPassword1, newPassword2
-        )
-        
-        if isValid:
-            handlePasswordChange(request, newPassword1)
-            errors.append({
-                'message': 'Your password was successfully updated!',
-                'is_success': True
-            })
-        else:
-            errors.append({
-                'message': errorMessage,
-                'is_success': False
-            })
     
-
-    profile = get_user("email", request.user.email)
-
+    if request.method == 'POST':
+        if 'save_profile' in request.POST:
+            try:
+                if 'name' in request.POST:
+                    profile.name = request.POST['name']
+                
+                if 'email' in request.POST and request.POST['email'] != profile.email:
+                    if Users.objects.using('gsharedb').filter(email=request.POST['email']).exists():
+                        errors.append({
+                            'message': 'This email is already in use',
+                            'is_success': False
+                        })
+                    else:
+                        profile.email = request.POST['email']
+                
+                if 'phone' in request.POST:
+                    profile.phone = request.POST['phone']
+                
+                if 'address' in request.POST:
+                    profile.address = request.POST['address']
+                
+                if 'about_me' in request.POST:
+                    profile.about_me = request.POST['about_me']
+                
+                if 'profile_picture' in request.FILES:
+                    profile_picture = request.FILES.get('profile_picture')
+                    if profile_picture:
+                        profile.profile_picture = profile_picture
+                
+                # Save the profile
+                profile.save(using='gsharedb')
+                
+                # Update the auth user's email if it was changed
+                if 'email' in request.POST and request.user.email != request.POST['email']:
+                    request.user.email = request.POST['email']
+                    request.user.save()
+                
+                messages.success(request, 'Profile updated successfully!')
+                return redirect('profile')
+                
+            except Exception as e:
+                errors.append({
+                    'message': f'Error updating profile: {str(e)}',
+                    'is_success': False
+                })
+        
+        elif 'change_password' in request.POST:
+            currentPassword = request.POST.get('current_password', '')
+            newPassword1 = request.POST.get('new_password1', '')
+            newPassword2 = request.POST.get('new_password2', '')
+            
+            isValid, errorMessage = validatePasswordChange(
+                request, currentPassword, newPassword1, newPassword2
+            )
+            
+            if isValid:
+                handlePasswordChange(request, newPassword1)
+                messages.success(request, 'Your password was successfully updated!')
+            else:
+                messages.error(request, errorMessage)
+            
+            return redirect('profile')
+    
     orders = get_orders(profile)
     
     # profile.orders_placed.select_related('store')\
@@ -260,7 +343,9 @@ def userprofile(request):
     return render(request, "profile.html", {
         'user': profile,
         'user_orders': orders,
-        'errors': errors
+        'errors': errors,
+        'request': request,
+        'auth_user': request.user
     })
 
 @login_required
