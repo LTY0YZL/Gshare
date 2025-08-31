@@ -59,9 +59,14 @@
 
         <aside class="col-span-1 bg-blue-900/90">
             <div class="p-4 border-b border-gray-300">
-                <h1 class="">Room: {{ room_name }}</h1>
-                <h1 class="">Room Code: {{ room_code }}</h1>
+                {% if thread %}
+                    <h1 class="">Direct Message with {{ other_user.username }}</h1>
+                {% else %}
+                    <h1 class="">Room: {{ room_name }}</h1>
+                    <h1 class="">Room Code: {{ room_code }}</h1>
+                {% endif %}
             </div>
+            {% if members %}
             <h2>Members</h2>
             <ul>
                 {% for member in members %}
@@ -72,6 +77,7 @@
                     <p>There is no one in this group, which is impossible because you are a part of this</p>
                 {% endfor %}
             </ul>
+            {% endif %}
         </aside>
     </div>
 
@@ -79,9 +85,16 @@
         const roomName = "{{ room_name }}";
         const username = "{{ user.username  }}"; // pass in the username from Django context
 
+        // connect to the WebSocket
+        {% if thread %}
+        const chatSocket = new WebSocket(
+            'ws://' + window.location.host + '/ws/chat/dm/' + '{{ thread.id }}' + '/'
+        );
+        {% else %}
         const chatSocket = new WebSocket(
             'ws://' + window.location.host + '/ws/chat/' + roomName + '/'
         );
+        {% endif %}
 
         window.onload = function () {
             const chatLog = document.querySelector('#chat-log');

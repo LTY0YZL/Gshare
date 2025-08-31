@@ -1,13 +1,32 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import ChatGroup
+from .models import ChatGroup, DirectMessageThread, Message
+from django.contrib.auth.models import User
 from django.utils.text import slugify
 
 # Create your views here.
 @login_required
 def groups_page(request):
     user_groups = ChatGroup.objects.filter(members=request.user)
+    
+    if request.method == 'POST':
+        username = request.POST.get('username', '').strip()
+        try:
+            other_user = User.objects.get(username=username)
+            if other_user == request.user:
+                messages.error(request, "You cannot start a direct message with yourself.")
+                return redirect('groups_page')
+            else:
+                thread, created = DirectMessageThread.get_or_create_thread(request.user, other_user)
+                if created:
+                    messages.success(request, f"Direct message thread created with {other_user.username}.")
+                else:
+                    messages.info(request, f"Direct message thread already exists with {other_user.username}.")
+                return redirect('direct_message', thread_id=thread.id)
+        except User.DoesNotExist:
+            messages.error(request, "User does not exist.")
+            
     return render(request, 'chat/groups.html', {'groups': user_groups})
 
 @login_required
@@ -17,7 +36,8 @@ def chat_room(request, room_name):
         messages = room.messages.all().order_by('timestamp')
         user_groups = ChatGroup.objects.filter(members=request.user)
         members = room.members.all()
-        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code, 'messages': messages, 'groups': user_groups, 'members': members})
+        # show all the other users in the DM's then display all the DM's
+        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code, 'messages': messages, 'groups': user_groups, 'members': members, 'user': request.user})
     except ChatGroup.DoesNotExist:
         messages.error(request, "Chat room does not exist.")
         return redirect('groups_page')
@@ -29,7 +49,7 @@ def create_group(request):
         group_name = request.POST.get('group_name', '').strip()
         if not group_name:
             messages.error(request, "Group name cannot be empty.")
-            return redirect(request, 'create_group')
+            return redirect('create_group')
         
         if ChatGroup.objects.filter(name=group_name).exists():
             messages.error(request, 'A group with this name already exists.')
@@ -56,4 +76,21 @@ def join_group(request):
             return redirect('join_group')
     
     return render(request, 'chat/join_group.html')
+
+@login_required
+def direct_message(request, thread_id):
+    print("Direct message view called with thread_id:", thread_id)
+    thread = DirectMessageThread.objects.filter(id=thread_id, participants=request.user).first()
+    if not thread:
+        messages.error(request, "Direct message thread does not exist or you do not have access.")
+        return redirect('groups_page')
+    else:
+        messages_qs = Message.objects.filter(thread=thread).order_by('timestamp')
+        
+        other_user = thread.participants.exclude(id=request.user.id).first()
+        user_groups = ChatGroup.objects.filter(members=request.user)
+        return render(request, 'chat/chat_room.html', {'thread': thread, 'messages': messages_qs, 'other_user': other_user, 'groups': user_groups, 'user': request.user})
+        
+        
+        
 
