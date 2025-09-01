@@ -36,8 +36,18 @@ def chat_room(request, room_name):
         messages = room.messages.all().order_by('timestamp')
         user_groups = ChatGroup.objects.filter(members=request.user)
         members = room.members.all()
+        
+        DMs = DirectMessageThread.objects.filter(participants=request.user)
+        # for each DM, get the other participant
+        dm_list = [
+            {
+                "id": dm.id,
+                "other_user": dm.participants.exclude(id=request.user.id).first()
+            }
+            for dm in DMs
+        ]
         # show all the other users in the DM's then display all the DM's
-        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code, 'messages': messages, 'groups': user_groups, 'members': members, 'user': request.user})
+        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code, 'messages': messages, 'groups': user_groups, 'members': members, 'dm_list':dm_list, 'user': request.user})
     except ChatGroup.DoesNotExist:
         messages.error(request, "Chat room does not exist.")
         return redirect('groups_page')
@@ -89,7 +99,16 @@ def direct_message(request, thread_id):
         
         other_user = thread.participants.exclude(id=request.user.id).first()
         user_groups = ChatGroup.objects.filter(members=request.user)
-        return render(request, 'chat/chat_room.html', {'thread': thread, 'messages': messages_qs, 'other_user': other_user, 'groups': user_groups, 'user': request.user})
+        DMs = DirectMessageThread.objects.filter(participants=request.user)
+        # for each DM, get the other participant
+        dm_list = [
+            {
+                "id": dm.id,
+                "other_user": dm.participants.exclude(id=request.user.id).first()
+            }
+            for dm in DMs
+        ]
+        return render(request, 'chat/chat_room.html', {'thread': thread, 'messages': messages_qs, 'other_user': other_user, 'groups': user_groups, 'dm_list': dm_list, 'user': request.user})
         
         
         

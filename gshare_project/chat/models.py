@@ -37,7 +37,7 @@ class DirectMessageThread(models.Model):
         return thread, True
 
 class Message(models.Model):
-    group = models.ForeignKey(ChatGroup, on_delete=models.CASCADE, related_name='messages')
+    group = models.ForeignKey(ChatGroup, on_delete=models.CASCADE, null=True, blank=True, related_name='messages')
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
     thread = models.ForeignKey(DirectMessageThread, on_delete=models.CASCADE, null=True, blank=True, related_name='messages')
     content = models.TextField()
@@ -48,3 +48,9 @@ class Message(models.Model):
     
     def __str__(self):
         return f'{self.sender.username}: {self.content[:20]}'
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if bool(self.group) == bool(self.thread):
+            raise ValidationError("Message must be associated with either a group or a direct message thread.")
+
