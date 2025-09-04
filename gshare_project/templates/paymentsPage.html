@@ -10,10 +10,10 @@
     </head>
 
     <body class="mt-16 overflow-x-hidden">
-        <div name="HoldsEverything" class="flex flex-row w-full h-[calc(100vh-5rem)]">
+        <div name="HoldsEverything" style="min-width: 100vw;" class="flex flex-row w-full h-[calc(100vh-5rem)]">
 
             <!-- Left column - Payments -->
-            <div name="paymentsAll" class="w-1/2 p-4 overflow-y-auto">
+            <div name="paymentsAll" style="font-weight: bolder;" class="w-1/2 p-4 overflow-y-auto">
                 <div name="PaymentsByOthers" style="min-height: 50vh;" class="mb-6 border-2 p-4 border-blue-500 min-h-[40%]">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid darkblue; padding: 6px">
                         <p>Other Member's Payments</p>
@@ -37,7 +37,7 @@
                     <label style="font-weight:500; margin: 6px">Card Number: <input type="number" style="border: 1px solid blue; padding: 2px; background-color: #3A97D4; color: aliceblue;"> </label>
                     <label style="font-weight:500; margin: 6px">Name on Card: <input type="text" style="border: 1px solid blue; padding: 2px; background-color: #3A97D4; color: aliceblue;"> </label>
                     <div style="margin: 6px; justify-content: space-between;">
-                        <label style="font-weight:500;">Expiration Date: <input type="month" min="{% now 'Y-m' %}" style="border: 1px solid blue; padding: 2px; background-color: #3A97D4; color: aliceblue;"> </label>
+                        <label style="font-weight:500; margin-right: 3.2rem;">Expiration: <input type="month" min="{% now 'Y-m' %}" style="border: 1px solid blue; padding: 2px; background-color: #3A97D4; color: aliceblue;"> </label>
                         <label style="font-weight:500; ">Code: <input type="number" style="border: 1px solid blue; padding: 2px; background-color: #3A97D4; color: aliceblue;"> </label>
 
                     </div>
@@ -50,10 +50,22 @@
             </div>
             
             <!-- Right column - Carts -->
-            <div name="Carts" class="w-1/2 p-4 border-l-2">
-                <div class="border-2 h-full">
-                    Carts Section
+            <div name="rightSide" style="height: 70vh; display: flex; flex-direction: column; justify-content: space-between; width: 45%;">
+                <div name="Carts" style="font-weight: bolder; min-width: 40vw; margin-top: 1rem; max-height: 50vh; flex-grow: 1;" class="border-2 p-4 overflow-y-auto">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid darkblue; padding: 6px">
+                        <p>Carts in this Cart</p>
+                    </div>
+
+                    <div name="eachCart" style="display: flex; flex-direction: row; justify-content: space-between; margin: 3px;">
+                        <div name="userInfo" style="display: flex; flex-direction: row; align-items: center; margin: 3px;">
+                            <img name="userIcon" src="userIcon" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
+                            <p style="margin-left: 1rem;">User</p>
+                        </div>
+                        <p>$10.88</p>
+                    </div>
                 </div>
+            
+                <button style="border: 1px solid darkblue; padding: 8px; max-width: 15vw; align-self: center; background-color: #3A97D4; color: aliceblue;">Confirm Payments</button>
             </div>
         </div>
     </body>

@@ -32,8 +32,12 @@
                 </div>
                 <div class="text-center md:text-left">
                     <h1 class="text-xl font-semibold">{{ user.name }}</h1>
-                    <p class="text-gray-600">Member since {{ auth_user.date_joined|date:"F Y" }}</p>
-                    <div class="mt-2">
+                    <div style="font-size: small; display: flex; flex-direction: column; ">
+                        <p>@{{auth_user.username}} </p>
+                        <p class="text-gray-600"> ⛺ Member since {{ auth_user.date_joined|date:"F Y" }}</p>
+                    </div>
+                    
+                    <div class="mt-1">
                         <span class="text-yellow-500">★★★★★</span>
                         <span class="text-sm text-gray-500">(0 reviews)</span>
                     </div>
