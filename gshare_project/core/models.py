@@ -8,6 +8,7 @@ class Users(models.Model):
     email = models.CharField(unique=True, max_length=100, null=True, blank=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
     address = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True) 
 
     class Meta:
         managed = False
