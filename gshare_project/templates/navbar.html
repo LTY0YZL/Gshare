@@ -22,7 +22,7 @@
         
         <div class="flex items-center space-x-4">
             {% if request.user.is_authenticated %}
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center">
                     <a href="{% url 'profile' %}" class="hover:underline">
                         {% if user and user.name %}
                             {{ user.name }}
@@ -30,12 +30,12 @@
                             {{ request.user.get_full_name|default:request.user.username }}
                         {% endif %}
                     </a>
-                    <span class="text-gray-400">|</span>
-                    <a href="{% url 'logout' %}" class="hover:underline">Log out</a>
+                    <span style="padding: 0rem 1rem 0rem 1rem;" class="text-gray-400">|</span>
+                    <a style="padding-right: 1rem;" href="{% url 'logout' %}" class="hover:underline">Log out</a>
                 </div>
             {% else %}
                 <div class="flex items-center space-x-4">
-                    <a href="{% url 'login' %}" class="hover:underline">Log in</a>
+                    <a style="padding-right: 1rem;" href="{% url 'login' %}" class="hover:underline">Log in</a>
                 </div>
             {% endif %}
         </div>
