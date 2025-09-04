@@ -487,3 +487,6 @@ def maps(request):
 def shoppingcart(request):
     return render(request, "shoppingcart.html")
 
+@login_required
+def payments(request):
+    return render(request, "paymentsPage.html")

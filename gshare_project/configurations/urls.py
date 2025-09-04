@@ -37,7 +37,7 @@ urlpatterns = [
     path('cart/add/<int:item_id>/', views.add_to_cart, name='add_to_cart'),
     path('checkout/', views.checkout, name='checkout'),
     path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
-    path('cart/payments/', views.shoppingcart, name='payments'),
+    path('cart/payments/', views.payments, name='payments'),
     # path('chat/', include('chat.urls')),
     path("__reload__/", include("django_browser_reload.urls")),
 ]
