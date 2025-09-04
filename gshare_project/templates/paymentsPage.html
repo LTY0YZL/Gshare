@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+    {% include navbar %}
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Payments</title>
+        <link rel="stylesheet" href="{% static 'dist/tailwindcss.css'%}">
+    </head>
+
+    <body>
+        <nav name="HoldsEverything" class="flex flex-col border-amber-300">
+            <nav name="paymentsAll" class="flex flex-row border-b-blue-800">
+
+                <section name="PaymentsByOthers">
+
+                </section>
+
+                <section name="myPayment">
+
+                </section>
+
+            </nav>
+
+            <nav name="Carts">
+
+            </nav>
+
+        </nav>
+    </body>
+
+</html>
