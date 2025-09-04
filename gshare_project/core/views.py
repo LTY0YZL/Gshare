@@ -12,9 +12,9 @@ from django.contrib.auth.models import User as AuthUser
 from django.contrib import messages
 from django.utils import timezone
 from django.conf import settings
-from pymysql import IntegrityError
+from django.db import IntegrityError 
 from django.db.models import Q
-
+from django.db.models import Avg, Count
 from core.models import (
     Users,
     Stores, Items,
@@ -23,6 +23,24 @@ from core.models import (
 )
 
 """helper functions"""
+
+"""
+Retrieve all feedback for a specific user and calculate their average rating.
+
+Args:
+    user_id (int): The ID of the user whose feedback and average rating are being retrieved.
+
+Returns:
+    tuple:
+        - QuerySet or None: A QuerySet of feedback objects if feedback exists, otherwise None.
+        - float: The average rating of the user if feedback exists, otherwise 0.0.
+"""
+def get_user_ratings(user_id: int):
+    feedbacks = Feedback.objects.using('gsharedb').filter(reviewee_id=user_id)
+    if not feedbacks.exists():
+        return None, 0.0
+    avg_rating = feedbacks.aggregate(Avg('rating'))['rating__avg']
+    return feedbacks, avg_rating
 
 
 """
@@ -336,16 +354,23 @@ def userprofile(request):
             
             return redirect('profile')
     
-    orders = get_orders(profile)
-    
+    Feedback, avg_rating = get_user_ratings(profile.id)
+    review_count = Feedback.count() if Feedback else 0
+
+    avg = float(avg_rating or 0)
+    stars_full = max(0, min(5, int(round(avg))))  
+    stars_text = '★' * stars_full + '☆' * (5 - stars_full)
+        
     # profile.orders_placed.select_related('store')\
     #             .prefetch_related('order_items__item') if profile else []
     return render(request, "profile.html", {
         'user': profile,
-        'user_orders': orders,
         'errors': errors,
         'request': request,
-        'auth_user': request.user
+        'auth_user': request.user,
+        'avg_rating': avg,
+        'review_count': review_count,
+        'stars_text': stars_text,
     })
 
 @login_required
