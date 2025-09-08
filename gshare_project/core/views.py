@@ -99,41 +99,106 @@ def create_user_signin(name: str, email: str, address: str = "Not provided", pho
         # e.g., duplicate email or other constraint violations
         raise
 
-    """
-    Create a new order for a user at a specific store with given items and quantities.
 
-    Args:
-        user (Users): The user placing the order.
-        store (Stores): The store from which the order is being placed.
-        items (list[Items]): A list of item objects to be included in the order.
-        quantities (list[int]): A list of quantities corresponding to each item.
+"""
+Create a new order for a user at a specific store with given items and quantities.
 
-    Returns:
-        Orders: The created order object.
-    """
-def create_order(user: Users, store: Stores, items: list[Items], quantities: list[int]) -> Orders:
+Args:
+    user (Users): The user placing the order.
+    store (Stores): The store from which the order is being placed.
+    items (list[Items]): A list of item objects to be included in the order.
+    quantities (list[int]): A list of quantities corresponding to each item.
 
-    if len(items) != len(quantities):
-        raise ValueError("Items and quantities lists must have the same length.")
+Returns:
+    Orders: The created order object.
+"""
+# def create_order(user: Users, store: Stores, items: list[Items], quantities: list[int]) -> Orders:
 
-    with transaction.atomic(using='gsharedb'):
-        order = Orders.objects.using('gsharedb').create(
-            user=user,
-            store=store,
-            status='placed',  # or 'cart' if you want to create a cart first
-            order_time=timezone.now()
-        )
+#     if len(items) != len(quantities):
+#         raise ValueError("Items and quantities lists must have the same length.")
 
-        order_items = [
-            OrderItems(
-                order=order,
-                item=item,
-                quantity=qty
-            ) for item, qty in zip(items, quantities)
-        ]
-        OrderItems.objects.using('gsharedb').bulk_create(order_items)
+#     with transaction.atomic(using='gsharedb'):
+#         order = Orders.objects.using('gsharedb').create(
+#             user=user,
+#             store=store,
+#             status='placed',  # or 'cart' if you want to create a cart first
+#             order_time=timezone.now()
+#         )
 
-    return order
+#         order_items = [
+#             OrderItems(
+#                 order=order,
+#                 item=item,
+#                 quantity=qty
+#             ) for item, qty in zip(items, quantities)
+#         ]
+#         OrderItems.objects.using('gsharedb').bulk_create(order_items)
+
+#     return order
+
+
+"""
+Add an item to the user's cart. If the item already exists in the cart, increase its quantity.
+
+Args:
+    request: The HTTP request object.
+    item_id (int): The ID of the item to add to the cart.
+
+Returns:
+    Redirects to the cart page.
+"""
+
+@login_required
+def add_to_cart(request, item_id):
+
+    profile = get_user("email", request.user.email)
+    item = get_object_or_404(Items, pk=item_id)
+
+    # Get or create the user's cart (order with status 'cart')
+    order, created = Orders.objects.using('gsharedb').get_or_create(
+        user=profile,
+        status='cart',
+        defaults={
+            'order_time': timezone.now(),
+            'store': item.store
+        }
+    )
+
+    # Add the item to the cart or update its quantity
+    order_item, created = OrderItems.objects.using('gsharedb').get_or_create(
+        order=order,
+        item=item,
+        defaults={'quantity': 1}
+    )
+    if not created:
+        order_item.quantity += 1
+        order_item.save(using='gsharedb')
+
+    messages.success(request, f"Added {item.name} to your cart.")
+    return redirect('cart')
+
+"""
+Edit the quantity of a specific item in an order.
+
+Args:
+    order_id (int): The ID of the order containing the item to be updated.
+    item_id (int): The ID of the item whose quantity needs to be updated.
+    new_quantity (int): The new quantity to set for the specified item.
+
+Returns:
+    bool: True if the item quantity was successfully updated, False otherwise.
+"""
+def Edit_order_items(order_id: int, item_id: int, new_quantity: int) -> bool:
+    try:
+        order_item = OrderItems.objects.using('gsharedb').get(order_id=order_id, item_id=item_id)
+        order_item.quantity = new_quantity
+        order_item.save(using='gsharedb')
+        return True
+    except OrderItems.DoesNotExist:
+        return False
+    except Exception as e:
+        print(f"Error updating order item: {e}")
+        return False
 
 """
 Retrieve all orders for a specific user from the 'gsharedb' database.
@@ -144,9 +209,9 @@ Args:
 Returns:
     QuerySet or list: A QuerySet of orders if orders exist, otherwise an empty list.
 """
-def get_orders(user: Users):
+def get_orders(user: Users, order_status: str):
 
-    orders = Orders.objects.using('gsharedb').filter(user_id = user.id) # Getting all the orders related to this user.
+    orders = Orders.objects.using('gsharedb').filter(user_id = user.id, status = order_status) # Getting all the orders related to this user and status.
     if not orders.exists():  # Checking if the queryset is empty.
         return []
     return orders
@@ -292,6 +357,16 @@ def userprofile(request):
     errors = []
     
     if request.method == 'POST':
+
+        if 'save_description' in request.POST:
+            if 'description' in request.POST:
+                    profile.description = request.POST.get('description', '').strip()
+                    print(profile.description)
+
+            profile.save(using='gsharedb')
+            messages.success(request, 'About Me updated!')
+            return redirect('profile')
+
         if 'save_profile' in request.POST:
             try:
                 if 'name' in request.POST:
@@ -311,10 +386,7 @@ def userprofile(request):
                 
                 if 'address' in request.POST:
                     profile.address = request.POST['address']
-                
-                if 'about_me' in request.POST:
-                    profile.about_me = request.POST['about_me']
-                
+
                 if 'profile_picture' in request.FILES:
                     profile_picture = request.FILES.get('profile_picture')
                     if profile_picture:
@@ -376,7 +448,7 @@ def userprofile(request):
 @login_required
 def menu(request):
     return render(request, "menu.html", {
-        'user': get_user("email", request.user.email),
+        'user': get_user("name", "anand"),
     })
 
 # @login_required
@@ -408,26 +480,32 @@ def browse_items(request):
 
 @login_required
 def add_to_cart(request, item_id):
-    # profile = get_custom_user(request)
-    # item = get_object_or_404(Items, pk=item_id)
-    # order, _ = Orders.objects.get_or_create(
-    #     user=profile,
-    #     status='cart',
-    #     defaults={
-    #         'order_date': timezone.now(),
-    #         'store': item.store
-    #     }
-    # )
-    # oi, created = OrderItems.objects.get_or_create(
-    #     order=order,
-    #     item=item,
-    #     defaults={'quantity':1, 'price':item.price}
-    # )
-    # if not created:
-    #     oi.quantity += 1
-    #     oi.save()
-    # messages.success(request, f"Added {item.name} to cart")
-     return # redirect('cart')
+
+    profile = get_user("email", request.user.email)
+    item = get_object_or_404(Items, pk=item_id)
+
+    # Get or create the user's cart (order with status 'cart')
+    order, created = Orders.objects.using('gsharedb').get_or_create(
+        user=profile,
+        status='cart',
+        defaults={
+            'order_time': timezone.now(),
+            'store': item.store
+        }
+    )
+
+    # Add the item to the cart or update its quantity
+    order_item, created = OrderItems.objects.using('gsharedb').get_or_create(
+        order=order,
+        item=item,
+        defaults={'quantity': 1}
+    )
+    if not created:
+        order_item.quantity += 1
+        order_item.save(using='gsharedb')
+
+    messages.success(request, f"Added {item.name} to your cart.")
+    return redirect('cart')
 
 @login_required
 def cart(request):
