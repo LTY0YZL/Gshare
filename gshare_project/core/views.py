@@ -205,6 +205,7 @@ Retrieve all orders for a specific user from the 'gsharedb' database.
 
 Args:
     user (Users): The user object for whom the orders are being retrieved.
+    Status (str): The status of the orders to filter by ('cart', 'placed', 'inprogress','delivered').
 
 Returns:
     QuerySet or list: A QuerySet of orders if orders exist, otherwise an empty list.
@@ -215,6 +216,40 @@ def get_orders(user: Users, order_status: str):
     if not orders.exists():  # Checking if the queryset is empty.
         return []
     return orders
+
+"""
+Change the status of an order in the 'gsharedb' database.
+Args:
+    order_id (int): The ID of the order to be updated.
+    new_status (str): The new status to set for the order ('cart', 'placed', 'inprogress','delivered').
+    Returns:
+    bool: True if the order status was successfully updated, False otherwise.
+"""
+def change_order_status(order_id: int, new_status: str) -> bool:
+    try:
+        order = Orders.objects.using('gsharedb').get(id=order_id)
+        order.status = new_status
+        order.save(using='gsharedb')
+        return True
+    except Orders.DoesNotExist:
+        return False
+    except Exception as e:
+        print(f"Error updating order status: {e}")
+        return False
+    
+"""
+Retrieve all deliveries for a specific user based on delivery status.
+Args:
+    user (Users): The user object for whom the deliveries are being retrieved.
+    delivery_status (str): The status of the deliveries to filter by ('accepted', 'inprogress', 'delivered').
+Returns:
+    QuerySet or list: A QuerySet of deliveries if deliveries exist, otherwise an empty list.
+"""
+def get_my_deliveries(user: Users, delivery_status: str):
+    deliveries = Deliveries.objects.using('gsharedb').filter(order__user=user, status=delivery_status)
+    if not deliveries.exists():
+        return []
+    return deliveries
 
 """Main functions"""
 
