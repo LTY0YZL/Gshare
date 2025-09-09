@@ -512,3 +512,6 @@ def maps(request):
 def shoppingcart(request):
     return render(request, "shoppingcart.html")
 
+@login_required
+def myorders(request):
+    return render(request, 'ordershistory.html')
