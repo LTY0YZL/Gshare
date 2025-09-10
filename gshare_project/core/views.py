@@ -644,4 +644,12 @@ def shoppingcart(request):
 
 @login_required
 def myorders(request):
-    return render(request, 'ordershistory.html')
+    orders = get_orders(request.user, "cart")
+    
+    # each tuple is (order, items)
+    orders_with_items = []
+    for order in orders:
+        items = get_order_items(order)
+        orders_with_items.append((order, items))
+    
+    return render(request, 'ordershistory.html', {'orders_with_items': orders_with_items})
