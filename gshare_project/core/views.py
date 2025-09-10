@@ -776,13 +776,26 @@ def shoppingcart(request):
 
 @login_required
 def myorders(request):
-    orders = get_orders(request.user, "cart")
+    user = get_user("email", request.user.email)
+    orders = get_orders(user, "cart")
     
     # each tuple is (order, items)
     orders_with_items = []
     for order in orders:
         items = get_order_items(order)
-        orders_with_items.append((order, items))
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+        orders_with_items.append((order, items_with_totals))
+
+
+    print(items_with_totals)
     
     return render(request, 'ordershistory.html', {'orders_with_items': orders_with_items})
 
