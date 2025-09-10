@@ -139,50 +139,35 @@ Returns:
 #     return order
 
 
-"""
-Add an item to the user's cart. If the item already exists in the cart, increase its quantity.
 
-Args:
-    request: The HTTP request object.
-    item_id (int): The ID of the item to add to the cart.
+# @login_required
+# def add_to_cart(request, item_id):
 
-Returns:
-    Redirects to the cart page.
-"""
+#     profile = get_user("email", request.user.email)
+#     item = get_object_or_404(Items, pk=item_id)
 
-@login_required
-def add_to_cart(request, item_id):
+#     # Get or create the user's cart (order with status 'cart')
+#     order, created = Orders.objects.using('gsharedb').get_or_create(
+#         user=profile,
+#         status='cart',
+#         defaults={
+#             'order_time': timezone.now(),
+#             'store': item.store
+#         }
+#     )
 
-    profile = get_user("email", request.user.email)
-    item = get_object_or_404(Items.objects.using('gsharedb'), pk=item_id)
+#     # Add the item to the cart or update its quantity
+#     order_item, created = OrderItems.objects.using('gsharedb').get_or_create(
+#         order=order,
+#         item=item,
+#         defaults={'quantity': 1}
+#     )
+#     if not created:
+#         order_item.quantity += 1
+#         order_item.save(using='gsharedb')
 
-    # Get or create the user's cart (order with status 'cart')
-    order, created = Orders.objects.using('gsharedb').get_or_create(
-        user=profile,
-        status='cart',
-        defaults={
-            'order_date': timezone.now(),
-            'store': item.store
-        }
-    )
-
-    # Add the item to the cart or update its quantity
-    order_item, created = OrderItems.objects.using('gsharedb').get_or_create(
-        order=order,
-        item=item,
-        defaults={'quantity': 1}
-    )
-    if not created:
-        order_item.quantity += 1
-        order_item.save(using='gsharedb')
-        
-    # Always return JSON for AJAX
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == "application/json":
-        return JsonResponse({"success": True, "message": f"Added {item.name} to your cart."})
-
-
-    messages.success(request, f"Added {item.name} to your cart.")
-    return redirect('cart')
+#     messages.success(request, f"Added {item.name} to your cart.")
+#     return redirect('cart')
 
 """
 Edit the quantity of a specific item in an order.
@@ -212,7 +197,7 @@ Retrieve all orders for a specific user from the 'gsharedb' database.
 
 Args:
     user (Users): The user object for whom the orders are being retrieved.
-    Status (str): The status of the orders to filter by ('cart', 'placed', 'inprogress','delivered').
+    Status (str): The status of the orders to filter by ('cart', 'placed', 'inprogress', 'delivered').
 
 Returns:
     QuerySet or list: A QuerySet of orders if orders exist, otherwise an empty list.
@@ -223,6 +208,38 @@ def get_orders(user: Users, order_status: str):
     if not orders.exists():  # Checking if the queryset is empty.
         return []
     return orders
+
+"""
+Retrieve all orders from the 'gsharedb' database based on their status.
+
+Args:
+    order_status (str): The status of the orders to filter by 
+                        (e.g., 'cart', 'placed', 'inprogress', 'delivered').
+
+Returns:
+    QuerySet or list: A QuerySet of orders if orders with the specified status exist, 
+                      otherwise an empty list.
+"""
+def get_orders_by_status(order_status: str):
+    orders = Orders.objects.using('gsharedb').filter(status=order_status)
+    if not orders.exists():
+        return []
+    return orders
+
+"""
+Retrieve all items in a specific order from the 'gsharedb' database.
+
+Args:
+    order (Orders): The order object for which the items are being retrieved.
+
+Returns:
+    QuerySet or list: A QuerySet of order items if they exist, otherwise an empty list.
+"""
+def get_order_items(order: Orders):
+    items = OrderItems.objects.using('gsharedb').filter(order=order).select_related('item')
+    if not items.exists():
+        return []
+    return items
 
 """
 Change the status of an order in the 'gsharedb' database.
@@ -519,6 +536,47 @@ def browse_items(request):
     #     'all_stores': stores,
     #     'custom_user': get_custom_user(request),
     # })
+
+
+
+"""
+Add an item to the user's cart. If the item already exists in the cart, increase its quantity.
+
+Args:
+    request: The HTTP request object.
+    item_id (int): The ID of the item to add to the cart.
+
+Returns:
+    Redirects to the cart page.
+"""
+@login_required
+def add_to_cart(request, item_id):
+
+    profile = get_user("email", request.user.email)
+    item = get_object_or_404(Items, pk=item_id)
+
+    # Get or create the user's cart (order with status 'cart')
+    order, created = Orders.objects.using('gsharedb').get_or_create(
+        user=profile,
+        status='cart',
+        defaults={
+            'order_time': timezone.now(),
+            'store': item.store
+        }
+    )
+
+    # Add the item to the cart or update its quantity
+    order_item, created = OrderItems.objects.using('gsharedb').get_or_create(
+        order=order,
+        item=item,
+        defaults={'quantity': 1}
+    )
+    if not created:
+        order_item.quantity += 1
+        order_item.save(using='gsharedb')
+
+    messages.success(request, f"Added {item.name} to your cart.")
+    return redirect('cart')
 
 @login_required
 def cart(request):
