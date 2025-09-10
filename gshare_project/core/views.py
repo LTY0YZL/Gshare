@@ -15,6 +15,7 @@ from django.conf import settings
 from django.db import IntegrityError 
 from django.db.models import Q
 from django.db.models import Avg, Count
+from django.http import JsonResponse
 from core.models import (
     Users,
     Stores, Items,
@@ -152,14 +153,14 @@ Returns:
 def add_to_cart(request, item_id):
 
     profile = get_user("email", request.user.email)
-    item = get_object_or_404(Items, pk=item_id)
+    item = get_object_or_404(Items.objects.using('gsharedb'), pk=item_id)
 
     # Get or create the user's cart (order with status 'cart')
     order, created = Orders.objects.using('gsharedb').get_or_create(
         user=profile,
         status='cart',
         defaults={
-            'order_time': timezone.now(),
+            'order_date': timezone.now(),
             'store': item.store
         }
     )
@@ -173,6 +174,11 @@ def add_to_cart(request, item_id):
     if not created:
         order_item.quantity += 1
         order_item.save(using='gsharedb')
+        
+    # Always return JSON for AJAX
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == "application/json":
+        return JsonResponse({"success": True, "message": f"Added {item.name} to your cart."})
+
 
     messages.success(request, f"Added {item.name} to your cart.")
     return redirect('cart')
@@ -514,35 +520,6 @@ def browse_items(request):
     # })
 
 @login_required
-def add_to_cart(request, item_id):
-
-    profile = get_user("email", request.user.email)
-    item = get_object_or_404(Items, pk=item_id)
-
-    # Get or create the user's cart (order with status 'cart')
-    order, created = Orders.objects.using('gsharedb').get_or_create(
-        user=profile,
-        status='cart',
-        defaults={
-            'order_time': timezone.now(),
-            'store': item.store
-        }
-    )
-
-    # Add the item to the cart or update its quantity
-    order_item, created = OrderItems.objects.using('gsharedb').get_or_create(
-        order=order,
-        item=item,
-        defaults={'quantity': 1}
-    )
-    if not created:
-        order_item.quantity += 1
-        order_item.save(using='gsharedb')
-
-    messages.success(request, f"Added {item.name} to your cart.")
-    return redirect('cart')
-
-@login_required
 def cart(request):
     store_filter = request.GET.get('Stores', 'All')
     price_filter = request.GET.get('Price-Range', 'Any')
@@ -613,6 +590,7 @@ def checkout(request):
 def maps(request):
     stores = Stores.objects.all()
     #delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
+    orders = get_orders(get_user("email", request.user.email), 'placed')
     return render(request, "maps.html", {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
         'location': {'lat': 40.7607, 'lng': -111.8939},
@@ -623,5 +601,10 @@ def maps(request):
     
 @login_required
 def shoppingcart(request):
-    return render(request, "shoppingcart.html")
+    user = request.user
+    order = get_orders(user, 'cart')
+    # for i in order:
+    #     print(i.address)
+    return render(request, "shoppingcart.html", {
+        'order': order})
 
