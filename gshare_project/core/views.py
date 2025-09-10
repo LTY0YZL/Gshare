@@ -733,17 +733,43 @@ def shoppingcart(request):
     user = request.user
     profile = get_user("email", user.email)
     print("User profile:", profile.name)
+    print(profile.id)
     order = get_orders(profile, 'cart')
     print(len(order))
-    print(order)
+    print(order[0].total_amount)
     print(order[0].id if order else "No order")
 
     items = get_order_items(order[0]) if order[0] else []
-    print(items)
+    subtotal = 0
+    items_with_totals = []
+    for item in items:
+        total = item[2] * item[5]  # quantity * price
+        subtotal += total
+        items_with_totals.append({
+            'name': item[4],  # item name
+            'quantity': item[2],
+            'price': item[5],  # item price
+            'total': total,
+        })
+        
+    tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+    grand_total = round(subtotal + tax, 2)
+
+    order_summary = {
+        'subtotal': subtotal,
+        'tax': tax,
+        'total': grand_total,
+    }
+    # for item in items:
+    #     totals.append(item[2] * item[5])  # quantity * price
+    # print(items)
 
     # print(items)
     return render(request, "shoppingcart.html", {
-        'order': order,
-        'items': items,
-        'items': items,
+        'items': items_with_totals,
+        'order': order_summary,
+        # 'order': order[0],
+        # 'items': items,
+        # 'items': items,
+        # 'totals': totals,
     })
