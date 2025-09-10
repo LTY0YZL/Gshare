@@ -11,10 +11,14 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User as AuthUser
 from django.contrib import messages
 from django.utils import timezone
+from django.db import connections
+from django.db import transaction
 from django.conf import settings
 from django.db import IntegrityError 
 from django.db.models import Q
 from django.db.models import Avg, Count
+from django.http import JsonResponse
+import json
 from core.models import (
     Users,
     Stores, Items,
@@ -195,7 +199,7 @@ Retrieve all orders for a specific user from the 'gsharedb' database.
 
 Args:
     user (Users): The user object for whom the orders are being retrieved.
-    Status (str): The status of the orders to filter by ('cart', 'placed', 'inprogress','delivered').
+    Status (str): The status of the orders to filter by ('cart', 'placed', 'inprogress', 'delivered').
 
 Returns:
     QuerySet or list: A QuerySet of orders if orders exist, otherwise an empty list.
@@ -204,6 +208,23 @@ def get_orders(user: Users, order_status: str):
 
     orders = Orders.objects.using('gsharedb').filter(user_id = user.id, status = order_status) # Getting all the orders related to this user and status.
     if not orders.exists():  # Checking if the queryset is empty.
+        return []
+    return orders
+
+"""
+Retrieve all orders from the 'gsharedb' database based on their status.
+
+Args:
+    order_status (str): The status of the orders to filter by 
+                        (e.g., 'cart', 'placed', 'inprogress', 'delivered').
+
+Returns:
+    QuerySet or list: A QuerySet of orders if orders with the specified status exist, 
+                      otherwise an empty list.
+"""
+def get_orders_by_status(order_status: str):
+    orders = Orders.objects.using('gsharedb').filter(status=order_status)
+    if not orders.exists():
         return []
     return orders
 
@@ -532,29 +553,70 @@ Returns:
 """
 @login_required
 def add_to_cart(request, item_id):
+    
+    print("Adding item to cart:", item_id)
 
     profile = get_user("email", request.user.email)
-    item = get_object_or_404(Items, pk=item_id)
+    if not profile:
+        messages.error(request, "Profile not found.")
+        return redirect('cart')
 
-    # Get or create the user's cart (order with status 'cart')
-    order, created = Orders.objects.using('gsharedb').get_or_create(
-        user=profile,
-        status='cart',
-        defaults={
-            'order_time': timezone.now(),
-            'store': item.store
-        }
-    )
+    print("User profile:", profile.name)
 
-    # Add the item to the cart or update its quantity
-    order_item, created = OrderItems.objects.using('gsharedb').get_or_create(
-        order=order,
-        item=item,
-        defaults={'quantity': 1}
-    )
-    if not created:
-        order_item.quantity += 1
-        order_item.save(using='gsharedb')
+    # Grab item
+    try:
+        item = Items.objects.using('gsharedb').get(id=item_id)
+    except Items.DoesNotExist:
+        messages.error(request, "Item not found.")
+        return redirect('cart')
+
+    # Get or create cart
+    order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
+    if not order:
+        order = Orders.objects.using('gsharedb').create(
+            user=profile,
+            status='cart',
+            order_date=timezone.now(),
+            store=item.store,
+            total_amount=0
+        )
+
+    print("Current order ID:", order.id)
+
+    # Upsert into order_items (composite PK table) and recompute total
+    with transaction.atomic(using='gsharedb'):
+        with connections['gsharedb'].cursor() as cur:
+            # Insert or bump quantity
+            cur.execute(
+                """
+                INSERT INTO order_items (order_id, item_id, quantity, price)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    quantity = quantity + VALUES(quantity)
+                """,
+                [order.id, item.id, 1, str(item.price or 0)]
+            )
+
+            # RECALC TOTAL from line items
+            cur.execute(
+                """
+                SELECT COALESCE(SUM(quantity * price), 0)
+                FROM order_items
+                WHERE order_id = %s
+                """,
+                [order.id]
+            )
+            total = cur.fetchone()[0] or 0
+
+    # Update order fields using ORM
+    order.total_amount = total
+    order.order_date = timezone.now()
+    order.save(using='gsharedb')
+    
+    # Always return JSON for AJAX
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == "application/json":
+        return JsonResponse({"success": True, "message": f"Added {item.name} to your cart."})
+
 
     messages.success(request, f"Added {item.name} to your cart.")
     return redirect('cart')
@@ -630,17 +692,42 @@ def checkout(request):
 def maps(request):
     stores = Stores.objects.all()
     #delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
+    orders = get_orders_by_status('cart')
+    print(orders)  # Debug print in your view
+    for order in orders:
+        print("Order ID:", order.id)  # Debug print in your view
+        print("User ID:", order.user.id)  # Debug print in your view
+        print("Delivery Address:", order.delivery_address)  # Debug print in your view
+    addresses = [order.delivery_address for order in orders if order.delivery_address]
+    print("Addresses:", addresses)  # Debug print in your view
+    print("Addresses JSON:", json.dumps(addresses))  # Debug print in your view
     return render(request, "maps.html", {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
         'location': {'lat': 40.7607, 'lng': -111.8939},
         'stores_for_map': stores,
         # 'delivery_persons': delivery_people,
-        'custom_user': get_user("email", request.user.email),
+        # 'custom_user': get_user("email", request.user.email),
+        'delivery_addresses_json': json.dumps(addresses),
+        'orders': orders,
+        'addresses': addresses,
     })
     
 @login_required
 def shoppingcart(request):
-    return render(request, "shoppingcart.html")
+    user = request.user
+    profile = get_user("email", user.email)
+    print(profile.id)
+    order = get_orders(profile, 'cart')
+    print(len(order))
+    print(order)
+    print(order[0].id if order else "No order")
+    
+    items = get_order_items(order[0]) if order else []
+    # print(items)
+    return render(request, "shoppingcart.html", {
+        'order': order,
+        'items': items,
+    })
 
 @login_required
 def myorders(request):
