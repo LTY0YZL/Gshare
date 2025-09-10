@@ -16,6 +16,7 @@ from django.db import IntegrityError
 from django.db.models import Q
 from django.db.models import Avg, Count
 from django.http import JsonResponse
+import json
 from core.models import (
     Users,
     Stores, Items,
@@ -602,9 +603,16 @@ def maps(request):
 @login_required
 def shoppingcart(request):
     user = request.user
-    order = get_orders(user, 'cart')
-    # for i in order:
-    #     print(i.address)
+    orders = get_orders(user, 'placed')
+    print(orders)  # Debug print in your view
+    addresses = [order.delivery_address for order in orders if order.delivery_address]
+    print("Addresses:", addresses)  # Debug print in your view
+    print("Addresses JSON:", json.dumps(addresses))  # Debug print in your view
+
+
     return render(request, "shoppingcart.html", {
-        'order': order})
+        'order': orders,
+        'addresses': addresses,
+        'addresses_json': json.dumps(addresses),
+})
 
