@@ -715,11 +715,14 @@ def maps(request):
 @login_required
 def shoppingcart(request):
     user = request.user
-    print(user)
-    order = get_orders(user, 'cart')
-    # print(len(order))
+    profile = get_user("email", user.email)
+    print(profile.id)
+    order = get_orders(profile, 'cart')
+    print(len(order))
+    print(order)
+    print(order[0].id if order else "No order")
     
-    items = get_order_items(order) if order else []
+    items = get_order_items(order[0]) if order else []
     # print(items)
     return render(request, "shoppingcart.html", {
         'order': order,
