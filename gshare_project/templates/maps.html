@@ -21,7 +21,15 @@
 
             </div>
         </div>
+        {% for order in orders %}
+            <p>{{ order.delivery_address }}</p>
+        {% empty %}
+            <p>No orders found.</p>
+        {% endfor %}
     </div>
+    <p>Orders: {{ orders }}</p>
+    <p>Addresses json: {{ addresses_json }}</p>
+    <p>Addresses : {{ addresses }}</p>
 
     <!-- pop up html --> 
      <div id="popup" class="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg h-full transform translate-x-full transition-transform duration-300">
@@ -89,7 +97,10 @@
 
         let map;
         let geocoder;
-        let marker;
+        let markers = [];
+        const addresses = JSON.parse('{{ addresses_json|escapejs }}');
+        console.log("Addresses array:", addresses);
+
 
         function initMap() {
             // Create a map centered at a specific location
@@ -99,14 +110,37 @@
                 zoom: 14
             });
             geocoder = new google.maps.Geocoder();
-            marker = new google.maps.Marker({ map: map, position: location });
 
-            marker.addListener('click', () => {
+            // Add a marker for each address
+            addresses.forEach(address => {
+                geocoder.geocode({ 'address': address }, (results, status) => {
+                    if (status === 'OK') {
+                        const location = results[0].geometry.location;
+                        const marker = new google.maps.Marker({
+                            map: map,
+                            position: location
+                        });
+                        markers.push(marker);
+
+                        marker.addListener('click', () => {
+                            const popup = document.getElementById('popup');
+                            const map_popup = document.getElementById('map_popup');
+                            map_popup.classList.add('-translate-x-50');
+                            popup.classList.remove('translate-x-full');
+                        });
+                    } else {
+                        console.error('Geocode was not successful for the following reason: ' + status);
+                    }
+                });
+            })
+            {% comment %} marker = new google.maps.Marker({ map: map, position: location }); {% endcomment %}
+
+            {% comment %} marker.addListener('click', () => {
                 const popup = document.getElementById('popup');
                 const map_popup = document.getElementById('map_popup');
                 map_popup.classList.add('-translate-x-50');
-                popup.classList.remove('translate-x-full');
-            });
+                popup.classList.remove('translate-x-full'); {% endcomment %}
+            {% comment %} }); {% endcomment %}
 
             closePopup.addEventListener('click', () => {
                 const popup = document.getElementById('popup');

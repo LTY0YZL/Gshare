@@ -1,3 +1,4 @@
+{% load tailwind_cli%}
 <!DOCTYPE html>
 {% load static %}
 <html lang="en">
@@ -5,7 +6,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stores_cart</title>
-    {% comment %} <link rel="stylesheet" href="{% static 'css/style.css' %}"> {% endcomment %}
+    {% tailwind_css %}
+
 </head>
 {% include "navbar.html" %}
 <body class="Stores_desgin">
@@ -87,19 +89,64 @@
         </div> {% endcomment %}
         <div name="Items_list" class="grid gap-4 mt-8">
             {% for item in page_obj %}
-                <div class="grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center">
+                <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg active:scale-95 transition-all duration-150 active:bg-gray-300" 
+                onclick="handleItemClick(this, {{item.id}} )">
                     <div class="text-lg font-bold">{{ item.name }}</div>
                     <div class="text-gray-700">Price: ${{ item.price }}</div>
                     <div class="text-gray-700">Store: {{ item.store.name }}</div>
                     <div class="text-gray-700">Stock: {{ item.stock }}</div>
+                    <div>
+                        <input type="number" name="item_ammount" value="1" min="1" max="{{ item.stock }}" class="w-16 px-2 py-1 border border-gray-300 rounded-lg">
+                    </div>
                 </div>
             {% empty %}
                 <p class="text-center text-gray-500">No items match your criteria.</p>
             {% endfor %}
         </div>
     </div>
-
+{% csrf_token %}
 </body>
+<style>
+    .item-card:hover {
+        background-color: #f0f0f0; /* Light gray background on hover */
+        cursor: pointer; /* Change cursor to pointer on hover */
+    }
+
+    .item-card:active {
+        background-color: #e5e7eb;        /* darker gray on click */
+        transform: scale(0.98);           /* slight press effect */
+    }
+</style>
+<script>
+    const csrf_token = "{{ csrf_token }}";
+    function handleItemClick(element, item_id) {
+        const ammountInput = element.querySelector('input[name="item_ammount"]');
+        const itemAmmount = ammountInput ? ammountInput.value : 1;
+
+        fetch(`/cart/add/${item_id}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf_token
+            },
+            body: JSON.stringify({ 'item_ammount': itemAmmount })
+        })
+        .then(response => {
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                return response.json();
+            } else {
+                throw new Error("Not authenticated or not found");
+            }
+        })
+        .then(data => {
+            console.log(data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+    }
+</script>
 
 <footer>
 
