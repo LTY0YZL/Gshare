@@ -11,6 +11,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User as AuthUser
 from django.contrib import messages
 from django.utils import timezone
+from django.db import connections
+from django.db import transaction
 from django.conf import settings
 from django.db import IntegrityError 
 from django.db.models import Q
@@ -551,29 +553,65 @@ Returns:
 """
 @login_required
 def add_to_cart(request, item_id):
+    
+    print("Adding item to cart:", item_id)
 
     profile = get_user("email", request.user.email)
-    item = get_object_or_404(Items, pk=item_id)
+    if not profile:
+        messages.error(request, "Profile not found.")
+        return redirect('cart')
 
-    # Get or create the user's cart (order with status 'cart')
-    order, created = Orders.objects.using('gsharedb').get_or_create(
-        user=profile,
-        status='cart',
-        defaults={
-            'order_time': timezone.now(),
-            'store': item.store
-        }
-    )
+    print("User profile:", profile.name)
 
-    # Add the item to the cart or update its quantity
-    order_item, created = OrderItems.objects.using('gsharedb').get_or_create(
-        order=order,
-        item=item,
-        defaults={'quantity': 1}
-    )
-    if not created:
-        order_item.quantity += 1
-        order_item.save(using='gsharedb')
+    # Grab item
+    try:
+        item = Items.objects.using('gsharedb').get(id=item_id)
+    except Items.DoesNotExist:
+        messages.error(request, "Item not found.")
+        return redirect('cart')
+
+    # Get or create cart
+    order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
+    if not order:
+        order = Orders.objects.using('gsharedb').create(
+            user=profile,
+            status='cart',
+            order_date=timezone.now(),
+            store=item.store,
+            total_amount=0
+        )
+
+    print("Current order ID:", order.id)
+
+    # Upsert into order_items (composite PK table) and recompute total
+    with transaction.atomic(using='gsharedb'):
+        with connections['gsharedb'].cursor() as cur:
+            # Insert or bump quantity
+            cur.execute(
+                """
+                INSERT INTO order_items (order_id, item_id, quantity, price)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    quantity = quantity + VALUES(quantity)
+                """,
+                [order.id, item.id, 1, str(item.price or 0)]
+            )
+
+            # RECALC TOTAL from line items
+            cur.execute(
+                """
+                SELECT COALESCE(SUM(quantity * price), 0)
+                FROM order_items
+                WHERE order_id = %s
+                """,
+                [order.id]
+            )
+            total = cur.fetchone()[0] or 0
+
+    # Update order fields using ORM
+    order.total_amount = total
+    order.order_date = timezone.now()
+    order.save(using='gsharedb')
 
     messages.success(request, f"Added {item.name} to your cart.")
     return redirect('cart')

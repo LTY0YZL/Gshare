@@ -90,7 +90,7 @@
         <div name="Items_list" class="grid gap-4 mt-8">
             {% for item in page_obj %}
                 <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg active:scale-95 transition-all duration-150 active:bg-gray-300" 
-                onclick="handleItemClick(this, {{ item.id }})">
+                onclick="handleItemClick(this, {{item.id}} )">
                     <div class="text-lg font-bold">{{ item.name }}</div>
                     <div class="text-gray-700">Price: ${{ item.price }}</div>
                     <div class="text-gray-700">Store: {{ item.store.name }}</div>
