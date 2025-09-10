@@ -195,7 +195,7 @@ Retrieve all orders for a specific user from the 'gsharedb' database.
 
 Args:
     user (Users): The user object for whom the orders are being retrieved.
-    Status (str): The status of the orders to filter by ('cart', 'placed', 'inprogress','delivered').
+    Status (str): The status of the orders to filter by ('cart', 'placed', 'inprogress', 'delivered').
 
 Returns:
     QuerySet or list: A QuerySet of orders if orders exist, otherwise an empty list.
@@ -204,6 +204,23 @@ def get_orders(user: Users, order_status: str):
 
     orders = Orders.objects.using('gsharedb').filter(user_id = user.id, status = order_status) # Getting all the orders related to this user and status.
     if not orders.exists():  # Checking if the queryset is empty.
+        return []
+    return orders
+
+"""
+Retrieve all orders from the 'gsharedb' database based on their status.
+
+Args:
+    order_status (str): The status of the orders to filter by 
+                        (e.g., 'cart', 'placed', 'inprogress', 'delivered').
+
+Returns:
+    QuerySet or list: A QuerySet of orders if orders with the specified status exist, 
+                      otherwise an empty list.
+"""
+def get_orders_by_status(order_status: str):
+    orders = Orders.objects.using('gsharedb').filter(status=order_status)
+    if not orders.exists():
         return []
     return orders
 
