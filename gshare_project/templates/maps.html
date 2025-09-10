@@ -21,7 +21,13 @@
 
             </div>
         </div>
+        {% for order in orders %}
+            <p>{{ order.delivery_address }}</p>
+        {% empty %}
+            <p>No orders found.</p>
+        {% endfor %}
     </div>
+    <p>Orders: {{ orders }}</p>
     <p>Addresses json: {{ addresses_json }}</p>
     <p>Addresses : {{ addresses }}</p>
 

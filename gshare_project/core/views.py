@@ -553,7 +553,7 @@ Returns:
 def add_to_cart(request, item_id):
 
     profile = get_user("email", request.user.email)
-    item = get_object_or_404(Items, pk=item_id)
+    item = get_object_or_404(Items.objects.using('gsharedb'), pk=item_id)
 
     # Get or create the user's cart (order with status 'cart')
     order, created = Orders.objects.using('gsharedb').get_or_create(
@@ -574,6 +574,11 @@ def add_to_cart(request, item_id):
     if not created:
         order_item.quantity += 1
         order_item.save(using='gsharedb')
+        
+    # Always return JSON for AJAX
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == "application/json":
+        return JsonResponse({"success": True, "message": f"Added {item.name} to your cart."})
+
 
     messages.success(request, f"Added {item.name} to your cart.")
     return redirect('cart')
@@ -649,28 +654,34 @@ def checkout(request):
 def maps(request):
     stores = Stores.objects.all()
     #delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
-    orders = get_orders(get_user("email", request.user.email), 'placed')
+    orders = get_orders_by_status('cart')
+    print(orders)  # Debug print in your view
+    for order in orders:
+        print("Order ID:", order.id)  # Debug print in your view
+        print("User ID:", order.user.id)  # Debug print in your view
+        print("Delivery Address:", order.delivery_address)  # Debug print in your view
+    addresses = [order.delivery_address for order in orders if order.delivery_address]
+    print("Addresses:", addresses)  # Debug print in your view
+    print("Addresses JSON:", json.dumps(addresses))  # Debug print in your view
     return render(request, "maps.html", {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
         'location': {'lat': 40.7607, 'lng': -111.8939},
         'stores_for_map': stores,
         # 'delivery_persons': delivery_people,
-        'custom_user': get_user("email", request.user.email),
+        # 'custom_user': get_user("email", request.user.email),
+        'delivery_addresses_json': json.dumps(addresses),
+        'orders': orders,
+        'addresses': addresses,
     })
     
 @login_required
 def shoppingcart(request):
     user = request.user
-    orders = get_orders(user, 'placed')
-    print(orders)  # Debug print in your view
-    addresses = [order.delivery_address for order in orders if order.delivery_address]
-    print("Addresses:", addresses)  # Debug print in your view
-    print("Addresses JSON:", json.dumps(addresses))  # Debug print in your view
+    order = get_orders(user, 'placed')
+
 
 
     return render(request, "shoppingcart.html", {
-        'order': orders,
-        'addresses': addresses,
-        'addresses_json': json.dumps(addresses),
-})
+        'order': order,
+    })
 
