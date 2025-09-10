@@ -137,45 +137,35 @@ Returns:
 #     return order
 
 
-"""
-Add an item to the user's cart. If the item already exists in the cart, increase its quantity.
 
-Args:
-    request: The HTTP request object.
-    item_id (int): The ID of the item to add to the cart.
+# @login_required
+# def add_to_cart(request, item_id):
 
-Returns:
-    Redirects to the cart page.
-"""
+#     profile = get_user("email", request.user.email)
+#     item = get_object_or_404(Items, pk=item_id)
 
-@login_required
-def add_to_cart(request, item_id):
+#     # Get or create the user's cart (order with status 'cart')
+#     order, created = Orders.objects.using('gsharedb').get_or_create(
+#         user=profile,
+#         status='cart',
+#         defaults={
+#             'order_time': timezone.now(),
+#             'store': item.store
+#         }
+#     )
 
-    profile = get_user("email", request.user.email)
-    item = get_object_or_404(Items, pk=item_id)
+#     # Add the item to the cart or update its quantity
+#     order_item, created = OrderItems.objects.using('gsharedb').get_or_create(
+#         order=order,
+#         item=item,
+#         defaults={'quantity': 1}
+#     )
+#     if not created:
+#         order_item.quantity += 1
+#         order_item.save(using='gsharedb')
 
-    # Get or create the user's cart (order with status 'cart')
-    order, created = Orders.objects.using('gsharedb').get_or_create(
-        user=profile,
-        status='cart',
-        defaults={
-            'order_time': timezone.now(),
-            'store': item.store
-        }
-    )
-
-    # Add the item to the cart or update its quantity
-    order_item, created = OrderItems.objects.using('gsharedb').get_or_create(
-        order=order,
-        item=item,
-        defaults={'quantity': 1}
-    )
-    if not created:
-        order_item.quantity += 1
-        order_item.save(using='gsharedb')
-
-    messages.success(request, f"Added {item.name} to your cart.")
-    return redirect('cart')
+#     messages.success(request, f"Added {item.name} to your cart.")
+#     return redirect('cart')
 
 """
 Edit the quantity of a specific item in an order.
@@ -528,6 +518,18 @@ def browse_items(request):
     #     'custom_user': get_custom_user(request),
     # })
 
+
+
+"""
+Add an item to the user's cart. If the item already exists in the cart, increase its quantity.
+
+Args:
+    request: The HTTP request object.
+    item_id (int): The ID of the item to add to the cart.
+
+Returns:
+    Redirects to the cart page.
+"""
 @login_required
 def add_to_cart(request, item_id):
 
