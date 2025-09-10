@@ -799,3 +799,6 @@ def myorders(request):
     
     return render(request, 'ordershistory.html', {'orders_with_items': orders_with_items})
 
+@login_required
+def payments(request):
+    return render(request, "paymentsPage.html")
