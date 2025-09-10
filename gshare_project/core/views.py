@@ -206,7 +206,7 @@ Returns:
 """
 def get_orders(user: Users, order_status: str):
 
-    orders = Orders.objects.using('gsharedb').filter(user_id = user.id, status = order_status) # Getting all the orders related to this user and status.
+    orders = Orders.objects.using('gsharedb').filter(user_id = user, status = order_status) # Getting all the orders related to this user and status.
     if not orders.exists():  # Checking if the queryset is empty.
         return []
     return orders
@@ -238,9 +238,25 @@ Returns:
     QuerySet or list: A QuerySet of order items if they exist, otherwise an empty list.
 """
 def get_order_items(order: Orders):
-    items = OrderItems.objects.using('gsharedb').filter(order=order).select_related('item')
-    if not items.exists():
-        return []
+
+     # Upsert into order_items (composite PK table) and recompute total
+    with transaction.atomic(using='gsharedb'):
+        with connections['gsharedb'].cursor() as cur:
+            # Fetch items with their details
+            cur.execute(
+                """
+                SELECT oi.*, i.name, i.price, i.store_id
+                FROM order_items oi
+                JOIN items i ON oi.item_id = i.id
+                WHERE oi.order_id = %s
+                """,
+                [order.id]
+            )
+
+        items = cur.fetchall()
+   # items = OrderItems.objects.using('gsharedb').filter(order=order).select_related('item')
+   # if not items.exists():
+   #     return []
     return items
 
 """
@@ -716,16 +732,19 @@ def maps(request):
 def shoppingcart(request):
     user = request.user
     profile = get_user("email", user.email)
-    print(profile.id)
+    print("User profile:", profile.name)
     order = get_orders(profile, 'cart')
     print(len(order))
     print(order)
     print(order[0].id if order else "No order")
-    
-    items = get_order_items(order[0]) if order else []
+
+    items = get_order_items(order[0]) if order[0] else []
+    print(items)
+
     # print(items)
     return render(request, "shoppingcart.html", {
         'order': order,
+        'items': items,
         'items': items,
     })
 
@@ -740,3 +759,4 @@ def myorders(request):
         orders_with_items.append((order, items))
     
     return render(request, 'ordershistory.html', {'orders_with_items': orders_with_items})
+
