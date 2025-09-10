@@ -628,6 +628,11 @@ def add_to_cart(request, item_id):
     order.total_amount = total
     order.order_date = timezone.now()
     order.save(using='gsharedb')
+    
+    # Always return JSON for AJAX
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == "application/json":
+        return JsonResponse({"success": True, "message": f"Added {item.name} to your cart."})
+
 
     messages.success(request, f"Added {item.name} to your cart.")
     return redirect('cart')
@@ -739,5 +744,6 @@ def shoppingcart(request):
     # print(items)
     return render(request, "shoppingcart.html", {
         'order': order,
+        'items': items,
         'items': items,
     })
