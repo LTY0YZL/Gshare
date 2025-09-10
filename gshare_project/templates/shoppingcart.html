@@ -11,13 +11,13 @@
 {% include "navbar.html" %}
 <body>
     <div class="grid grid-cols-2 h-screen gap-4 p-4">
-        <div class="col-span-1 bg-white ">
+        <div class="col-span-1 bg-white">
             {% for item in items %}
-                <div class="p-4 border-b border-gray-300 bg-blue-200 shadow-md">
-                    <h2 class="text-xl font-bold mb-2">{{ item.product.name }}</h2>
-                    <p class="mb-1">Quantity: {{ item.quantity }}</p>
-                    <p class="mb-1">Price: ${{ item.product.price }}</p>
-                    <p class="mb-1">Total: ${{ item.total_price }}</p>
+                <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                    <h2 class="text-xl font-bold mb-2 pl-8">{{ item.name }}</h2>
+                    <p class="mb-1 pl-32">Quantity: {{ item.quantity }}</p>
+                    <p class="mb-1 pl-32">Price: ${{ item.price }}</p>
+                    <p class="mb-1 pl-32">Total: ${{ item.total }}</p>
                 </div>
             {% empty %}
             <p class="p-4">Your cart is empty.</p>
