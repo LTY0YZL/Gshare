@@ -218,6 +218,21 @@ def get_orders(user: Users, order_status: str):
     return orders
 
 """
+Retrieve all items in a specific order from the 'gsharedb' database.
+
+Args:
+    order (Orders): The order object for which the items are being retrieved.
+
+Returns:
+    QuerySet or list: A QuerySet of order items if they exist, otherwise an empty list.
+"""
+def get_order_items(order: Orders):
+    items = OrderItems.objects.using('gsharedb').filter(order=order).select_related('item')
+    if not items.exists():
+        return []
+    return items
+
+"""
 Change the status of an order in the 'gsharedb' database.
 Args:
     order_id (int): The ID of the order to be updated.
