@@ -719,7 +719,7 @@ def maps(request):
     user_address = user.address
     #delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
     orders = get_orders_by_status('placed')
-    print(orders.user)
+    # print(orders.user)
     # print(orders)  # Debug print in your view
     # for order in orders:
     #     print("Order ID:", order.id)  # Debug print in your view
@@ -826,11 +826,21 @@ def shoppingcart(request):
 @login_required
 def myorders(request):
     user = get_user("email", request.user.email)
-    orders = get_orders(user, "cart")
+    all_orders = []
+    orders_cart = get_orders(user, "cart")
+    orders_placed = get_orders(user, "placed")
+    orders_inprogress = get_orders(user, "inprogress")
+    orders_completed = get_orders(user, "completed")
+    
+    all_orders.extend(orders_cart)
+    all_orders.extend(orders_placed)
+    all_orders.extend(orders_inprogress)
+    all_orders.extend(orders_completed)
+
     
     # each tuple is (order, items)
     orders_with_items = []
-    for order in orders:
+    for order in all_orders:
         items = get_order_items(order)
         items_with_totals = []
         for item in items:
@@ -844,7 +854,7 @@ def myorders(request):
         orders_with_items.append((order, items_with_totals))
 
 
-    print(items_with_totals)
+    # print(items_with_totals)
     
     return render(request, 'ordershistory.html', {'orders_with_items': orders_with_items})
 
