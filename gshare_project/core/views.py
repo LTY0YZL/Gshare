@@ -826,6 +826,7 @@ def shoppingcart(request):
 @login_required
 def myorders(request):
     user = get_user("email", request.user.email)
+    # add a database method to get all orders for a user of any status.
     all_orders = []
     orders_cart = get_orders(user, "cart")
     orders_placed = get_orders(user, "placed")
