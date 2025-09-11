@@ -5,3 +5,4 @@ django-browser-reload
 daphne
 channels
 django_tailwind_cli
+requests

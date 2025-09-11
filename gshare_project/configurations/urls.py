@@ -39,8 +39,13 @@ urlpatterns = [
     path('checkout/', views.checkout, name='checkout'),
     path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
     path('myorders/', views.myorders, name='order_history'),
+    path('cart/payments/', views.payments, name='payments'),
     # path('chat/', include('chat.urls')),
     path("__reload__/", include("django_browser_reload.urls")),
+    
+    path('cart/kroger/add/',   views.add_kroger_item_to_cart, name='add_kroger_item_to_cart'),
+    path('cart/kroger/save/',  views.save_kroger_results,     name='save_kroger_results'),
+    path('cart/kroger/clear/', views.clear_kroger_items,      name='clear_kroger_items'),   
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

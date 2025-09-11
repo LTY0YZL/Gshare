@@ -19,6 +19,8 @@ from django.db.models import Q
 from django.db.models import Avg, Count
 from django.http import JsonResponse
 import json
+from . import kroger_api
+
 from core.models import (
     Users,
     Stores, Items,
@@ -529,17 +531,6 @@ def userprofile(request):
     })
 
 @login_required
-def menu(request):
-    return render(request, "menu.html", {
-        'user': get_user("name", "anand"),
-    })
-
-# @login_required
-# def groups(request):
-#     # delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
-#     return render(request, "chat/groups.html")
-
-@login_required
 def browse_items(request):
     # items = Items.objects.select_related('store').all()
     # q = request.GET.get('search','').strip()
@@ -561,6 +552,12 @@ def browse_items(request):
     #     'custom_user': get_custom_user(request),
     # })
 
+
+@login_required
+def menu(request):
+    return render(request, "menu.html", {
+        'user': get_user("name", "anand"),
+    })
 
 
 """
@@ -650,6 +647,10 @@ def cart(request):
     store_filter = request.GET.get('Stores', 'All')
     price_filter = request.GET.get('Price-Range', 'Any')
     search_query = request.GET.get('Item_Search_Bar', '')
+    
+    sf_override = request.GET.get('store_filter')
+    if sf_override:
+        store_filter = sf_override
 
     items = Items.objects.using('gsharedb').all()
 
@@ -665,6 +666,31 @@ def cart(request):
 
     if search_query:
         items = items.filter(name__icontains=search_query)
+        
+    if store_filter == 'Kroger':
+        context = {
+            'store_filter': store_filter,
+            'price_filter': price_filter,
+            'search_query': search_query,
+        }
+        context['saved_kroger_items'] = Items.objects.using('gsharedb') \
+            .filter(store__name='Kroger').order_by('name')
+        zip_code = (request.GET.get('zip_code') or '').strip()
+        term = (request.GET.get('search_term') or '').strip()
+        context['zip_code'] = zip_code
+        context['search_term'] = term
+
+        if zip_code and term:
+            try:
+                locations = kroger_api.find_kroger_locations_by_zip(zip_code)
+                if locations:
+                    loc_id = locations[0]['locationId']
+                    context['kroger_products'] = kroger_api.search_kroger_products(loc_id, term)
+                else:
+                    messages.error(request, f"No stores found for {zip_code}.")
+            except Exception:
+                messages.error(request, "Kroger search failed.")
+        return render(request, "cart.html", context)
         
     paginator = Paginator(items, 10)  # Show 10 items per page
     page_number = request.GET.get('page')
@@ -691,6 +717,90 @@ def cart(request):
     #     'cart_items': items,
     #     'custom_user': profile,
     # })
+    
+@login_required
+def add_kroger_item_to_cart(request):
+    if request.method != 'POST':
+        messages.error(request, "Invalid request.")
+        return redirect('cart')
+    product_name = (request.POST.get('product_name') or '').strip()
+    product_price = request.POST.get('product_price')
+    if not product_name and request.content_type == 'application/json':
+        try:
+            body = json.loads(request.body or '{}')
+            product_name = (body.get('product_name') or '').strip()
+            product_price = body.get('product_price')
+        except Exception:
+            product_name, product_price = '', None
+
+    if not product_name or product_price is None:
+        messages.error(request, "Missing Kroger product data.")
+        return redirect('cart')
+
+    try:
+        price_dec = Decimal(str(product_price))
+    except Exception:
+        messages.error(request, "Invalid Kroger product price.")
+        return redirect('cart')
+    kroger_store, _ = Stores.objects.using('gsharedb').get_or_create(name='Kroger')
+    item, _ = Items.objects.using('gsharedb').update_or_create(
+        name=product_name,
+        store=kroger_store,
+        defaults={'price': price_dec, 'stock': 0}
+    )
+
+    return add_to_cart(request, item.id)
+
+@login_required
+def save_kroger_results(request):
+    if request.method != 'POST':
+        messages.error(request, "Invalid request.")
+        return redirect('cart')
+    raw = request.POST.get('products_json') or '[]'
+    try:
+        products = json.loads(raw)
+    except Exception:
+        products = []
+
+    kroger_store, _ = Stores.objects.using('gsharedb').get_or_create(name='Kroger')
+    created = 0
+    updated = 0
+    for p in products:
+        try:
+            name = (p.get('description') or '').strip()
+            regular = (
+                p.get('items', [{}])[0]
+                 .get('price', {})
+                 .get('regular')
+            )
+            if not name or regular is None:
+                continue
+            price_dec = Decimal(str(regular))
+        except Exception:
+            continue
+
+        _, was_created = Items.objects.using('gsharedb').update_or_create(
+            name=name,
+            store=kroger_store,
+            defaults={'price': price_dec, 'stock': 0}
+        )
+        if was_created:
+            created += 1
+        else:
+            updated += 1
+    messages.success(request, f"Saved {created} new and {updated} existing Kroger item(s).")
+    return redirect('cart')
+
+@login_required
+def clear_kroger_items(request):
+    if request.method != 'POST':
+        messages.error(request, "Invalid request.")
+        return redirect('cart')
+    qs = Items.objects.using('gsharedb').filter(store__name='Kroger')
+    count = qs.count()
+    qs.delete()
+    messages.success(request, f"Cleared {count} saved Kroger item(s).")
+    return redirect(request.META.get('HTTP_REFERER', 'cart'))
 
 @login_required
 def checkout(request):
@@ -826,7 +936,6 @@ def shoppingcart(request):
 @login_required
 def myorders(request):
     user = get_user("email", request.user.email)
-    # add a database method to get all orders for a user of any status.
     all_orders = []
     orders_cart = get_orders(user, "cart")
     orders_placed = get_orders(user, "placed")
@@ -859,3 +968,6 @@ def myorders(request):
     
     return render(request, 'ordershistory.html', {'orders_with_items': orders_with_items})
 
+@login_required
+def payments(request):
+    return render(request, "paymentsPage.html")

@@ -14,7 +14,7 @@
 
     <div class="container py-8">
         <div class="flex justify-center mt-2">
-            <form action="{% url 'cart' %}" method="get" class="mb-6 border border-gray-300 p-4 rounded-lg bg-white shadow-md w-1/2 flex flex-row gap-8 items-start ml-16">
+            <form action="{% url 'cart' %}" method="get" class="mb-6 border border-gray-300 p-4 rounded-lg bg-white shadow-md w-1/2 flex flex-row flex-wrap gap-6 items-start ml-16">                <input type="hidden" name="store_filter" id="store_filter" value="{{ store_filter|default:'All' }}">
                 <div class="flex flex0-col items-start">
                     <p class="font-bold mb-2">Price Range</p>
                     <div name="PriceButtons flex flex-wrap gap-4 mb-4">
@@ -41,7 +41,7 @@
                         <label class="flex items-center ml-2">
                             <input type="radio" id="100+" name="Price-Range" value="100+" class="mr-2">
                             $100+
-                        </label>
+                        </label>      
                     </div>
                 </div>
             
@@ -61,9 +61,32 @@
                             Costco
                         </label>
                         <label class="flex items-center ml-2">
-                            <input type="radio" id="All" name="Stores" value="All" checked class="mr-2">
+                            <input type="radio" id="Kroger" name="Stores" value="Kroger" class="mr-2"
+                            {% if store_filter == 'Kroger' %}checked{% endif %}>
+                            Kroger
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="All" name="Stores" value="All" class="mr-2"
+                                {% if store_filter|default:'All' == 'All' %}checked{% endif %}>
                             All
                         </label>
+                    </div>
+                    <div id="krogerBox" class="basis-full mt-2 {% if store_filter == 'Kroger' %}block{% else %}hidden{% endif %}">                        <div class="border rounded-lg bg-white shadow-md p-3">
+                            <div class="text-sm text-gray-600 mb-2">Search in Kroger</div>
+                            <div class="flex flex-wrap gap-2 items-end">
+                                <label class="flex flex-col">
+                                    <span class="text-xs text-gray-600">Zip code</span>
+                                    <input name="zip_code" value="{{ zip_code|default:'' }}" placeholder="e.g. 84112"
+                                        class="border rounded px-3 py-2">
+                                </label>
+                                <label class="flex flex-col">
+                                    <span class="text-xs text-gray-600">Item</span>
+                                    <input name="search_term" value="{{ search_term|default:'' }}" placeholder="e.g. milk"
+                                        class="border rounded px-3 py-2">
+                                </label>
+                                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Search Kroger</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             
@@ -100,10 +123,70 @@
                     </div>
                 </div>
             {% empty %}
-                <p class="text-center text-gray-500">No items match your criteria.</p>
+                {% if store_filter != 'Kroger' %}
+                    <p class="text-center text-gray-500">No items match your criteria.</p>
+                {% endif %}
             {% endfor %}
         </div>
-    </div>
+        {% if kroger_products %}
+            <div class="mt-8 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold">Kroger Results</h3>
+                    <form id="save-kroger-form" method="post" action="{% url 'save_kroger_results' %}" class="inline-flex">
+                        {% csrf_token %}
+                        {{ kroger_products|json_script:"kroger-data" }}
+                        <input type="hidden" name="products_json" id="products_json">
+                        <button type="submit" class="bg-emerald-600 text-white px-3 py-2 rounded">Save all</button>
+                    </form>
+                </div>
+                <div class="grid gap-4">
+                    {% for p in kroger_products %}
+                        {% with desc=p.description price=p.items.0.price.regular %}
+                            <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg active:scale-95 transition-all duration-150 active:bg-gray-300 cursor-pointer"
+                                onclick="addKrogerCardClick(this, '{{ desc|escapejs }}', '{{ price|default:'' }}')">
+                            <div class="text-lg font-bold truncate">{{ desc }}</div>
+                            <div class="text-gray-700">Price: ${{ price|default:'—' }}</div>
+                            <div class="text-gray-700">Store: Kroger</div>
+                            <div>
+                                <input type="number" name="item_ammount" value="1" min="1" class="w-16 px-2 py-1 border border-gray-300 rounded-lg">
+                            </div>
+                        </div>
+                    {% endwith %}
+                {% endfor %}
+            </div>
+        </div>
+        <script>
+            (function(){
+                var data = JSON.parse(document.getElementById('kroger-data').textContent);
+                document.getElementById('products_json').value = JSON.stringify(data);
+            })();
+        </script>
+        {% endif %}
+        {% if saved_kroger_items %}
+            <div class="mt-10 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold">Saved Kroger Items</h3>
+                    <form method="post" action="{% url 'clear_kroger_items' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="bg-red-600 text-white px-3 py-2 rounded">Clear saved</button>
+                    </form>
+                </div>
+                <div class="grid gap-4">
+                    {% for item in saved_kroger_items %}
+                        <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg active:scale-95 transition-all duration-150 active:bg-gray-300 cursor-pointer"
+                            onclick="handleItemClick(this, {{ item.id }})">
+                        <div class="text-lg font-bold truncate">{{ item.name }}</div>
+                        <div class="text-gray-700">Price: ${{ item.price }}</div>
+                        <div class="text-gray-700">Store: Kroger</div>
+                        <div>
+                            <input type="number" name="item_ammount" value="1" min="1" class="w-16 px-2 py-1 border border-gray-300 rounded-lg">
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+</div>
 {% csrf_token %}
 </body>
 <style>
@@ -146,6 +229,61 @@
             console.error('Error:', error);
         });
     }
+    (function(){
+    const radios = document.querySelectorAll('input[name="Stores"]');
+    const hidden = document.getElementById('store_filter');
+    const box = document.getElementById('krogerBox');
+
+    function toggleKrogerBox(){
+      const checked = document.querySelector('input[name="Stores"]:checked');
+      const val = (checked && checked.value) || hidden.value || 'All';
+      hidden.value = val;
+      if (val === 'Kroger') box.classList.remove('hidden');
+      else box.classList.add('hidden');
+    }
+
+    radios.forEach(r => r.addEventListener('change', toggleKrogerBox));
+    toggleKrogerBox();
+  })();
+  
+  function addKrogerItem(name, price){
+    if (!name || !price) {
+      alert('This item is missing a price and cannot be added.');
+      return;
+    }
+    fetch("{% url 'add_kroger_item_to_cart' %}", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf_token },
+      body: JSON.stringify({ product_name: name, product_price: price })
+    })
+    .then(r => {
+      const ct = r.headers.get('content-type')||'';
+      return ct.includes('application/json') ? r.json() : {};
+    })
+    .then(data => {
+      console.log('Added Kroger item:', name, price, data);
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Failed to add item to cart.');
+    });
+  }
+
+  function addKrogerCardClick(el, name, price){
+    const qtyInput = el.querySelector('input[name="item_ammount"]');
+    const qty = qtyInput ? parseInt(qtyInput.value || '1', 10) : 1;
+
+    if (!price) { alert('This item is missing a price and cannot be added.'); return; }
+
+    fetch("{% url 'add_kroger_item_to_cart' %}", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf_token },
+      body: JSON.stringify({ product_name: name, product_price: price, item_ammount: qty })
+    })
+    .then(r => (r.headers.get('content-type')||'').includes('application/json') ? r.json() : {})
+    .then(data => { console.log('Added', name, qty); })
+    .catch(err => { console.error(err); alert('Failed to add item to cart.'); });
+  }
 </script>
 
 <footer>
