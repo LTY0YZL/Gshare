@@ -10,6 +10,7 @@
 </head>
 {% include "navbar.html" %}
 <body>
+    {% csrf_token %}
     <div class="grid grid-cols-2 h-screen gap-4 p-4">
         <div class="col-span-1 bg-white">
             {% for item in items %}
@@ -28,8 +29,38 @@
             <p class="mb-2">Subtotal: ${{ order.subtotal }}</p>
             <p class="mb-2">Tax: ${{ order.tax }}</p>
             <p class="mb-4 font-bold">Total: ${{ order.total }}</p>
-            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">Proceed to Checkout</button>
+            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+            onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Proceed to Checkout</button>
 
         </div>
     </div>
 </body>
+<script>
+        function changeOrderStatus(orderId, newStatus) {
+            if(!orderId) {
+                alert('Invalid order.');
+                return;
+            }
+            fetch(`/change_order_status/${orderId}/${newStatus}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'  // Include CSRF token for security
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Order status updated successfully!');
+                    location.reload();
+                    // Optionally, you can refresh the page or update the UI to reflect the change
+                } else {
+                    alert('Failed to update order status.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the order status.');
+            });
+        }
+</script>

@@ -279,6 +279,12 @@ def change_order_status(order_id: int, new_status: str) -> bool:
         print(f"Error updating order status: {e}")
         return False
     
+def change_order_status_json(request, order_id, new_status):
+    if request.method == 'POST':
+        success = change_order_status(order_id, new_status)
+        return JsonResponse({'success': success})
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+    
 """
 Retrieve all deliveries for a specific user based on delivery status.
 Args:
@@ -584,7 +590,7 @@ def add_to_cart(request, item_id):
         item = Items.objects.using('gsharedb').get(id=item_id)
     except Items.DoesNotExist:
         messages.error(request, "Item not found.")
-        return redirect('cart')
+        return redirect('cart') 
 
     # Get or create cart
     order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
@@ -594,9 +600,11 @@ def add_to_cart(request, item_id):
             status='cart',
             order_date=timezone.now(),
             store=item.store,
-            total_amount=0
+            total_amount=0,
+            delivery_address = profile.address
         )
 
+    print("Current order total:", order.delivery_address)
     print("Current order ID:", order.id)
 
     # Upsert into order_items (composite PK table) and recompute total
@@ -707,25 +715,52 @@ def checkout(request):
 @login_required
 def maps(request):
     stores = Stores.objects.all()
+    user = get_user("email", request.user.email)
+    user_address = user.address
     #delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
-    orders = get_orders_by_status('cart')
-    print(orders)  # Debug print in your view
+    orders = get_orders_by_status('placed')
+    # print(orders.user)
+    # print(orders)  # Debug print in your view
+    # for order in orders:
+    #     print("Order ID:", order.id)  # Debug print in your view
+    #     print("User ID:", order.user.id)  # Debug print in your view
+    #     print("Delivery Address:", order.delivery_address)  # Debug print in your view
+    # addresses = [order.delivery_address for order in orders if order.delivery_address]
+    info = []
     for order in orders:
-        print("Order ID:", order.id)  # Debug print in your view
-        print("User ID:", order.user.id)  # Debug print in your view
-        print("Delivery Address:", order.delivery_address)  # Debug print in your view
-    addresses = [order.delivery_address for order in orders if order.delivery_address]
-    print("Addresses:", addresses)  # Debug print in your view
-    print("Addresses JSON:", json.dumps(addresses))  # Debug print in your view
+        if order.delivery_address:
+            user = get_user("id", order.user.id)
+            print(user.name)
+            items = get_order_items(order)
+            subtotal = 0
+            items_with_totals = []
+            for item in items:
+                total = float(item[2]) * float(item[5])  # quantity * price
+                subtotal += total
+                items_with_totals.append({
+                    'name': item[4],  # item name
+                    'quantity': int(item[2]),
+                    'price': float(item[5]),  # item price
+                    'total': total,
+                })
+            info.append({'address': order.delivery_address, 'user': {
+                'name': user.name,
+                'items': items_with_totals,
+                'subtotal': subtotal,
+                'address': order.delivery_address,
+                'order_id': order.id,
+                
+            }})
+    # print("Addresses:", addresses)  # Debug print in your view
+    # print("Addresses JSON:", json.dumps(addresses))  # Debug print in your view
     return render(request, "maps.html", {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
         'location': {'lat': 40.7607, 'lng': -111.8939},
         'stores_for_map': stores,
         # 'delivery_persons': delivery_people,
         # 'custom_user': get_user("email", request.user.email),
-        'delivery_addresses_json': json.dumps(addresses),
-        'orders': orders,
-        'addresses': addresses,
+        'delivery_addresses_with_info_json': json.dumps(info),
+        'user_address': user_address,
     })
     
 @login_required
@@ -735,6 +770,18 @@ def shoppingcart(request):
     print("User profile:", profile.name)
     print(profile.id)
     order = get_orders(profile, 'cart')
+    if not order:
+        order = []
+        print("No active cart found.")
+        return render(request, "shoppingcart.html", {
+            'items': [],
+            'order': {
+                'subtotal': 0,
+                'tax': 0,
+                'total': 0,
+            },
+            'id': None,
+        })
     print(len(order))
     print(order[0].total_amount)
     print(order[0].id if order else "No order")
@@ -760,6 +807,7 @@ def shoppingcart(request):
         'tax': tax,
         'total': grand_total,
     }
+    print(order[0].id if order else "No order")
     # for item in items:
     #     totals.append(item[2] * item[5])  # quantity * price
     # print(items)
@@ -768,6 +816,7 @@ def shoppingcart(request):
     return render(request, "shoppingcart.html", {
         'items': items_with_totals,
         'order': order_summary,
+        'id': order[0].id if order else None,
         # 'order': order[0],
         # 'items': items,
         # 'items': items,
@@ -777,11 +826,21 @@ def shoppingcart(request):
 @login_required
 def myorders(request):
     user = get_user("email", request.user.email)
-    orders = get_orders(user, "cart")
+    all_orders = []
+    orders_cart = get_orders(user, "cart")
+    orders_placed = get_orders(user, "placed")
+    orders_inprogress = get_orders(user, "inprogress")
+    orders_completed = get_orders(user, "completed")
+    
+    all_orders.extend(orders_cart)
+    all_orders.extend(orders_placed)
+    all_orders.extend(orders_inprogress)
+    all_orders.extend(orders_completed)
+
     
     # each tuple is (order, items)
     orders_with_items = []
-    for order in orders:
+    for order in all_orders:
         items = get_order_items(order)
         items_with_totals = []
         for item in items:
@@ -795,7 +854,7 @@ def myorders(request):
         orders_with_items.append((order, items_with_totals))
 
 
-    print(items_with_totals)
+    # print(items_with_totals)
     
     return render(request, 'ordershistory.html', {'orders_with_items': orders_with_items})
 

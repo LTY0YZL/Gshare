@@ -21,15 +21,7 @@
 
             </div>
         </div>
-        {% for order in orders %}
-            <p>{{ order.delivery_address }}</p>
-        {% empty %}
-            <p>No orders found.</p>
-        {% endfor %}
     </div>
-    <p>Orders: {{ orders }}</p>
-    <p>Addresses json: {{ addresses_json }}</p>
-    <p>Addresses : {{ addresses }}</p>
 
     <!-- pop up html --> 
      <div id="popup" class="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg h-full transform translate-x-full transition-transform duration-300">
@@ -43,19 +35,18 @@
             <button id="person" class="bg-white w-1/2 h-1/14 text-lg font-bold hover:bg-[#B299EA]">People</button>
         </div>
 
+        <div id="popup-content" class="p-6"></div>
         <div id="shoppingcart">
-            <h1 class="text-5xl font-bold">I am inside the shopping cart information area</h1>
-            <p> This is where we will be adding items from the database that relate to the person who's marker you clicked on. 
-            </p>
+
         </div>
 
         <div id="people" class="hidden">
-            <h2>I am inside the people button information</h2>
+
         </div>
 
 
      </div>
-
+     {% csrf_token %}
      <script>
         //const openPopup = document.getElementById('openPopup'); 
         const closePopup = document.getElementById('closePopup');
@@ -98,35 +89,61 @@
         let map;
         let geocoder;
         let markers = [];
-        const addresses = JSON.parse('{{ addresses_json|escapejs }}');
-        console.log("Addresses array:", addresses);
+        const addresses_with_info = JSON.parse('{{ delivery_addresses_with_info_json|escapejs }}');
+        const user_address = '{{ user_address|escapejs }}';
 
 
         function initMap() {
             // Create a map centered at a specific location
-            const location = { lat: 40.7607, lng: -111.8939 };
             map = new google.maps.Map(document.getElementById('map'), {
-                center: location,
-                zoom: 14
+                zoom: 17
             });
             geocoder = new google.maps.Geocoder();
 
+            geocoder.geocode({ 'address': user_address }, (results, status) => {
+                if (status === 'OK') {
+                    const location = results[0].geometry.location;
+                    map.setCenter(location);
+                } else {
+                    alert('Geocode was not successful for the following reason: ' + status);
+                }
+            });
+
             // Add a marker for each address
-            addresses.forEach(address => {
-                geocoder.geocode({ 'address': address }, (results, status) => {
+            addresses_with_info.forEach(data => {
+                geocoder.geocode({ 'address': data.address }, (results, status) => {
                     if (status === 'OK') {
                         const location = results[0].geometry.location;
                         const marker = new google.maps.Marker({
                             map: map,
                             position: location
                         });
-                        markers.push(marker);
+                        markers.push({ marker, user: data.user });
 
                         marker.addListener('click', () => {
-                            const popup = document.getElementById('popup');
-                            const map_popup = document.getElementById('map_popup');
-                            map_popup.classList.add('-translate-x-50');
-                            popup.classList.remove('translate-x-full');
+                            // Display user info in your popup
+                            document.getElementById('popup-content').innerHTML = `
+                                <div class="space-y-4">
+                                    <h2 class="text-4xl font-bold mb-2 text-center">${data.user.name}</h2>
+                                    <p class="text-gray-700 text-2xl mt-4 text-center">${data.user.address}</p>
+                                    <p class="text-gray-700 text-2xl mt-4 text-right mb-8">Total cost of items: $${data.user.subtotal}</p>
+                                    <ul class="list-disc pl-6">
+                                        ${data.user.items.map(item => `
+                                        <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
+                                            <span class="font-semibold">${item.name}</span>:
+                                            <span class="font-semibold">${item.quantity} x $${item.price} =</span>
+                                            <span class="text-blue-700 font-bold">$${item.total}</span>
+                                        </li>
+                                        `).join('')}
+                                    </ul>
+                                    <div class = border-t border-gray-300 flex justify-right>
+                                        <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-4 w-32"
+                                        onclick="changeOrderStatus(${data.user.order_id}, 'inprogress')">Accept Request</button>
+                                    </div>
+                                        <!-- Add more user info as needed -->
+                                </div>
+                            `;
+                            document.getElementById('popup').classList.remove('translate-x-full');
                         });
                     } else {
                         console.error('Geocode was not successful for the following reason: ' + status);
@@ -165,6 +182,29 @@
                 }
             });
         } 
+
+        function changeOrderStatus(orderId, newStatus) {
+            fetch(`/change_order_status/${orderId}/${newStatus}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'  // Include CSRF token for security
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Order status updated successfully!');
+                    // Optionally, you can refresh the page or update the UI to reflect the change
+                } else {
+                    alert('Failed to update order status.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the order status.');
+            });
+        }
     </script>
 
     <script async defer
