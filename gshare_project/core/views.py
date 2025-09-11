@@ -601,9 +601,10 @@ def add_to_cart(request, item_id):
             order_date=timezone.now(),
             store=item.store,
             total_amount=0,
-            address = profile.address
+            delivery_address = profile.address
         )
 
+    print("Current order total:", order.delivery_address)
     print("Current order ID:", order.id)
 
     # Upsert into order_items (composite PK table) and recompute total
