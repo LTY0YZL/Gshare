@@ -1,0 +1,215 @@
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maps</title>
+    <link rel="stylesheet" href="{% static 'dist/tailwindcss.css' %}">
+    <style>
+    </style>
+</head>
+<body class="bg-[#D8D8D8] h-screen">
+    
+    {% include "navbar.html" %}
+
+    <div class="h-full flex items-center justify-center">
+        {% comment %} <button id="openPopup" class="bg-[#150931] text-white flex justify-center items-center w-32 h-32 rounded-lg transform translate-x-full transition-transform duration-300">
+            Open Popup
+        </button> {% endcomment %}
+        <div id="map_popup" class="flex justify-center items-center w-full">
+            <div id='map' class="w-1/3  h-96 mt-4 border border-gray-300 rounded-lg shadow-lg">
+
+            </div>
+        </div>
+    </div>
+
+    <!-- pop up html --> 
+     <div id="popup" class="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg h-full transform translate-x-full transition-transform duration-300">
+        <div class="flex justify-between items-center border-b">
+            <button id="closePopup" class="text-gray-500 hover:text-gray-700 ml-auto">&times;</button>
+
+        </div>
+
+        <div class="flex items-center justify-center border-b-gray">
+            <button id="shop" class="bg-[#EBE5FA] w-1/2 h-1/14 text-lg font-bold">Shopping Cart</button>
+            <button id="person" class="bg-white w-1/2 h-1/14 text-lg font-bold hover:bg-[#B299EA]">People</button>
+        </div>
+
+        <div id="popup-content" class="p-6"></div>
+        <div id="shoppingcart">
+
+        </div>
+
+        <div id="people" class="hidden">
+
+        </div>
+
+
+     </div>
+     {% csrf_token %}
+     <script>
+        //const openPopup = document.getElementById('openPopup'); 
+        const closePopup = document.getElementById('closePopup');
+        const shop = document.getElementById('shop');
+        const person = document.getElementById('person');
+        const map_popup = document.getElementById('map_popup');
+
+        // openPopup.addEventListener('click', () => {
+        //     popup.classList.remove('translate-x-full');
+        //     openPopup.classList.add('-translate-x-10');
+        // }); 
+
+
+        shop.addEventListener('click', () => {
+            console.log('person clicked');
+            shop.classList.add('bg-[#EBE5FA]');
+            person.classList.remove('bg-[#EBE5FA]');
+            shop.classList.remove('bg-white');
+            person.classList.add('bg-white');
+            shoppingcart.classList.remove('hidden');
+            people.classList.add('hidden');
+            shop.classList.remove('hover:bg-[#B299EA]');
+            person.classList.add('hover:bg-[#B299EA]');
+
+        });
+
+        person.addEventListener('click', () => {
+            console.log('person clicked');
+            person.classList.add('bg-[#EBE5FA]');
+            shop.classList.remove('bg-[#EBE5FA]');
+            person.classList.remove('bg-white');
+            shop.classList.add('bg-white');
+            shoppingcart.classList.add('hidden');
+            people.classList.remove('hidden');
+            person.classList.remove('hover:bg-[#B299EA]');
+            shop.classList.add('hover:bg-[#B299EA]');
+
+        });
+
+        let map;
+        let geocoder;
+        let markers = [];
+        const addresses_with_info = JSON.parse('{{ delivery_addresses_with_info_json|escapejs }}');
+        const user_address = '{{ user_address|escapejs }}';
+
+
+        function initMap() {
+            // Create a map centered at a specific location
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 17
+            });
+            geocoder = new google.maps.Geocoder();
+
+            geocoder.geocode({ 'address': user_address }, (results, status) => {
+                if (status === 'OK') {
+                    const location = results[0].geometry.location;
+                    map.setCenter(location);
+                } else {
+                    alert('Geocode was not successful for the following reason: ' + status);
+                }
+            });
+
+            // Add a marker for each address
+            addresses_with_info.forEach(data => {
+                geocoder.geocode({ 'address': data.address }, (results, status) => {
+                    if (status === 'OK') {
+                        const location = results[0].geometry.location;
+                        const marker = new google.maps.Marker({
+                            map: map,
+                            position: location
+                        });
+                        markers.push({ marker, user: data.user });
+
+                        marker.addListener('click', () => {
+                            // Display user info in your popup
+                            document.getElementById('popup-content').innerHTML = `
+                                <div class="space-y-4">
+                                    <h2 class="text-4xl font-bold mb-2 text-center">${data.user.name}</h2>
+                                    <p class="text-gray-700 text-2xl mt-4 text-center">${data.user.address}</p>
+                                    <p class="text-gray-700 text-2xl mt-4 text-right mb-8">Total cost of items: $${data.user.subtotal}</p>
+                                    <ul class="list-disc pl-6">
+                                        ${data.user.items.map(item => `
+                                        <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
+                                            <span class="font-semibold">${item.name}</span>:
+                                            <span class="font-semibold">${item.quantity} x $${item.price} =</span>
+                                            <span class="text-blue-700 font-bold">$${item.total}</span>
+                                        </li>
+                                        `).join('')}
+                                    </ul>
+                                    <div class = border-t border-gray-300 flex justify-right>
+                                        <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-4 w-32"
+                                        onclick="changeOrderStatus(${data.user.order_id}, 'inprogress')">Accept Request</button>
+                                    </div>
+                                        <!-- Add more user info as needed -->
+                                </div>
+                            `;
+                            document.getElementById('popup').classList.remove('translate-x-full');
+                        });
+                    } else {
+                        console.error('Geocode was not successful for the following reason: ' + status);
+                    }
+                });
+            })
+            {% comment %} marker = new google.maps.Marker({ map: map, position: location }); {% endcomment %}
+
+            {% comment %} marker.addListener('click', () => {
+                const popup = document.getElementById('popup');
+                const map_popup = document.getElementById('map_popup');
+                map_popup.classList.add('-translate-x-50');
+                popup.classList.remove('translate-x-full'); {% endcomment %}
+            {% comment %} }); {% endcomment %}
+
+            closePopup.addEventListener('click', () => {
+                const popup = document.getElementById('popup');
+                const map_popup = document.getElementById('map_popup');
+                popup.classList.add('translate-x-full');
+                map_popup.classList.remove('-translate-x-50');
+            });
+    
+        }
+
+        function geocodeAddress() {
+            const address = document.getElementById('input_location').value;
+            geocoder.geocode({ 'address': address }, (results, status) => {
+                if (status === 'OK') {
+                    const location = results[0].geometry.location;
+                    map.setCenter(location);
+                    document.getElementById('input_location').value = '';
+
+
+                } else {
+                    alert('Geocode was not successful for the following reason: ' + status);
+                }
+            });
+        } 
+
+        function changeOrderStatus(orderId, newStatus) {
+            fetch(`/change_order_status/${orderId}/${newStatus}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'  // Include CSRF token for security
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Order status updated successfully!');
+                    // Optionally, you can refresh the page or update the UI to reflect the change
+                } else {
+                    alert('Failed to update order status.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the order status.');
+            });
+        }
+    </script>
+
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap">
+
+    </script>
+
+</body>

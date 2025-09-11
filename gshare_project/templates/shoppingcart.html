@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+{% load tailwind_cli%}
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stores_cart</title>
+    {% tailwind_css %}
+</head>
+{% include "navbar.html" %}
+<body>
+    {% csrf_token %}
+    <div class="grid grid-cols-2 h-screen gap-4 p-4">
+        <div class="col-span-1 bg-white">
+            {% for item in items %}
+                <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                    <h2 class="text-xl font-bold mb-2 pl-8">{{ item.name }}</h2>
+                    <p class="mb-1 pl-32">Quantity: {{ item.quantity }}</p>
+                    <p class="mb-1 pl-32">Price: ${{ item.price }}</p>
+                    <p class="mb-1 pl-32">Total: ${{ item.total }}</p>
+                </div>
+            {% empty %}
+            <p class="p-4">Your cart is empty.</p>
+            {% endfor %}
+        </div>
+        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
+            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+            <p class="mb-2">Subtotal: ${{ order.subtotal }}</p>
+            <p class="mb-2">Tax: ${{ order.tax }}</p>
+            <p class="mb-4 font-bold">Total: ${{ order.total }}</p>
+            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+            onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Proceed to Checkout</button>
+
+        </div>
+    </div>
+</body>
+<script>
+        function changeOrderStatus(orderId, newStatus) {
+            if(!orderId) {
+                alert('Invalid order.');
+                return;
+            }
+            fetch(`/change_order_status/${orderId}/${newStatus}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'  // Include CSRF token for security
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Order status updated successfully!');
+                    location.reload();
+                    // Optionally, you can refresh the page or update the UI to reflect the change
+                } else {
+                    alert('Failed to update order status.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the order status.');
+            });
+        }
+</script>

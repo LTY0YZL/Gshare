@@ -1,0 +1,293 @@
+{% load tailwind_cli%}
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stores_cart</title>
+    {% tailwind_css %}
+
+</head>
+{% include "navbar.html" %}
+<body class="Stores_desgin">
+
+    <div class="container py-8">
+        <div class="flex justify-center mt-2">
+            <form action="{% url 'cart' %}" method="get" class="mb-6 border border-gray-300 p-4 rounded-lg bg-white shadow-md w-1/2 flex flex-row flex-wrap gap-6 items-start ml-16">                <input type="hidden" name="store_filter" id="store_filter" value="{{ store_filter|default:'All' }}">
+                <div class="flex flex0-col items-start">
+                    <p class="font-bold mb-2">Price Range</p>
+                    <div name="PriceButtons flex flex-wrap gap-4 mb-4">
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="Any" name="Price-Range" value="Any" checked class="mr-2">
+                            Any
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="0-10" name="Price-Range" value="0-10" class="mr-2">
+                            0-$10
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="10-25" name="Price-Range" value="10-25" class="mr-2">
+                            $10-$25
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="25-50" name="Price-Range" value="25-50" class="mr-2">
+                            $25-$50
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="50-100" name="Price-Range" value="50-100" class="mr-2">
+                            $50-$100
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="100+" name="Price-Range" value="100+" class="mr-2">
+                            $100+
+                        </label>      
+                    </div>
+                </div>
+            
+                <div class="flex flex-cols items-start">
+                    <p class = "font-bold mb-2">Stores</p>
+                    <div name="StoresButtons" class="flex flex-col gap-2 mb-4">
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="Walmart" name="Stores" value="Walmart" class="mr-2">
+                            Walmart
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="Target" name="Stores" value="Target" class="mr-2">
+                            Target
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="Costco" name="Stores" value="Costco" class="mr-2">
+                            Costco
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="Kroger" name="Stores" value="Kroger" class="mr-2"
+                            {% if store_filter == 'Kroger' %}checked{% endif %}>
+                            Kroger
+                        </label>
+                        <label class="flex items-center ml-2">
+                            <input type="radio" id="All" name="Stores" value="All" class="mr-2"
+                                {% if store_filter|default:'All' == 'All' %}checked{% endif %}>
+                            All
+                        </label>
+                    </div>
+                    <div id="krogerBox" class="basis-full mt-2 {% if store_filter == 'Kroger' %}block{% else %}hidden{% endif %}">                        <div class="border rounded-lg bg-white shadow-md p-3">
+                            <div class="text-sm text-gray-600 mb-2">Search in Kroger</div>
+                            <div class="flex flex-wrap gap-2 items-end">
+                                <label class="flex flex-col">
+                                    <span class="text-xs text-gray-600">Zip code</span>
+                                    <input name="zip_code" value="{{ zip_code|default:'' }}" placeholder="e.g. 84112"
+                                        class="border rounded px-3 py-2">
+                                </label>
+                                <label class="flex flex-col">
+                                    <span class="text-xs text-gray-600">Item</span>
+                                    <input name="search_term" value="{{ search_term|default:'' }}" placeholder="e.g. milk"
+                                        class="border rounded px-3 py-2">
+                                </label>
+                                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Search Kroger</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            
+                <div class="flex items-center gap-4 mb-6">
+                    <input type="text" name="Item_Search_Bar" placeholder="Search for an item" class="border border-gray-300 rounded-lg px-4 py-2 mb-4 w-full">
+                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">Search</button>
+
+                </div>
+            </form>
+        </div>
+
+        {% comment %} <div name="Items_list" class="grid grid-cols-1 md:grud-cols-2 lg:grid-cols-3 gap-6">
+            {% for item in page_obj %}
+                <div class="border border-gray-300 rounded-lg p-4 shadow-md">
+                    <h3 class="text-lg font-bold mb-2">{{ item.name }}</h3>
+                    <p class="text-gray-700">Price: ${{ item.price }}</p>
+                    <p class="text-gray-700">Store: {{ item.store.name }}</p>
+                    <p class="text-gray-700">Stock: {{ item.stock }}</p>
+                </div>
+            {% empty %}
+                <p class="col-span-full text-center text-gray-500">No items match your criteria.</p>
+            {% endfor %}
+        </div> {% endcomment %}
+        <div name="Items_list" class="grid gap-4 mt-8">
+            {% for item in page_obj %}
+                <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg active:scale-95 transition-all duration-150 active:bg-gray-300" 
+                onclick="handleItemClick(this, {{item.id}} )">
+                    <div class="text-lg font-bold">{{ item.name }}</div>
+                    <div class="text-gray-700">Price: ${{ item.price }}</div>
+                    <div class="text-gray-700">Store: {{ item.store.name }}</div>
+                    <div class="text-gray-700">Stock: {{ item.stock }}</div>
+                    <div>
+                        <input type="number" name="item_ammount" value="1" min="1" max="{{ item.stock }}" class="w-16 px-2 py-1 border border-gray-300 rounded-lg">
+                    </div>
+                </div>
+            {% empty %}
+                {% if store_filter != 'Kroger' %}
+                    <p class="text-center text-gray-500">No items match your criteria.</p>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% if kroger_products %}
+            <div class="mt-8 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold">Kroger Results</h3>
+                    <form id="save-kroger-form" method="post" action="{% url 'save_kroger_results' %}" class="inline-flex">
+                        {% csrf_token %}
+                        {{ kroger_products|json_script:"kroger-data" }}
+                        <input type="hidden" name="products_json" id="products_json">
+                        <button type="submit" class="bg-emerald-600 text-white px-3 py-2 rounded">Save all</button>
+                    </form>
+                </div>
+                <div class="grid gap-4">
+                    {% for p in kroger_products %}
+                        {% with desc=p.description price=p.items.0.price.regular %}
+                            <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg active:scale-95 transition-all duration-150 active:bg-gray-300 cursor-pointer"
+                                onclick="addKrogerCardClick(this, '{{ desc|escapejs }}', '{{ price|default:'' }}')">
+                            <div class="text-lg font-bold truncate">{{ desc }}</div>
+                            <div class="text-gray-700">Price: ${{ price|default:'—' }}</div>
+                            <div class="text-gray-700">Store: Kroger</div>
+                            <div>
+                                <input type="number" name="item_ammount" value="1" min="1" class="w-16 px-2 py-1 border border-gray-300 rounded-lg">
+                            </div>
+                        </div>
+                    {% endwith %}
+                {% endfor %}
+            </div>
+        </div>
+        <script>
+            (function(){
+                var data = JSON.parse(document.getElementById('kroger-data').textContent);
+                document.getElementById('products_json').value = JSON.stringify(data);
+            })();
+        </script>
+        {% endif %}
+        {% if saved_kroger_items %}
+            <div class="mt-10 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold">Saved Kroger Items</h3>
+                    <form method="post" action="{% url 'clear_kroger_items' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="bg-red-600 text-white px-3 py-2 rounded">Clear saved</button>
+                    </form>
+                </div>
+                <div class="grid gap-4">
+                    {% for item in saved_kroger_items %}
+                        <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg active:scale-95 transition-all duration-150 active:bg-gray-300 cursor-pointer"
+                            onclick="handleItemClick(this, {{ item.id }})">
+                        <div class="text-lg font-bold truncate">{{ item.name }}</div>
+                        <div class="text-gray-700">Price: ${{ item.price }}</div>
+                        <div class="text-gray-700">Store: Kroger</div>
+                        <div>
+                            <input type="number" name="item_ammount" value="1" min="1" class="w-16 px-2 py-1 border border-gray-300 rounded-lg">
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% csrf_token %}
+</body>
+<style>
+    .item-card:hover {
+        background-color: #f0f0f0; /* Light gray background on hover */
+        cursor: pointer; /* Change cursor to pointer on hover */
+    }
+
+    .item-card:active {
+        background-color: #e5e7eb;        /* darker gray on click */
+        transform: scale(0.98);           /* slight press effect */
+    }
+</style>
+<script>
+    const csrf_token = "{{ csrf_token }}";
+    function handleItemClick(element, item_id) {
+        const ammountInput = element.querySelector('input[name="item_ammount"]');
+        const itemAmmount = ammountInput ? ammountInput.value : 1;
+
+        fetch(`/cart/add/${item_id}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf_token
+            },
+            body: JSON.stringify({ 'item_ammount': itemAmmount })
+        })
+        .then(response => {
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                return response.json();
+            } else {
+                throw new Error("Not authenticated or not found");
+            }
+        })
+        .then(data => {
+            console.log(data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+    }
+    (function(){
+    const radios = document.querySelectorAll('input[name="Stores"]');
+    const hidden = document.getElementById('store_filter');
+    const box = document.getElementById('krogerBox');
+
+    function toggleKrogerBox(){
+      const checked = document.querySelector('input[name="Stores"]:checked');
+      const val = (checked && checked.value) || hidden.value || 'All';
+      hidden.value = val;
+      if (val === 'Kroger') box.classList.remove('hidden');
+      else box.classList.add('hidden');
+    }
+
+    radios.forEach(r => r.addEventListener('change', toggleKrogerBox));
+    toggleKrogerBox();
+  })();
+  
+  function addKrogerItem(name, price){
+    if (!name || !price) {
+      alert('This item is missing a price and cannot be added.');
+      return;
+    }
+    fetch("{% url 'add_kroger_item_to_cart' %}", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf_token },
+      body: JSON.stringify({ product_name: name, product_price: price })
+    })
+    .then(r => {
+      const ct = r.headers.get('content-type')||'';
+      return ct.includes('application/json') ? r.json() : {};
+    })
+    .then(data => {
+      console.log('Added Kroger item:', name, price, data);
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Failed to add item to cart.');
+    });
+  }
+
+  function addKrogerCardClick(el, name, price){
+    const qtyInput = el.querySelector('input[name="item_ammount"]');
+    const qty = qtyInput ? parseInt(qtyInput.value || '1', 10) : 1;
+
+    if (!price) { alert('This item is missing a price and cannot be added.'); return; }
+
+    fetch("{% url 'add_kroger_item_to_cart' %}", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf_token },
+      body: JSON.stringify({ product_name: name, product_price: price, item_ammount: qty })
+    })
+    .then(r => (r.headers.get('content-type')||'').includes('application/json') ? r.json() : {})
+    .then(data => { console.log('Added', name, qty); })
+    .catch(err => { console.error(err); alert('Failed to add item to cart.'); });
+  }
+</script>
+
+<footer>
+
+</footer>
+
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="{% static 'dist/tailwindcss.css' %}">
+</head>
+{% include "navbar.html" with navbar_bg_color="#150931" %}
+<body class="bg-gradient-to-br from-[#150931] to-[#2a1259] min-h-screen">
+
+    <div class="max-w-2xl mx-auto my-16 border border-purple-300 rounded-xl shadow-2xl p-10 m-8 bg-white flex flex-col">
+        {% if messages %}
+            <div class="mb-8 p-5 bg-red-50 border-l-4 border-red-500 rounded">
+                {% for message in messages %}
+                    <p class="text-red-700 font-medium">{{ message }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+        
+        <div id="login">
+            <h4 class="text-3xl font-bold text-center text-purple-800 mb-8">User Login</h4>
+            <form method="post" action="{% url 'login' %}" class="w-full">
+                {% csrf_token %}
+                <div class="mb-8">
+                    <div class="mb-6">
+                        <label for="username" class="block text-lg font-medium text-gray-700 mb-2">Username</label>
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg transition-all duration-200 focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 focus-within:ring-opacity-50">
+                            <img class="w-8 h-8 m-3" src="{% static 'media/user.png' %}" alt="User Icon">
+                            <input type="text" id="username" name="username" class="w-full p-3 focus:outline-none text-lg" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <label for="password" class="block text-lg font-medium text-gray-700 mb-2">Password</label>
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg transition-all duration-200 focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 focus-within:ring-opacity-50">
+                            <img class="w-8 h-8 m-3" src="{% static 'media/lock.png' %}" alt="Password Icon">
+                            <input type="password" id="password" name="password" class="w-full p-3 focus:outline-none text-lg" required>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center mb-8">
+                        <a href="#" class="text-purple-700 hover:text-purple-900 underline text-base">Forgot Password?</a>
+                    </div>
+                    
+                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-black py-4 px-5 rounded-lg font-bold transition duration-200 text-lg">Login</button>
+                    
+                    <div class="mt-6 text-center">
+                        <p class="text-gray-600 text-lg">Don't have an account? 
+                            <button type="button" onclick="togglefunc()" class="text-purple-700 hover:text-purple-900 font-medium ml-2">Sign Up</button>
+                        </p>
+                    </div>
+                </div>
+            </form>
+
+            <div class="mt-10 border-t pt-8">
+                <h4 class="text-center text-gray-700 font-medium mb-6 text-lg">Or Login Using</h4>
+
+                <div class="grid gap-4 w-full">
+                    <button class="flex items-center justify-center p-3 border border-gray-300 rounded-lg bg-[#3b5998] text-black w-full hover:bg-[#4267B2] transition-all duration-200 hover:-translate-y-1 hover:shadow-md">
+                        <img class="w-8 h-8 mr-4" src="{% static 'media/facebook.png' %}" alt="Facebook Icon">
+                        <span class="font-medium text-lg">LOGIN WITH FACEBOOK</span>
+                    </button>
+
+                    <button class="flex items-center justify-center p-3 border border-gray-300 rounded-lg bg-white text-black w-full hover:bg-gray-50 transition-all duration-200 hover:-translate-y-1 hover:shadow-md">
+                        <img class="w-8 h-8 mr-4" src="{% static 'media/google.png' %}" alt="Google Icon">
+                        <span class="font-medium text-lg">LOGIN WITH GOOGLE</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="signup" class="hidden">
+            <h4 class="text-3xl font-bold text-center text-purple-800 mb-8">Create Account</h4>
+            <form method="post" action="{% url 'signup' %}" class="w-full">
+                {% csrf_token %}
+                <div class="mb-8">
+                    <!-- Username -->
+                    <div class="mb-6">
+                        <label for="signup-username" class="block text-lg font-medium text-gray-700 mb-2">Username</label>
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 transition-all">
+                            <img class="w-8 h-8 m-3" src="{% static 'media/user.png' %}" alt="User Icon">
+                            <input type="text" id="signup-username" name="username" class="w-full p-3 focus:outline-none text-lg" required>
+                        </div>
+                    </div>
+        
+                    <!-- First Name -->
+                    <div class="mb-6">
+                        <label for="first_name" class="block text-lg font-medium text-gray-700 mb-2">First Name</label>
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 transition-all">
+                            <img class="w-8 h-8 m-3" src="{% static 'media/user.png' %}" alt="User Icon">
+                            <input type="text" id="first_name" name="first_name" class="w-full p-3 focus:outline-none text-lg" required>
+                    </div>
+        
+                    <!-- Last Name -->
+                    <div class="mb-6">
+                        <label for="last_name" class="block text-lg font-medium text-gray-700 mb-2">Last Name</label>
+                        <input type="text" id="last_name" name="last_name" class="w-full border-2 border-gray-300 rounded-lg p-3 focus:outline-none text-lg focus:border-purple-500 focus:ring focus:ring-purple-200">
+                    </div>
+        
+                    <!-- Email -->
+                    <div class="mb-6">
+                        <label for="email" class="block text-lg font-medium text-gray-700 mb-2">Email</label>
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 transition-all">
+                            <img class="w-8 h-8 m-3" src="{% static 'media/user.png' %}" alt="Email Icon">
+                            <input type="email" id="email" name="email" class="w-full p-3 focus:outline-none text-lg" required>
+                        </div>
+                    </div>
+        
+                    <!-- Password -->
+                    <div class="mb-6">
+                        <label for="signup-password" class="block text-lg font-medium text-gray-700 mb-2">Password</label>
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 transition-all">
+                            <img class="w-8 h-8 m-3" src="{% static 'media/lock.png' %}" alt="Password Icon">
+                            <input type="password" id="signup-password" name="password" class="w-full p-3 focus:outline-none text-lg" required>
+                        </div>
+                    </div>
+        
+                    <!-- Optional Address -->
+                    <div class="mb-6">
+                        <label for="address" class="block text-lg font-medium text-gray-700 mb-2">Address (optional)</label>
+                        <input type="text" id="address" name="address" class="w-full border-2 border-gray-300 rounded-lg p-3 focus:outline-none text-lg focus:border-purple-500 focus:ring focus:ring-purple-200">
+                    </div>
+        
+                    <!-- Optional Phone -->
+                    <div class="mb-6">
+                        <label for="phone" class="block text-lg font-medium text-gray-700 mb-2">Phone (optional)</label>
+                        <input type="text" id="phone" name="phone" class="w-full border-2 border-gray-300 rounded-lg p-3 focus:outline-none text-lg focus:border-purple-500 focus:ring focus:ring-purple-200">
+                    </div>
+        
+                    <!-- Submit -->
+                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-black py-4 px-5 rounded-lg font-bold transition duration-200 text-lg">Create Account</button>
+        
+                    <div class="mt-6 text-center">
+                        <p class="text-gray-600 text-lg">Already have an account? 
+                            <button type="button" onclick="togglefunc()" class="text-purple-700 hover:text-purple-900 font-medium ml-2">Log In</button>
+                        </p>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        
+    <script>
+        function togglefunc() {
+            document.getElementById("login").classList.toggle("hidden");
+            document.getElementById("signup").classList.toggle("hidden");   
+        }
+    </script>
+</body>
+</html>

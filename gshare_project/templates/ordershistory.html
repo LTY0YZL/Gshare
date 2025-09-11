@@ -1,0 +1,36 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Orders</title>
+</head>
+<body style="margin: 0; padding: 0;">
+    {% include 'navbar.html' %}
+    
+    <div style="padding: 1rem;">
+        <h1 style="text-align: center; font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem;">My Orders</h1>
+        
+        {% for order, items in orders_with_items %}
+        <div name="eachOrder" style="border: 1px solid #ddd; border-radius: 0.5rem; margin-bottom: 1rem; overflow: hidden;">
+            <div name="orderHeader" style="padding: 0.5rem; background: #f5f5f5;">
+                <h4>Order from {{ order.store.name }} - {{ order.order_date|date:"M d, Y" }}</h4>
+            </div>
+            
+            <div style="padding: 0.5rem;">
+                <div name="itemsContainer" style="max-height: 10rem; overflow-y: auto;">
+                    {% for order_item in items %}
+                        <div name="eachItem" style="display: flex; align-items: center; padding: 0.25rem 0; border-bottom: 1px solid #eee;">
+                            <span style="width: 8rem;">{{ order_item.name }}</span>
+                            <span style="margin: 0 1rem;">${{ order_item.price }}</span>
+                            <span>Qty: {{ order_item.quantity }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
