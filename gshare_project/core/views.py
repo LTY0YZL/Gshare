@@ -590,7 +590,7 @@ def add_to_cart(request, item_id):
         item = Items.objects.using('gsharedb').get(id=item_id)
     except Items.DoesNotExist:
         messages.error(request, "Item not found.")
-        return redirect('cart')
+        return redirect('cart') 
 
     # Get or create cart
     order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
@@ -600,7 +600,8 @@ def add_to_cart(request, item_id):
             status='cart',
             order_date=timezone.now(),
             store=item.store,
-            total_amount=0
+            total_amount=0,
+            address = profile.address
         )
 
     print("Current order ID:", order.id)
