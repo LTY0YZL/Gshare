@@ -15,10 +15,24 @@
         <div class="col-span-1 bg-white">
             {% for item in items %}
                 <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                    <h2 class="text-xl font-bold mb-2 pl-8">{{ item.name }}</h2>
-                    <p class="mb-1 pl-32">Quantity: {{ item.quantity }}</p>
-                    <p class="mb-1 pl-32">Price: ${{ item.price }}</p>
-                    <p class="mb-1 pl-32">Total: ${{ item.total }}</p>
+                    <div class="flex flex-row">
+                        <div class="flex flex-col">
+                            <h2 class="text-xl font-bold mb-2 pl-8">{{ item.name }}</h2>
+                            <div flex flex-row>
+                                <p class="mb-1 pl-32">Quantity: {{ item.quantity }}</p>
+                                <input type="number" name="item_amount" value="{{item.quantity}}" min="1" class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
+                                <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
+                                onclick="handleItemClick(this, {{ item.id }}, {{ item_amount.value }})">
+                                    Update
+                                </button>
+                            </div>
+                            <p class="mb-1 pl-32">Price: ${{ item.price }}</p>
+                            <p class="mb-1 pl-32">Total: ${{ item.total }}</p>
+                        </div>
+                        <button class="ml-auto self-center">
+                            <a href="" class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md ">Remove item</a>
+                        </button>
+                    </div>
                 </div>
             {% empty %}
             <p class="p-4">Your cart is empty.</p>

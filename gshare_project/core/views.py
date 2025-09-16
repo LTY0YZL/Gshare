@@ -571,9 +571,10 @@ Returns:
     Redirects to the cart page.
 """
 @login_required
-def add_to_cart(request, item_id):
+def add_to_cart(request, item_id, quantity=1):
     
     print("Adding item to cart:", item_id)
+    print("Quantity:", quantity)
 
     profile = get_user("email", request.user.email)
     if not profile:
@@ -615,7 +616,7 @@ def add_to_cart(request, item_id):
                 ON DUPLICATE KEY UPDATE
                     quantity = quantity + VALUES(quantity)
                 """,
-                [order.id, item.id, 1, str(item.price or 0)]
+                [order.id, item.id, quantity, str(item.price or 0)]
             )
 
             # RECALC TOTAL from line items
