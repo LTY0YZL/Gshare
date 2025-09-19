@@ -45,7 +45,11 @@ urlpatterns = [
     
     path('cart/kroger/add/',   views.add_kroger_item_to_cart, name='add_kroger_item_to_cart'),
     path('cart/kroger/save/',  views.save_kroger_results,     name='save_kroger_results'),
-    path('cart/kroger/clear/', views.clear_kroger_items,      name='clear_kroger_items'),   
+    path('cart/kroger/clear/', views.clear_kroger_items,      name='clear_kroger_items'), 
+    path('orders/repeat_orders', views.scheduled_orders, name='scheduled_orders'),
+    path('orders/create_recurring_cart/', views.create_recurring_cart, name='create_recurring_cart'),
+    path('orders/toggle_cart_status/<int:cart_id>/', views.toggle_cart_status, name='toggle_cart_status'),
+    path('orders/delete_cart/<int:cart_id>/', views.delete_cart, name='delete_cart'),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

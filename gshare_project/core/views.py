@@ -971,3 +971,19 @@ def myorders(request):
 @login_required
 def payments(request):
     return render(request, "paymentsPage.html")
+
+@login_required
+def scheduled_orders(request):
+    return render(request, "scheduled_orders.html")
+
+@login_required
+def create_recurring_cart(request):
+    return redirect('scheduled_orders')
+
+@login_required
+def toggle_cart_status(request, cart_id):
+    return redirect('scheduled_orders')
+
+@login_required
+def delete_cart(request, cart_id):
+    return redirect('scheduled_orders')
