@@ -11,7 +11,7 @@
 {% include "navbar.html" %}
 <body>
     {% csrf_token %}
-    <div class="grid grid-cols-2 h-screen gap-4 p-4">
+    {% comment %} <div class="grid grid-cols-2 h-screen gap-4 p-4">
         <div class="col-span-1 bg-white">
             {% for item in items %}
                 <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
@@ -47,34 +47,110 @@
             onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Proceed to Checkout</button>
 
         </div>
+    </div> {% endcomment %}
+
+    <div class="tabsList">
+        <button class="Buttoncolor text-white px-4 py-2 hover:bg-blue-600 rounded-t-lg" onclick="display('cart')">Cart</button>
+        <button class="Buttoncolor" onclick="display('group')">Group cart</button>
+        <button class="Buttoncolor" onclick="display('inprogress')">Orders in Progress</button>
     </div>
+
+    <div id="tab-cart" class="tab-content"></div>
+    <div id="tab-group" class="tab-content hidden"></div>
+    <div id="tab-inprogress" class="tab-content hidden"></div>
 </body>
+<style>
+    .tabsList {
+        display: flex;
+        padding: 4px;
+        justify-content: center;
+        background-color: #bfdbfe; /* Tailwind's blue-100 */
+    }
+    .Buttoncolor {
+        background-color: #60A5FA; /* Tailwind's blue-400 */
+        color: white;
+        padding: 4px;
+    }
+
+    .Buttoncolor:hover {
+        background-color #3B82F6;
+    }
+    
+</style>
 <script>
-        function changeOrderStatus(orderId, newStatus) {
-            if(!orderId) {
-                alert('Invalid order.');
-                return;
-            }
-            fetch(`/change_order_status/${orderId}/${newStatus}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'  // Include CSRF token for security
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Order status updated successfully!');
-                    location.reload();
-                    // Optionally, you can refresh the page or update the UI to reflect the change
-                } else {
-                    alert('Failed to update order status.');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while updating the order status.');
-            });
+    function display(tabName) {
+        // Hide all tabs
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add("hidden")); 
+
+        // Show the selected tab
+        const tab = document.getElementById("tab-" + tabName);
+        tab.classList.remove("hidden"); 
+
+        if (tabName == 'cart') {
+            displayCart();
         }
+        else if (tabName == 'group') {
+            displayGroupCart();
+        }
+        else if (tabName == 'inprogress') {
+            displayInProgressOrders();
+        }
+    }
+
+    function displayCart() {
+        fetch('/cartItems/')
+        .then(response => response.json())
+        .then(data => {
+            let html = "";
+            data.items.forEach(item => {
+                html += `<div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8 w-1/2">
+                            <div class="flex flex-row">
+                                <div class="flex flex-col">
+                                    <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
+                                    <div flex flex-row>
+                                        <p class="mb-1 pl-32"> Quantity: ${item.quantity}</p>
+                                        <p class="mb-1 pl-32"> Price: $${item.price}</p>
+                                        <p class="mb-1 pl-32"> <b> Total: $${item.total}</b></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+        });
+        const tab = document.getElementById("tab-cart");
+        tab.innerHTML = html ||  "<p class='p-4'>Your cart is empty.</p>";
+        });
+    }
+
+    function changeOrderStatus(orderId, newStatus) {
+        if(!orderId) {
+            alert('Invalid order.');
+            return;
+        }
+        fetch(`/change_order_status/${orderId}/${newStatus}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'  // Include CSRF token for security
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Order status updated successfully!');
+                location.reload();
+                // Optionally, you can refresh the page or update the UI to reflect the change
+            } else {
+                alert('Failed to update order status.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while updating the order status.');
+        });
+    }
+    
+    // Show cart by default when page loads
+    document.addEventListener("DOMContentLoaded", () => {
+      display('cart');
+    });
 </script>

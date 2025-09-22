@@ -38,6 +38,8 @@ urlpatterns = [
     path('change_order_status/<int:order_id>/<str:new_status>/', views.change_order_status_json, name='change_order_status_json'),
     path('checkout/', views.checkout, name='checkout'),
     path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
+    path('cartItems/', views.cart_data, name='cart_items'),
+
     path('myorders/', views.myorders, name='order_history'),
     path('cart/payments/', views.payments, name='payments'),
     # path('chat/', include('chat.urls')),
