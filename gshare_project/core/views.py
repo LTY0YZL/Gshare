@@ -8,7 +8,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User as AuthUser
+from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password, check_password
 from django.contrib import messages
 from django.utils import timezone
 from django.db import connections
@@ -19,13 +20,14 @@ from django.db.models import Q
 from django.db.models import Avg, Count
 from django.http import JsonResponse
 import json
+import re
 from . import kroger_api
 
 from core.models import (
     Users,
     Stores, Items,
     Orders, OrderItems,
-    Deliveries, Feedback
+    Deliveries, Feedback, GroupOrders
 )
 
 """helper functions"""
@@ -232,6 +234,23 @@ def get_my_deliveries(user: Users, delivery_status: str):
     if not deliveries.exists():
         return []
     return deliveries
+
+def set_group_password(group, raw_password: str):
+    # explicitly tell Django to use Argon2 for this hash
+    group.password_hash = make_password(raw_password, hasher='argon2')
+    group.save(using='gsharedb')
+
+def verify_group_password(group, raw_password: str) -> bool:
+    # check_password auto-detects the hasher from the stored hash
+    return check_password(raw_password, group.password_hash)
+
+def get_orders_in_group(group_id: int):
+    try:
+        group = GroupOrders.objects.using('gsharedb').get(group_id=group_id)
+        order_ids = re.findall(r"\d+", group.list_of_order_ids)
+        return Orders.objects.using('gsharedb').filter(id__in=order_ids)
+    except GroupOrders.DoesNotExist:
+        return Orders.objects.none()
 
 """Main functions"""
 

@@ -86,3 +86,12 @@ class Deliveries(models.Model):
     class Meta:
         managed = False
         db_table = 'deliveries'
+
+class GroupOrders(models.Model):
+    group_id = models.AutoField(primary_key=True)
+    list_of_order_ids = models.TextField()
+    password_hash = models.CharField(max_length=128)
+
+    class Meta:
+        managed = False
+        db_table = 'group_orders'
