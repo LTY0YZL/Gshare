@@ -86,3 +86,40 @@ class Deliveries(models.Model):
     class Meta:
         managed = False
         db_table = 'deliveries'
+
+class RecurringCart(models.Model):
+    STATUS_CHOICES = [
+        ('enabled', 'Enabled'),
+        ('paused', 'Paused'),
+    ]
+    FREQUENCY_CHOICES = [
+        ('weekly', 'Weekly'),
+        ('biweekly', 'Bi-Weekly'),
+        ('monthly', 'Monthly'),
+    ]
+
+    user = models.ForeignKey(Users, on_delete=models.CASCADE, related_name='recurring_carts')
+    name = models.CharField(max_length=100)
+    frequency = models.CharField(max_length=10, choices=FREQUENCY_CHOICES, default='weekly')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='enabled')
+    next_order_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        managed = False
+        db_table = 'core_recurringcart'
+
+    def __str__(self):
+        return f"{self.name} for {self.user.name}"
+
+class RecurringCartItem(models.Model):
+    recurring_cart = models.ForeignKey(RecurringCart, on_delete=models.CASCADE, related_name='items')
+    item = models.ForeignKey(Items, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        managed = False
+        db_table = 'core_recurringcartitem'
+        
+    def __str__(self):
+        return f"{self.quantity} x {self.item.name}"
