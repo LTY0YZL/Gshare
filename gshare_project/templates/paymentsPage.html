@@ -60,7 +60,11 @@
                     </div>
                 </div>
             
-                <button style="border: 1px solid darkblue; padding: 8px; max-width: 15vw; align-self: center; background-color: #3A97D4; color: aliceblue;">Confirm Payments</button>
+                <form action="{% url 'paymentscheckout' %}" method="post">
+
+                    {% csrf_token %}
+                    <button style="border: 1px solid darkblue; padding: 8px; max-width: 15vw; align-self: center; background-color: #3A97D4; color: aliceblue;">Confirm Payments</button>
+                </form>
             </div>
         </div>
     </body>

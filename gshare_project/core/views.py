@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.conf import settings
 from pymysql import IntegrityError
 from django.db.models import Q
+import stripe
 
 from core.models import (
     Users,
@@ -489,4 +490,22 @@ def shoppingcart(request):
 
 @login_required
 def payments(request):
+    return render(request, "paymentsPage.html")
+
+@login_required
+def paymentsCheckout(request):
+    stripe.api_key=settings.STRIPE_SECRET_KEY
+    cartItems = [1]
+    checkoutSession = stripe.checkout.Session.create(
+        line_items=[
+            {
+                'price': 1.33,
+                'quantity': 1,
+            }
+            for item in cartItems
+        ],
+        mode='payment',
+        success_url="http://127.0.0.1:8000/",
+        cancel_url="http://127.0.0.1:8000/cart/payments",
+    )
     return render(request, "paymentsPage.html")
