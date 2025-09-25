@@ -105,74 +105,6 @@ def create_user_signin(name: str, email: str, address: str = "Not provided", pho
         # e.g., duplicate email or other constraint violations
         raise
 
-
-"""
-Create a new order for a user at a specific store with given items and quantities.
-
-Args:
-    user (Users): The user placing the order.
-    store (Stores): The store from which the order is being placed.
-    items (list[Items]): A list of item objects to be included in the order.
-    quantities (list[int]): A list of quantities corresponding to each item.
-
-Returns:
-    Orders: The created order object.
-"""
-# def create_order(user: Users, store: Stores, items: list[Items], quantities: list[int]) -> Orders:
-
-#     if len(items) != len(quantities):
-#         raise ValueError("Items and quantities lists must have the same length.")
-
-#     with transaction.atomic(using='gsharedb'):
-#         order = Orders.objects.using('gsharedb').create(
-#             user=user,
-#             store=store,
-#             status='placed',  # or 'cart' if you want to create a cart first
-#             order_time=timezone.now()
-#         )
-
-#         order_items = [
-#             OrderItems(
-#                 order=order,
-#                 item=item,
-#                 quantity=qty
-#             ) for item, qty in zip(items, quantities)
-#         ]
-#         OrderItems.objects.using('gsharedb').bulk_create(order_items)
-
-#     return order
-
-
-
-# @login_required
-# def add_to_cart(request, item_id):
-
-#     profile = get_user("email", request.user.email)
-#     item = get_object_or_404(Items, pk=item_id)
-
-#     # Get or create the user's cart (order with status 'cart')
-#     order, created = Orders.objects.using('gsharedb').get_or_create(
-#         user=profile,
-#         status='cart',
-#         defaults={
-#             'order_time': timezone.now(),
-#             'store': item.store
-#         }
-#     )
-
-#     # Add the item to the cart or update its quantity
-#     order_item, created = OrderItems.objects.using('gsharedb').get_or_create(
-#         order=order,
-#         item=item,
-#         defaults={'quantity': 1}
-#     )
-#     if not created:
-#         order_item.quantity += 1
-#         order_item.save(using='gsharedb')
-
-#     messages.success(request, f"Added {item.name} to your cart.")
-#     return redirect('cart')
-
 """
 Edit the quantity of a specific item in an order.
 
@@ -426,9 +358,7 @@ def updateProfile(profile, data, files):
 
 @login_required
 def userprofile(request):
-    # profile = get_custom_user(request)
-    # orders = profile.orders_placed.select_related('store')\
-    #             .prefetch_related('order_items__item') if profile else []
+
     user_email = request.user.email
     if not user_email:
         messages.error(request, 'No email associated with your account')
@@ -518,8 +448,6 @@ def userprofile(request):
     stars_full = max(0, min(5, int(round(avg))))  
     stars_text = '★' * stars_full + '☆' * (5 - stars_full)
         
-    # profile.orders_placed.select_related('store')\
-    #             .prefetch_related('order_items__item') if profile else []
     return render(request, "profile.html", {
         'user': profile,
         'errors': errors,
