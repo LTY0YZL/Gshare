@@ -43,8 +43,18 @@ urlpatterns = [
     # path('chat/', include('chat.urls')),
     path("__reload__/", include("django_browser_reload.urls")),
     
+    # kroger api
     path('cart/kroger/add/',   views.add_kroger_item_to_cart, name='add_kroger_item_to_cart'),
     path('cart/kroger/save/',  views.save_kroger_results,     name='save_kroger_results'),
+    path('cart/kroger/clear/', views.clear_kroger_items,      name='clear_kroger_items'),   
+    
+    # recurring Carts
+    path('recurring/', views.manage_recurring_carts, name='manage_recurring_carts'),
+    path('recurring/create/', views.create_recurring_cart, name='create_recurring_cart'),
+    path('recurring/toggle/<int:cart_id>/', views.toggle_recurring_cart_status, name='toggle_recurring_cart_status'),
+    path('recurring/create-from-order/<int:order_id>/', views.create_recurring_from_order, name='create_recurring_from_order'),
+    path('recurring/delete/<int:cart_id>/', views.delete_recurring_cart, name='delete_recurring_cart'),
+
     path('cart/kroger/clear/', views.clear_kroger_items,      name='clear_kroger_items'), 
     path('orders/repeat_orders', views.scheduled_orders, name='scheduled_orders'),
     path('orders/create_recurring_cart/', views.create_recurring_cart, name='create_recurring_cart'),

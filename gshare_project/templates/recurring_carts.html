@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manage Recurring Carts</title>
+</head>
+<body>
+    <h1>My Recurring Grocery Lists</h1>
+    <a href="{% url 'create_recurring_cart' %}">Create a New List</a>
+    <hr>
+
+    {% if carts %}
+        {% for cart in carts %}
+            <div>
+                <h3>{{ cart.name }}</h3>
+                <p>Status: <strong>{{ cart.get_status_display }}</strong></p>
+                <p>Frequency: {{ cart.get_frequency_display }}</p>
+                <p>Next Order On: {{ cart.next_order_date }}</p>
+
+                <div style="margin-left: 20px;">
+                    <strong>Items in this list:</strong>
+                    <ul>
+                        {% for cart_item in cart.items.all %}
+                            <li>
+                                {{ cart_item.item.name }} (Qty: {{ cart_item.quantity }})
+                            </li>
+                        {% empty %}
+                            <li>This list has no items.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                
+                <a href="{% url 'toggle_recurring_cart_status' cart.id %}">
+                    {% if cart.status == 'enabled' %}
+                        Pause This List
+                    {% else %}
+                        Enable This List
+                    {% endif %}
+                </a>
+
+                <a href="{% url 'delete_recurring_cart' cart.id %}" 
+                   style="color: red; margin-left: 10px;" 
+                   onclick="return confirm('Are you sure you want to delete this list permanently?');">
+                    Delete
+                </a>
+            </div>
+            <br>
+        {% endfor %}
+    {% else %}
+        <p>You have not created any recurring grocery lists yet.</p>
+    {% endif %}
+
+</body>
+</html>

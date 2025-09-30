@@ -29,6 +29,15 @@
                     {% endfor %}
                 </div>
             </div>
+
+            <div name="orderFooter" style="padding: 0.5rem; background: #f5f5f5; text-align: right;">
+                {% comment %} {% if order.status == 'completed' %} {% endcomment %}
+                    <a href="{% url 'create_recurring_from_order' order.id %}" style="padding: 5px 10px; background-color: blue; color: white; text-decoration: none; border-radius: 5px;">
+                        Make Recurring
+                    </a>
+                {% comment %} {% endif %} {% endcomment %}
+            </div>
+
         </div>
         {% endfor %}
     </div>
