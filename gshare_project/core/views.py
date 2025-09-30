@@ -94,18 +94,25 @@ Returns:
     Users: The updated user object if the user exists, otherwise None.
 """
 def create_user_signin(name: str, email: str, address: str = "Not provided", phone: str | None = None):
-  
-    try:
-        with transaction.atomic(using='gsharedb'):
-            return Users.objects.using('gsharedb').create(
-                name=name,
-                email=email,     # email is unique but nullable
-                phone=phone,     # optional
-                address=address  # REQUIRED by your schema
-            )
-    except IntegrityError as e:
-        # e.g., duplicate email or other constraint violations
-        raise
+    lat, lng = 0, 0
+
+    if address != "Not provided" and address.strip() == "":
+        lat, lng = geoLoc(address)
+
+    if lat == 0 and lng == 0:
+        try:
+            with transaction.atomic(using='gsharedb'):
+                return Users.objects.using('gsharedb').create(
+                    name=name,
+                    email=email,     # email is unique but nullable
+                    phone=phone,     # optional
+                    address=address  # REQUIRED by your schema
+                    latitude= lat,
+                    longitude= lng
+                )
+        except IntegrityError as e:
+            # e.g., duplicate email or other constraint violations
+            raise
 
 """
 Edit the quantity of a specific item in an order.
@@ -346,7 +353,7 @@ def signup_view(request):
         if User.objects.filter(username=u).exists():
             messages.error(request, "Username taken")
             return redirect('login')
-
+        
 
         # Create auth user in default DB
         auth_user = User.objects.create_user(username=u, email=e, password=p)
