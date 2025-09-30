@@ -10,6 +10,9 @@ class Users(models.Model):
     address = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True) 
     area_code = models.IntegerField(db_column = 'addressCode',max_length=10, null=True, blank=True)
+    latitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
+    longitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
+
 
     class Meta:
         managed = False

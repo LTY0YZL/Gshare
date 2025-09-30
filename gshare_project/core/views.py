@@ -251,6 +251,51 @@ def get_orders_in_group(group_id: int):
         return Orders.objects.using('gsharedb').filter(id__in=order_ids)
     except GroupOrders.DoesNotExist:
         return Orders.objects.none()
+    
+from django.db import connection
+from django.http import JsonResponse
+
+def _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
+    if min_lng <= max_lng:
+        rect_wkt = f"POLYGON(({min_lng} {min_lat},{min_lng} {max_lat},{max_lng} {max_lat},{max_lng} {min_lat},{min_lng} {min_lat}))"
+        sql = """
+          SELECT id, name, address, ST_X(location) AS lng, ST_Y(location) AS lat
+          FROM users
+          WHERE MBRIntersects(location, ST_SRID(ST_PolygonFromText(%s), 4326))
+          {exclude}
+          LIMIT %s
+        """
+        exclude_clause = "AND id <> %s" if exclude_id is not None else ""
+        params = [rect_wkt] + ([exclude_id] if exclude_id is not None else []) + [limit]
+        with connection.cursor() as cur:
+            cur.execute(sql.format(exclude=exclude_clause), params)
+            rows = cur.fetchall()
+        return [{"id": r[0], "name": r[1], "address": r[2],
+                 "longitude": float(r[3]), "latitude": float(r[4])} for r in rows]
+    else:
+        # Antimeridian split
+        left = _users_in_viewport_spatial(min_lat, min_lng, max_lat, 180.0, limit, exclude_id)
+        right = _users_in_viewport_spatial(min_lat, -180.0, max_lat, max_lng, limit, exclude_id)
+        seen, out = set(), []
+        for row in left + right:
+            if row["id"] in seen: 
+                continue
+            seen.add(row["id"]); out.append(row)
+            if len(out) >= limit: 
+                break
+        return out
+
+def geoLoc(request, location):
+
+    url = f"https://maps.googleapis.com/maps/api/geocode/json?address={location}&key={{ google_maps_api_key }}"
+    response = request.get(url)
+    data = response.json()
+
+    if data["status"] == "OK":
+        location_data = data["results"][0]["geometry"]["location"]
+        lat, lng = location_data["lat"], location_data["lng"]
+        return lat, lng
+    return 0, 0
 
 """Main functions"""
 
