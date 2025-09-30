@@ -99,7 +99,7 @@ def create_user_signin(name: str, email: str, address: str = "Not provided", pho
     if address != "Not provided" and address.strip() == "":
         lat, lng = geoLoc(address)
 
-    if lat == 0 and lng == 0:
+    if lat != 0 and lng != 0:
         try:
             with transaction.atomic(using='gsharedb'):
                 return Users.objects.using('gsharedb').create(
