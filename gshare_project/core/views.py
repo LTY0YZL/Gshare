@@ -106,7 +106,7 @@ def create_user_signin(name: str, email: str, address: str = "Not provided", pho
                     name=name,
                     email=email,     # email is unique but nullable
                     phone=phone,     # optional
-                    address=address  # REQUIRED by your schema
+                    address=address,  # REQUIRED by your schema
                     latitude= lat,
                     longitude= lng
                 )
