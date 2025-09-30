@@ -14,7 +14,7 @@ def geoLoc(address: str) -> tuple[float, float]:
     if not address or not address.strip():
         return 0.0, 0.0
 
-    if settings.DEBUG and getattr(settings, "FAKE_GEOLOC", True):
+    if getattr(settings, "FAKE_GEOLOC", False):
         return _fake_coords(address)
 
     params = {"address": address.strip(), "key": settings.GOOGLE_MAPS_API_KEY}
