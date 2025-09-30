@@ -297,37 +297,6 @@ def _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit=500, ex
                 break
         return out
 
-# def geoLoc(location: str) -> tuple[float, float]:
-#     """
-#     Geocode an address string using the Google Maps Geocoding API.
-#     Returns (lat, lng) or (0.0, 0.0) if not found/error.
-#     """
-#     if not location or not location.strip():
-#         return 0.0, 0.0
-
-#     params = {
-#         "address": location.strip(),
-#         "key": settings.GOOGLE_MAPS_API_KEY,  # comes from config('GOOGLE_MAPS_API_KEY')
-#     }
-#     url = f"https://maps.googleapis.com/maps/api/geocode/json?{urlencode(params)}"
-
-#     try:
-#         resp = requests.get(url, timeout=5)
-#         resp.raise_for_status()
-#         data = resp.json()
-
-#         print(f"Geocode response: {data.get('status')}")
-
-#         if data.get("status") == "OK" and data.get("results"):
-#             loc = data["results"][0]["geometry"]["location"]
-#             lat, lng = float(loc["lat"]), float(loc["lng"])
-#             print(f"Geocoded lat={lat}, lng={lng}")
-#             return lat, lng
-#     except Exception as e:
-#         print("Geocode error:", e)
-
-#     return 0.0, 0.0
-
 """Main functions"""
 
 def home(request):
