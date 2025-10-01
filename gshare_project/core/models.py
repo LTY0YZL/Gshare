@@ -9,7 +9,7 @@ class Users(models.Model):
     phone = models.CharField(max_length=20, null=True, blank=True)
     address = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True) 
-    area_code = models.IntegerField(db_column = 'addressCode',max_length=10, null=True, blank=True)
+    area_code = models.IntegerField(db_column = 'addressCode', null=True, blank=True)
 
     class Meta:
         managed = False
@@ -72,8 +72,8 @@ class OrderItems(models.Model):
         unique_together = (('order', 'item'),)  # Enforce uniqueness on order_id and item_id
 
     # Explicitly define the composite primary key
-    def save(self, *args, **kwargs):
-        raise NotImplementedError("This model is read-only.")
+    # def save(self, *args, **kwargs):
+    #     raise NotImplementedError("This model is read-only.")
 
 class Deliveries(models.Model):
     id = models.AutoField(primary_key=True)
