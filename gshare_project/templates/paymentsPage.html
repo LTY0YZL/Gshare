@@ -28,19 +28,13 @@
                         </div>
                     </div>
                 </div>
-                <div name="myPayment" style="min-height: fit-content; font-weight: bold;" class="border-2 p-4 border-purple-500 min-h-[25%]">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid darkblue; padding: 6px">
-                        <p>My Payment</p>
-                    </div>
-                    <h1 style="margin: 5px; font-weight: bold;">Enter Card Details Below</h1>
-                    <label style="font-weight:500; margin: 6px">Card Number: <input type="number" style="border: 1px solid blue; padding: 2px; background-color: #3A97D4; color: aliceblue;"> </label>
-                    <label style="font-weight:500; margin: 6px">Name on Card: <input type="text" style="border: 1px solid blue; padding: 2px; background-color: #3A97D4; color: aliceblue;"> </label>
-                    <div style="margin: 6px; justify-content: space-between;">
-                        <label style="font-weight:500; margin-right: 3.2rem;">Expiration: <input type="month" min="{% now 'Y-m' %}" style="border: 1px solid blue; padding: 2px; background-color: #3A97D4; color: aliceblue;"> </label>
-                        <label style="font-weight:500; ">Code: <input type="number" style="border: 1px solid blue; padding: 2px; background-color: #3A97D4; color: aliceblue;"> </label>
+                <div style="width: 100%; justify-content: center; align-items: center; display: flex;">
+            
+                    <form action="{% url 'paymentscheckout' %}" method="post">
 
-                    </div>
-
+                        {% csrf_token %}
+                        <button style="border: 1px solid darkblue; padding: 8px; max-width: 15vw; align-self: center; background-color: #3A97D4; color: aliceblue;">Confirm Payments</button>
+                    </form>
                 </div>
             </div>
             
@@ -59,14 +53,10 @@
                         <p>$10.88</p>
                     </div>
                 </div>
-            
-                <form action="{% url 'paymentscheckout' %}" method="post">
-
-                    {% csrf_token %}
-                    <button style="border: 1px solid darkblue; padding: 8px; max-width: 15vw; align-self: center; background-color: #3A97D4; color: aliceblue;">Confirm Payments</button>
-                </form>
             </div>
+            
         </div>
+        
     </body>
 
 </html>
