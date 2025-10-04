@@ -33,14 +33,20 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('browse/', views.browse_items, name='browse_items'),
     path('cart/', views.cart, name='cart'),
-    path('cart/', views.cart, name='shoppingcart'),
+    # path('cart/', views.cart, name='shoppingcart'),
     path('cart/add/<int:item_id>/', views.add_to_cart, name='add_to_cart'),
+    path('change_order_status/<int:order_id>/<str:new_status>/', views.change_order_status_json, name='change_order_status_json'),
     path('checkout/', views.checkout, name='checkout'),
     path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
+    path('myorders/', views.myorders, name='order_history'),
     path('cart/payments/', views.payments, name='payments'),
     path('cart/payments/checkout/', views.paymentsCheckout, name='paymentscheckout'),
     # path('chat/', include('chat.urls')),
     path("__reload__/", include("django_browser_reload.urls")),
+    
+    path('cart/kroger/add/',   views.add_kroger_item_to_cart, name='add_kroger_item_to_cart'),
+    path('cart/kroger/save/',  views.save_kroger_results,     name='save_kroger_results'),
+    path('cart/kroger/clear/', views.clear_kroger_items,      name='clear_kroger_items'),   
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

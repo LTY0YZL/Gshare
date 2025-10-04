@@ -98,3 +98,10 @@ myenv/
 
 # Ignore uploaded media files
 /gshare_project/media/
+# Local History
+.history/
+**/.history/
+# Env files
+.env
+*.env
+
