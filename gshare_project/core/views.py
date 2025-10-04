@@ -8,7 +8,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User as AuthUser
+from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password, check_password
 from django.contrib import messages
 from django.utils import timezone
 from django.db import connections
@@ -19,6 +20,10 @@ from django.db.models import Q
 from django.db.models import Avg, Count
 from django.http import JsonResponse
 import json
+import re
+import requests
+from core.utils.geo import geoLoc
+from urllib.parse import urlencode
 from . import kroger_api
 import stripe
 
@@ -26,7 +31,7 @@ from core.models import (
     Users,
     Stores, Items,
     Orders, OrderItems,
-    Deliveries, Feedback
+    Deliveries, Feedback, GroupOrders
 )
 
 """helper functions"""
@@ -92,19 +97,28 @@ Args:
 Returns:
     Users: The updated user object if the user exists, otherwise None.
 """
-def create_user_signin(name: str, email: str, address: str = "Not provided", phone: str | None = None):
-  
-    try:
-        with transaction.atomic(using='gsharedb'):
-            return Users.objects.using('gsharedb').create(
-                name=name,
-                email=email,     # email is unique but nullable
-                phone=phone,     # optional
-                address=address  # REQUIRED by your schema
-            )
-    except IntegrityError as e:
-        # e.g., duplicate email or other constraint violations
-        raise
+def create_user_signin(name: str, email: str, address: str = "Not provided", phone: str | None = None, request=None):
+    lat, lng = 0, 0
+
+    if address != "Not provided":
+        lat, lng = geoLoc(address)
+
+    print(f"Geocoded {address} to lat={lat}, lng={lng}")
+
+    if lat != 0 and lng != 0:
+        try:
+            with transaction.atomic(using='gsharedb'):
+                return Users.objects.using('gsharedb').create(
+                    name=name,
+                    email=email,     # email is unique but nullable
+                    phone=phone,     # optional
+                    address=address,  # REQUIRED by your schema
+                    latitude= lat,
+                    longitude= lng
+                )
+        except IntegrityError as e:
+            # e.g., duplicate email or other constraint violations
+            raise
 
 """
 Edit the quantity of a specific item in an order.
@@ -234,6 +248,56 @@ def get_my_deliveries(user: Users, delivery_status: str):
         return []
     return deliveries
 
+def set_group_password(group, raw_password: str):
+    # explicitly tell Django to use Argon2 for this hash
+    group.password_hash = make_password(raw_password, hasher='argon2')
+    group.save(using='gsharedb')
+
+def verify_group_password(group, raw_password: str) -> bool:
+    # check_password auto-detects the hasher from the stored hash
+    return check_password(raw_password, group.password_hash)
+
+def get_orders_in_group(group_id: int):
+    try:
+        group = GroupOrders.objects.using('gsharedb').get(group_id=group_id)
+        order_ids = re.findall(r"\d+", group.list_of_order_ids)
+        return Orders.objects.using('gsharedb').filter(id__in=order_ids)
+    except GroupOrders.DoesNotExist:
+        return Orders.objects.none()
+    
+from django.db import connection
+from django.http import JsonResponse
+
+def _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
+    if min_lng <= max_lng:
+        rect_wkt = f"POLYGON(({min_lng} {min_lat},{min_lng} {max_lat},{max_lng} {max_lat},{max_lng} {min_lat},{min_lng} {min_lat}))"
+        sql = """
+          SELECT id, name, address, ST_X(location) AS lng, ST_Y(location) AS lat
+          FROM users
+          WHERE MBRIntersects(location, ST_SRID(ST_PolygonFromText(%s), 4326))
+          {exclude}
+          LIMIT %s
+        """
+        exclude_clause = "AND id <> %s" if exclude_id is not None else ""
+        params = [rect_wkt] + ([exclude_id] if exclude_id is not None else []) + [limit]
+        with connection.cursor() as cur:
+            cur.execute(sql.format(exclude=exclude_clause), params)
+            rows = cur.fetchall()
+        return [{"id": r[0], "name": r[1], "address": r[2],
+                 "longitude": float(r[3]), "latitude": float(r[4])} for r in rows]
+    else:
+        # Antimeridian split
+        left = _users_in_viewport_spatial(min_lat, min_lng, max_lat, 180.0, limit, exclude_id)
+        right = _users_in_viewport_spatial(min_lat, -180.0, max_lat, max_lng, limit, exclude_id)
+        seen, out = set(), []
+        for row in left + right:
+            if row["id"] in seen: 
+                continue
+            seen.add(row["id"]); out.append(row)
+            if len(out) >= limit: 
+                break
+        return out
+
 """Main functions"""
 
 def home(request):
@@ -283,7 +347,7 @@ def signup_view(request):
         if User.objects.filter(username=u).exists():
             messages.error(request, "Username taken")
             return redirect('login')
-
+        
 
         # Create auth user in default DB
         auth_user = User.objects.create_user(username=u, email=e, password=p)
@@ -296,7 +360,7 @@ def signup_view(request):
         # Create business profile in gsharedb
         full_name = " ".join(part for part in [f, l] if part) or u  # fallback to username
         try:
-            create_user_signin(full_name, e, address=addr, phone=phone)
+            create_user_signin(full_name, e, address=addr, phone=phone,request=request)
         except IntegrityError as ex:
             # roll back auth user if business insert fails
             auth_user.delete()
