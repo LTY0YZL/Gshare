@@ -19,6 +19,7 @@ from django.db import IntegrityError
 from django.db.models import Q
 from django.db.models import Avg, Count
 from django.http import JsonResponse
+from django.db import connection
 import json
 import re
 import requests
@@ -247,6 +248,20 @@ def get_my_deliveries(user: Users, delivery_status: str):
         return []
     return deliveries
 
+"""
+Create a new group order with a list of order IDs and a password.
+Args:
+    order_ids (list[int]): A list of order IDs to be included in the group order.
+    raw_password (str): The raw password to be hashed and stored for the group order.
+    Returns:
+    GroupOrders: The created GroupOrders object.
+"""
+def create_group_order(order_ids: list[int], raw_password: str) -> GroupOrders:
+    order_ids_str = ",".join(str(oid) for oid in order_ids)
+    group = GroupOrders(list_of_order_ids=order_ids_str)
+    set_group_password(group, raw_password)
+    return group
+
 def set_group_password(group, raw_password: str):
     # explicitly tell Django to use Argon2 for this hash
     group.password_hash = make_password(raw_password, hasher='argon2')
@@ -263,9 +278,6 @@ def get_orders_in_group(group_id: int):
         return Orders.objects.using('gsharedb').filter(id__in=order_ids)
     except GroupOrders.DoesNotExist:
         return Orders.objects.none()
-    
-from django.db import connection
-from django.http import JsonResponse
 
 def _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
     if min_lng <= max_lng:
