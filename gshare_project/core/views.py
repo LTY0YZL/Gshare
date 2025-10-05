@@ -31,7 +31,7 @@ from core.models import (
     Users,
     Stores, Items,
     Orders, OrderItems,
-    Deliveries, Feedback, GroupOrders
+    Deliveries, Feedback, GroupOrders, GroupMembers
 )
 
 """helper functions"""
@@ -272,12 +272,16 @@ def verify_group_password(group, raw_password: str) -> bool:
     return check_password(raw_password, group.password_hash)
 
 def get_orders_in_group(group_id: int):
-    try:
-        group = GroupOrders.objects.using('gsharedb').get(group_id=group_id)
-        order_ids = re.findall(r"\d+", group.list_of_order_ids)
-        return Orders.objects.using('gsharedb').filter(id__in=order_ids)
-    except GroupOrders.DoesNotExist:
-        return Orders.objects.none()
+    order_ids = (
+        GroupMembers.objects.using('gsharedb')
+        .filter(group_id=group_id, order_id__isnull=False)
+        .values_list('order_id', flat=True)
+        .distinct()
+    )
+    return list(
+        Orders.objects.using('gsharedb')
+        .filter(id__in=order_ids)
+    )
 
 def _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
     if min_lng <= max_lng:
