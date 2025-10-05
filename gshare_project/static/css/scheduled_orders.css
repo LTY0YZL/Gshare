@@ -1,0 +1,128 @@
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #1A2037;
+    color: #3A97D4;
+}
+
+.main-container {
+    padding: 1rem;
+    height: 100vh;
+}
+
+.page-title {
+    text-align: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+}
+
+.form-container {
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.btn-primary {
+    padding: 0.5rem 1rem;
+    background: #3A97D4;
+    color: #1A2037;
+    border: none;
+    border-radius: 0.25rem;
+}
+
+.cart-card {
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    border: 1px solid #3A97D4;
+}
+
+.cart-header {
+    padding: 0.5rem;
+    background: #3A97D4;
+    color: #1A2037;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.btn-toggle {
+    padding: 0.25rem 0.5rem;
+    color: #1A2037;
+    border: none;
+    border-radius: 0.25rem;
+}
+
+.btn-toggle.enabled {
+    background: #ffc107;
+}
+
+.btn-toggle.disabled {
+    background: #3A97D4;
+}
+
+.btn-delete {
+    padding: 0.25rem 0.5rem;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 0.25rem;
+    margin-left: 0.5rem;
+}
+
+.form-inline {
+    display: inline;
+}
+
+.update-form {
+    padding: 0.5rem;
+    border: 1px solid #3A97D4;
+}
+
+.label-date {
+    border-bottom: 0.1px solid white;
+    margin-bottom: 2px;
+    padding-bottom: 1px;
+}
+
+.auto-order-date:hover {
+    background-color: #3A97D4;
+    color: #1A2037;
+}
+
+.items-container {
+    max-height: 10rem;
+    overflow-y: auto;
+}
+
+.item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+    border-bottom: 0.1px solid #ffffff;
+}
+
+.item-name {
+    width: 60rem;
+}
+
+.item-price {
+    margin: 0 5rem;
+    width: 10rem;
+}
+
+.qty-input {
+    padding-left: 5px;
+    width: 10rem;
+}
+
+.qty-input:hover {
+    background-color: #3A97D4;
+    color: #1A2037;
+}
+
+.save-container {
+    text-align: right;
+    margin-top: 0.5rem;
+}

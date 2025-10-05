@@ -913,7 +913,7 @@ def manage_recurring_carts(request):
     profile = get_object_or_404(Users.objects.using('gsharedb'), email=request.user.email)
     carts = RecurringCart.objects.using('gsharedb').filter(user=profile).prefetch_related('items__item')
     context = {'carts': carts}
-    return render(request, 'recurring_carts.html', context)
+    return render(request, 'scheduled_orders.html', context)
 
 @login_required
 def create_recurring_from_order(request, order_id):
@@ -963,7 +963,51 @@ def delete_recurring_cart(request, cart_id):
 
 @login_required
 def scheduled_orders(request):
-    return render(request, "scheduled_orders.html")
+    profile = get_object_or_404(Users.objects.using('gsharedb'), email=request.user.email)
+    carts = RecurringCart.objects.using('gsharedb').filter(user=profile).prefetch_related('items__item')
+    context = {'carts': carts}
+    return render(request, "scheduled_orders.html", context)
+
+@login_required
+def updateScheduledOrders(request, cart_id):
+    user = get_user("email", request.user.email)
+    if request.method == 'POST':
+        try:
+            cart = RecurringCart.objects.using('gsharedb').get(id=cart_id, user=user)
+        except RecurringCart.DoesNotExist:
+            messages.error(request, "Recurring cart not found.")
+            return redirect('scheduled_orders')
+
+        # Update next date of order
+        nextDate = request.POST.get('next_order_date')
+        if nextDate:
+            try:
+                cart.next_order_date = timezone.datetime.fromisoformat(nextDate).date()
+            except ValueError:
+                messages.error(request, "Invalid date format.")
+                return redirect('scheduled_orders')
+
+        # Update item quantities
+        for item in cart.items.all():
+            quantity_key = f'quantity_{item.id}'
+            quantity_str = request.POST.get(quantity_key)
+            if quantity_str:
+                try:
+                    quantity = int(quantity_str)
+                    if quantity > 0:
+                        item.quantity = quantity
+                        item.save(using='gsharedb')
+                    else:
+                        messages.warning(request, f"Quantity for {item.item.name} must be greater than 0.")
+                except ValueError:
+                    messages.error(request, f"Invalid quantity for {item.item.name}.")
+                    return redirect('scheduled_orders')
+
+        cart.save(using='gsharedb')
+        messages.success(request, "Recurring cart updated successfully.")
+        return redirect('scheduled_orders')  
+
+    return redirect('scheduled_orders')
 
 @login_required
 def create_recurring_cart(request):
@@ -971,8 +1015,22 @@ def create_recurring_cart(request):
 
 @login_required
 def toggle_cart_status(request, cart_id):
+    user = get_user("email", request.user.email)
+    if request.method == "POST":
+        recurringCart = RecurringCart.objects.using('gsharedb').get(id=cart_id, user=user)
+        cartStatus = request.POST.get("cartStatus")
+        if cartStatus == "enabled":
+            recurringCart.status = "disabled"
+        else:
+            recurringCart.status = "enabled"
+        recurringCart.save(using='gsharedb')
+        return redirect('scheduled_orders')
     return redirect('scheduled_orders')
 
 @login_required
 def delete_cart(request, cart_id):
+    user = get_user("email", request.user.email)
+    if request.method == "POST":
+        recurringCart = RecurringCart.objects.using('gsharedb').get(id=cart_id, user=user)
+        recurringCart.delete(using='gsharedb')
     return redirect('scheduled_orders')

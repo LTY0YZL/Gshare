@@ -54,12 +54,13 @@ urlpatterns = [
     path('recurring/toggle/<int:cart_id>/', views.toggle_recurring_cart_status, name='toggle_recurring_cart_status'),
     path('recurring/create-from-order/<int:order_id>/', views.create_recurring_from_order, name='create_recurring_from_order'),
     path('recurring/delete/<int:cart_id>/', views.delete_recurring_cart, name='delete_recurring_cart'),
+    path('recurring/update/<int:cart_id>/', views.updateScheduledOrders, name='updateScheduledOrders'),
 
     path('cart/kroger/clear/', views.clear_kroger_items,      name='clear_kroger_items'), 
-    path('orders/repeat_orders', views.scheduled_orders, name='scheduled_orders'),
-    path('orders/create_recurring_cart/', views.create_recurring_cart, name='create_recurring_cart'),
-    path('orders/toggle_cart_status/<int:cart_id>/', views.toggle_cart_status, name='toggle_cart_status'),
-    path('orders/delete_cart/<int:cart_id>/', views.delete_cart, name='delete_cart'),
+    path('myorders/recurring', views.scheduled_orders, name='scheduled_orders'),
+    path('myorders/create_recurring_cart/', views.create_recurring_cart, name='create_recurring_cart'),
+    path('myorders/toggle_cart_status/<int:cart_id>/', views.toggle_cart_status, name='toggle_cart_status'),
+    path('myorders/delete_cart/<int:cart_id>/', views.delete_cart, name='delete_cart'),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
