@@ -89,10 +89,22 @@ class Deliveries(models.Model):
         db_table = 'deliveries'
 
 class GroupOrders(models.Model):
-    group_id = models.AutoField(primary_key=True)
-    list_of_order_ids = models.TextField()
-    password_hash = models.CharField(max_length=128)
+    # matches your existing table
+    group_id = models.IntegerField(primary_key=True)
+    description = models.TextField()
+    password = models.CharField(max_length=255)
+
+    class Meta:
+        managed = False          # set True only if Django should create/migrate it
+        db_table = 'group_orders'
+
+class GroupMembers(models.Model):
+    group = models.ForeignKey(GroupOrders, on_delete=models.CASCADE, db_column='group_id')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
 
     class Meta:
         managed = False
-        db_table = 'group_orders'
+        db_table = 'group_members'
+        constraints = [
+            models.UniqueConstraint(fields=['group', 'user'], name='uq_group_user'),
+        ]
