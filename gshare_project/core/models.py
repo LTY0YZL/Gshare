@@ -105,22 +105,8 @@ class GroupOrders(models.Model):
         db_table = 'group_orders'
 
 class GroupMembers(models.Model):
-    group = models.ForeignKey(
-        GroupOrders,
-        on_delete=models.CASCADE,
-        db_column='group_id',
-        related_name='memberships',
-        null=True,
-        blank=True,
-    )
-    user = models.ForeignKey(
-        'Users',
-        on_delete=models.CASCADE,
-        db_column='user_id',
-        related_name='group_memberships',
-        null=True,
-        blank=True,
-    )
+    group = models.ForeignKey(GroupOrders,on_delete=models.CASCADE,db_column='group_id',related_name='memberships',null=True,blank=True)
+    user = models.ForeignKey('Users',on_delete=models.CASCADE,db_column='user_id',related_name='group_memberships',null=True,blank=True)
     order = models.ForeignKey('Orders',on_delete=models.SET_NULL,db_column='order_id',related_name='groupmembers',null=True,blank=True)
 
     class Meta:
