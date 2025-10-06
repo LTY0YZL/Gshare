@@ -44,7 +44,7 @@ class Orders(models.Model):
     status = models.CharField(max_length=50, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     delivery_address = models.CharField(max_length=255, null=True, blank=True)
-
+    
     class Meta:
         managed = False
         db_table = 'orders'
@@ -89,8 +89,10 @@ class Deliveries(models.Model):
         db_table = 'deliveries'
 
 class GroupOrders(models.Model):
+    # matches your existing table
+    group_id = models.AutoField(primary_key=True)
     description = models.TextField()
-    password = models.CharField(max_length=255)
+    password_hash = models.CharField(max_length=255)
 
     members = models.ManyToManyField(
         'Users',
