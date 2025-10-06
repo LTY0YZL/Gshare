@@ -24,10 +24,14 @@ body {
 
 .btn-primary {
     padding: 0.5rem 1rem;
-    background: #3A97D4;
+    background: #3a96d489;
     color: #1A2037;
     border: none;
     border-radius: 0.25rem;
+}
+
+.btn-primary:hover {
+    background: #3A97D4;
 }
 
 .cart-card {
@@ -54,6 +58,10 @@ body {
 }
 
 .btn-toggle.enabled {
+    background: #ffc10788;
+}
+
+.btn-toggle.enabled:hover {
     background: #ffc107;
 }
 
@@ -63,11 +71,15 @@ body {
 
 .btn-delete {
     padding: 0.25rem 0.5rem;
-    background: #dc3545;
+    background: #d83b4b9c;
     color: white;
     border: none;
     border-radius: 0.25rem;
     margin-left: 0.5rem;
+}
+
+.btn-delete:hover {
+    background-color: #ff0404 !important;
 }
 
 .form-inline {
@@ -80,19 +92,21 @@ body {
 }
 
 .label-date {
-    border-bottom: 0.1px solid white;
+    border-bottom: 0.1px solid rgba(255, 255, 255, 0.356);
     margin-bottom: 2px;
     padding-bottom: 1px;
+    margin-right: 1rem;
 }
 
 .auto-order-date:hover {
-    background-color: #3A97D4;
+    background-color: #3a96d450;
     color: #1A2037;
 }
 
 .items-container {
     max-height: 10rem;
     overflow-y: auto;
+    margin-top: 1rem;
 }
 
 .item-row {
@@ -100,7 +114,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 0.25rem 0;
-    border-bottom: 0.1px solid #ffffff;
+    border-bottom: 0.1px solid rgba(255, 255, 255, 0.356);
 }
 
 .item-name {
@@ -118,7 +132,7 @@ body {
 }
 
 .qty-input:hover {
-    background-color: #3A97D4;
+    background-color: #3a96d450;
     color: #1A2037;
 }
 

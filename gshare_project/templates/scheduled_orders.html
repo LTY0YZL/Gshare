@@ -40,7 +40,7 @@
             
             <form method="post" action="{% url 'updateScheduledOrders' cart.id %}" class="update-form">
                 {% csrf_token %}
-                <label class="label-date">Auto Order Date: </label><input class="auto-order-date" type="date" name="next_order_date" value="{{ cart.next_order_date|date:'Y-m-d' }}" />
+                <label class="label-date">This Order is Scheduled For: </label><input class="auto-order-date" type="date" name="next_order_date" value="{{ cart.next_order_date|date:'Y-m-d' }}" />
                 <div class="items-container">
                     {% for item in cart.items.all %}
                         <div class="item-row">
