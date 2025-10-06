@@ -89,10 +89,34 @@ class Deliveries(models.Model):
         db_table = 'deliveries'
 
 class GroupOrders(models.Model):
-    group_id = models.AutoField(primary_key=True)
-    list_of_order_ids = models.TextField()
-    password_hash = models.CharField(max_length=128)
+    # matches your existing table
+    group_id = models.IntegerField(primary_key=True)
+    description = models.TextField()
+    password = models.CharField(max_length=255)
+
+    members = models.ManyToManyField(
+        'Users',
+        through='GroupMembers',
+        related_name='groups_joined',
+    )
+
+    class Meta:
+        managed = False          # set True only if Django should create/migrate it
+        db_table = 'group_orders'
+
+class GroupMembers(models.Model):
+    group = models.ForeignKey(GroupOrders,on_delete=models.CASCADE,db_column='group_id',related_name='memberships',null=True,blank=True)
+    user = models.ForeignKey('Users',on_delete=models.CASCADE,db_column='user_id',related_name='group_memberships',null=True,blank=True)
+    order = models.ForeignKey('Orders',on_delete=models.SET_NULL,db_column='order_id',related_name='groupmembers',null=True,blank=True)
 
     class Meta:
         managed = False
-        db_table = 'group_orders'
+        db_table = 'group_members'
+        constraints = [
+            models.UniqueConstraint(fields=['group', 'user'], name='uq_group_user'),
+        ]
+        indexes = [
+            models.Index(fields=['group'], name='ix_group'),
+            models.Index(fields=['user'], name='ix_user'),
+            models.Index(fields=['order'], name='ix_order'),
+        ]
