@@ -9,7 +9,6 @@ class Users(models.Model):
     phone = models.CharField(max_length=20, null=True, blank=True)
     address = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True) 
-    area_code = models.IntegerField(db_column = 'addressCode',max_length=10, null=True, blank=True)
 
     class Meta:
         managed = False
