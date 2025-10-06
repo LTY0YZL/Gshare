@@ -317,6 +317,13 @@ def remove_group(group: GroupOrders):
         print(f"Error deleting group: {e}")
         return False
     
+def get_group_by_user_and_order(user: Users, order: Orders):
+    try:
+        membership = GroupMembers.objects.using('gsharedb').get(user=user, order=order)
+        return membership.group
+    except GroupMembers.DoesNotExist:
+        return None
+    
 def add_order_to_group(group: GroupOrders, user: Users, order: Orders):
     try:
         GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
