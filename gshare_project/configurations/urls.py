@@ -38,7 +38,10 @@ urlpatterns = [
     path('change_order_status/<int:order_id>/<str:new_status>/', views.change_order_status_json, name='change_order_status_json'),
     path('checkout/', views.checkout, name='checkout'),
     path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
-    path('cartItems/', views.cart_data, name='cart_items'),
+    path('shoppingcart/cartItems/', views.cart_data, name='cart_items'),
+    path('shoppingcart/groupItems/', views.group_data, name='group_items'),
+    path('shoppingcart/placedItems/', views.placed_data, name='placed_items'),
+
 
     path('myorders/', views.myorders, name='order_history'),
     path('cart/payments/', views.payments, name='payments'),

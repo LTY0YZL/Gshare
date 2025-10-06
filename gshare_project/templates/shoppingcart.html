@@ -11,7 +11,17 @@
 {% include "navbar.html" %}
 <body>
     {% csrf_token %}
-    {% comment %} <div class="grid grid-cols-2 h-screen gap-4 p-4">
+    <div class="tabsList">
+        <button class="Buttoncolor text-white px-4 py-2 hover:bg-blue-600 rounded-t-lg" onclick="display('cart')">Cart</button>
+        <button class="Buttoncolor" onclick="display('group')">Group cart</button>
+        <button class="Buttoncolor" onclick="display('placed')">Orders in Progress</button>
+    </div>
+
+    {% comment %} <div id="tab-cart" class="tab-content"></div> {% endcomment %}
+    <div id="tab-group" class="tab-content hidden"></div>
+    <div id="tab-placed" class="tab-content hidden"></div>
+    
+    <div id="tab-cart" class="tab-content grid grid-cols-2 h-screen gap-4 p-4">
         <div class="col-span-1 bg-white">
             {% for item in items %}
                 <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
@@ -47,17 +57,7 @@
             onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Proceed to Checkout</button>
 
         </div>
-    </div> {% endcomment %}
-
-    <div class="tabsList">
-        <button class="Buttoncolor text-white px-4 py-2 hover:bg-blue-600 rounded-t-lg" onclick="display('cart')">Cart</button>
-        <button class="Buttoncolor" onclick="display('group')">Group cart</button>
-        <button class="Buttoncolor" onclick="display('inprogress')">Orders in Progress</button>
     </div>
-
-    <div id="tab-cart" class="tab-content"></div>
-    <div id="tab-group" class="tab-content hidden"></div>
-    <div id="tab-inprogress" class="tab-content hidden"></div>
 </body>
 <style>
     .tabsList {
@@ -92,33 +92,183 @@
         else if (tabName == 'group') {
             displayGroupCart();
         }
-        else if (tabName == 'inprogress') {
-            displayInProgressOrders();
+        else if (tabName == 'placed') {
+            console.log("placed pressed")
+            displayPlacedOrders();
         }
     }
 
-    function displayCart() {
-        fetch('/cartItems/')
-        .then(response => response.json())
-        .then(data => {
-            let html = "";
-            data.items.forEach(item => {
-                html += `<div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8 w-1/2">
-                            <div class="flex flex-row">
-                                <div class="flex flex-col">
-                                    <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                    <div flex flex-row>
-                                        <p class="mb-1 pl-32"> Quantity: ${item.quantity}</p>
-                                        <p class="mb-1 pl-32"> Price: $${item.price}</p>
-                                        <p class="mb-1 pl-32"> <b> Total: $${item.total}</b></p>
-                                    </div>
+    function displayGroupCart() {
+        const groupItemsUrl = "{% url 'group_items' %}"
+        console.log("group data")
+        fetch(groupItemsUrl)
+            .then(response => response.json())
+            .then(data => {
+                const tab = document.getElementById("tab-group");
+
+                if (!data.items || data.items.length === 0) {
+                    tab.innerHTML = "<p class='p-4'>Your cart is empty.</p>";
+                    return;
+                }
+
+                let html = `<div class="grid grid-cols-2 h-screen gap-4 p-4">
+                                <div class="col-span-1 bg-white">`;
+
+                data.items.forEach(item => {
+                    html += `
+                    <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                        <div class="flex flex-row">
+                            <div class="flex flex-col">
+                                <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
+                                <div flex flex-row>
+                                    <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
+                                    <input type="number" name="item_amount" value="${item.quantity}" min="1"
+                                        class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
+                                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
+                                            onclick="handleItemClick(this, ${item.id}, this.previousElementSibling.value)">
+                                        Update
+                                    </button>
                                 </div>
+                                <p class="mb-1 pl-32">Price: $${item.price}</p>
+                                <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
                             </div>
+                            <button class="ml-auto self-center">
+                                <a href="" class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md">Remove item</a>
+                            </button>
+                        </div>
+                    </div>`;
+                });
+
+                html += `</div>
+                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                            <p class="mb-2">Subtotal: $${data.order.subtotal}</p>
+                            <p class="mb-2">Tax: $${data.order.tax}</p>
+                            <p class="mb-4 font-bold">Total: $${data.order.total}</p>
+                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                                    onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
+                                Proceed to Checkout
+                            </button>
+                        </div>
                         </div>`;
-        });
-        const tab = document.getElementById("tab-cart");
-        tab.innerHTML = html ||  "<p class='p-4'>Your cart is empty.</p>";
-        });
+
+                tab.innerHTML = html;
+            });
+    }
+
+    function displayPlacedOrders() {
+        const placedItemsUrl = "{% url 'placed_items' %}"
+        console.log("placed data")
+        fetch(placedItemsUrl)
+            .then(response => response.json())
+            .then(data => {
+                const tab = document.getElementById("tab-placed");
+
+                if (!data.items || data.items.length === 0) {
+                    tab.innerHTML = "<p class='p-4'>Your cart is empty.</p>";
+                    return;
+                }
+
+                let html = `<div class="grid grid-cols-2 h-screen gap-4 p-4">
+                                <div class="col-span-1 bg-white">`;
+
+                data.items.forEach(item => {
+                    html += `
+                    <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                        <div class="flex flex-row">
+                            <div class="flex flex-col">
+                                <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
+                                <div flex flex-row>
+                                    <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
+                                    <input type="number" name="item_amount" value="${item.quantity}" min="1"
+                                        class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
+                                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
+                                            onclick="handleItemClick(this, ${item.id}, this.previousElementSibling.value)">
+                                        Update
+                                    </button>
+                                </div>
+                                <p class="mb-1 pl-32">Price: $${item.price}</p>
+                                <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
+                            </div>
+                            <button class="ml-auto self-center">
+                                <a href="" class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md">Remove item</a>
+                            </button>
+                        </div>
+                    </div>`;
+                });
+
+                html += `</div>
+                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                            <p class="mb-2">Subtotal: $${data.order.subtotal}</p>
+                            <p class="mb-2">Tax: $${data.order.tax}</p>
+                            <p class="mb-4 font-bold">Total: $${data.order.total}</p>
+                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                                    onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
+                                Proceed to Checkout
+                            </button>
+                        </div>
+                        </div>`;
+
+                tab.innerHTML = html;
+            });
+    }
+
+    function displayCart() {
+        const cartItemsUrl = "{% url 'cart_items' %}";
+        fetch(cartItemsUrl)
+            .then(response => response.json())
+            .then(data => {
+                const tab = document.getElementById("tab-cart");
+
+                if (!data.items || data.items.length === 0) {
+                    tab.innerHTML = "<p class='p-4'>Your cart is empty.</p>";
+                    return;
+                }
+
+                let html = `<div class="grid grid-cols-2 h-screen gap-4 p-4">
+                                <div class="col-span-1 bg-white">`;
+
+                data.items.forEach(item => {
+                    html += `
+                    <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                        <div class="flex flex-row">
+                            <div class="flex flex-col">
+                                <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
+                                <div flex flex-row>
+                                    <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
+                                    <input type="number" name="item_amount" value="${item.quantity}" min="1"
+                                        class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
+                                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
+                                            onclick="handleItemClick(this, ${item.id}, this.previousElementSibling.value)">
+                                        Update
+                                    </button>
+                                </div>
+                                <p class="mb-1 pl-32">Price: $${item.price}</p>
+                                <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
+                            </div>
+                            <button class="ml-auto self-center">
+                                <a href="" class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md">Remove item</a>
+                            </button>
+                        </div>
+                    </div>`;
+                });
+
+                html += `</div>
+                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                            <p class="mb-2">Subtotal: $${data.order.subtotal}</p>
+                            <p class="mb-2">Tax: $${data.order.tax}</p>
+                            <p class="mb-4 font-bold">Total: $${data.order.total}</p>
+                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                                    onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
+                                Proceed to Checkout
+                            </button>
+                        </div>
+                        </div>`;
+
+                tab.innerHTML = html;
+            });
     }
 
     function changeOrderStatus(orderId, newStatus) {
@@ -149,8 +299,4 @@
         });
     }
     
-    // Show cart by default when page loads
-    document.addEventListener("DOMContentLoaded", () => {
-      display('cart');
-    });
 </script>
