@@ -259,8 +259,12 @@ Args:
     GroupOrders: The created GroupOrders object.
 """
 def create_group_order(user: Users, order_ids: list[int], raw_password: str):
+
+    if not order_ids:
+        raise ValueError("order_ids list cannot be empty")
+
     with transaction.atomic(using='gsharedb'):
-        group = GroupOrders.objects.using('gsharedb').create(description="Group Order", password_hash="")
+        group = GroupOrders.objects.using('gsharedb').create(description="Group Order", password="")
         set_group_password(group, raw_password)
         for oid in order_ids:
             try:

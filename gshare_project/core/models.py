@@ -89,8 +89,6 @@ class Deliveries(models.Model):
         db_table = 'deliveries'
 
 class GroupOrders(models.Model):
-    # matches your existing table
-    group_id = models.IntegerField(primary_key=True)
     description = models.TextField()
     password = models.CharField(max_length=255)
 
