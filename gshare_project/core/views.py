@@ -256,11 +256,17 @@ Args:
     Returns:
     GroupOrders: The created GroupOrders object.
 """
-def create_group_order(order_ids: list[int], raw_password: str) -> GroupOrders:
-    order_ids_str = ",".join(str(oid) for oid in order_ids)
-    group = GroupOrders(list_of_order_ids=order_ids_str)
-    set_group_password(group, raw_password)
-    return group
+def create_group_order(user: Users, order_ids: list[int], raw_password: str):
+    with transaction.atomic(using='gsharedb'):
+        group = GroupOrders.objects.using('gsharedb').create(description="Group Order", password_hash="")
+        set_group_password(group, raw_password)
+        for oid in order_ids:
+            try:
+                order = Orders.objects.using('gsharedb').get(id=oid, user=user)
+                GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
+            except Orders.DoesNotExist:
+                continue
+        return group
 
 def set_group_password(group, raw_password: str):
     # explicitly tell Django to use Argon2 for this hash
