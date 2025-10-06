@@ -248,6 +248,8 @@ def get_my_deliveries(user: Users, delivery_status: str):
         return []
     return deliveries
 
+""" functions from here are for group orders """
+
 """
 Create a new group order with a list of order IDs and a password.
 Args:
@@ -267,15 +269,33 @@ def create_group_order(user: Users, order_ids: list[int], raw_password: str):
             except Orders.DoesNotExist:
                 continue
         return group
+    
+def add_user_to_group(group: GroupOrders, user: Users, order: Orders = None):
+    try:
+        GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
+        return True
+    except IntegrityError:
+        return False
 
-def set_group_password(group, raw_password: str):
-    # explicitly tell Django to use Argon2 for this hash
-    group.password_hash = make_password(raw_password, hasher='argon2')
-    group.save(using='gsharedb')
+def remove_user_from_group(group: GroupOrders, user: Users):
+    try:
+        membership = GroupMembers.objects.using('gsharedb').get(group=group, user=user)
+        membership.delete()
+        return True
+    except GroupMembers.DoesNotExist:
+        return False
+    
+def get_group_by_id(group_id: int):
+    try:
+        return GroupOrders.objects.using('gsharedb').get(group_id=group_id)
+    except GroupOrders.DoesNotExist:
+        return None
 
-def verify_group_password(group, raw_password: str) -> bool:
-    # check_password auto-detects the hasher from the stored hash
-    return check_password(raw_password, group.password_hash)
+def get_group_members(group: GroupOrders):
+    return GroupMembers.objects.using('gsharedb').filter(group=group).select_related('user', 'order')
+
+def get_groups_for_user(user: Users):
+    return GroupOrders.objects.using('gsharedb').filter(members=user).distinct()
 
 def get_orders_in_group(group_id: int):
     order_ids = (
@@ -288,6 +308,41 @@ def get_orders_in_group(group_id: int):
         Orders.objects.using('gsharedb')
         .filter(id__in=order_ids)
     )
+
+def remove_group(group: GroupOrders):
+    try:
+        group.delete()
+        return True
+    except Exception as e:
+        print(f"Error deleting group: {e}")
+        return False
+    
+def add_order_to_group(group: GroupOrders, user: Users, order: Orders):
+    try:
+        GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
+        return True
+    except IntegrityError:
+        return False
+    
+def remove_order_from_group(group: GroupOrders, order: Orders):
+    try:
+        membership = GroupMembers.objects.using('gsharedb').get(group=group, order=order)
+        membership.delete()
+        return True
+    except GroupMembers.DoesNotExist:
+        return False
+
+def set_group_password(group, raw_password: str):
+    # explicitly tell Django to use Argon2 for this hash
+    group.password_hash = make_password(raw_password, hasher='argon2')
+    group.save(using='gsharedb')
+
+def verify_group_password(group, raw_password: str) -> bool:
+    # check_password auto-detects the hasher from the stored hash
+    return check_password(raw_password, group.password_hash)
+
+
+""""Functions for spatial queries"""
 
 def _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
     if min_lng <= max_lng:
@@ -587,14 +642,12 @@ Returns:
 @login_required
 def add_to_cart(request, item_id):
     
-    print("Adding item to cart:", item_id)
 
     profile = get_user("email", request.user.email)
     if not profile:
         messages.error(request, "Profile not found.")
         return redirect('cart')
 
-    print("User profile:", profile.name)
 
     # Grab item
     try:
@@ -614,9 +667,6 @@ def add_to_cart(request, item_id):
             total_amount=0,
             delivery_address = profile.address
         )
-
-    print("Current order total:", order.delivery_address)
-    print("Current order ID:", order.id)
 
     # Upsert into order_items (composite PK table) and recompute total
     with transaction.atomic(using='gsharedb'):
@@ -654,6 +704,45 @@ def add_to_cart(request, item_id):
 
 
     messages.success(request, f"Added {item.name} to your cart.")
+    return redirect('cart')
+
+@login_required
+def remove_from_cart(request, item_id):
+    profile = get_user("email", request.user.email)
+    if not profile:
+        messages.error(request, "Profile not found.")
+        return redirect('cart')
+
+    order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
+    if not order:
+        messages.error(request, "No active cart.")
+        return redirect('cart')
+
+    try:
+        order_item = OrderItems.objects.using('gsharedb').get(order=order, item_id=item_id)
+    except OrderItems.DoesNotExist:
+        messages.error(request, "Item not in cart.")
+        return redirect('cart')
+
+    with transaction.atomic(using='gsharedb'):
+        order_item.delete()
+
+        # RECALC TOTAL from line items
+        with connections['gsharedb'].cursor() as cur:
+            cur.execute(
+                """
+                SELECT COALESCE(SUM(quantity * price), 0)
+                FROM order_items
+                WHERE order_id = %s
+                """,
+                [order.id]
+            )
+            total = cur.fetchone()[0] or 0
+
+        order.total_amount = total
+        order.save(using='gsharedb')
+
+    messages.success(request, f"Removed {order_item.item.name} from your cart.")
     return redirect('cart')
 
 @login_required
