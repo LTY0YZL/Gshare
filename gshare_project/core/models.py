@@ -111,12 +111,4 @@ class GroupMembers(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'group_members'
-        constraints = [
-            models.UniqueConstraint(fields=['group', 'user'], name='uq_group_user'),
-        ]
-        indexes = [
-            models.Index(fields=['group'], name='ix_group'),
-            models.Index(fields=['user'], name='ix_user'),
-            models.Index(fields=['order'], name='ix_order'),
-        ]
+        db_table = 'group_orders'

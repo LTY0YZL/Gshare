@@ -659,8 +659,10 @@ Returns:
     Redirects to the cart page.
 """
 @login_required
-def add_to_cart(request, item_id):
+def add_to_cart(request, item_id, quantity=1):
     
+    print("Adding item to cart:", item_id)
+    print("Quantity:", quantity)
 
     profile = get_user("email", request.user.email)
     if not profile:
@@ -698,7 +700,7 @@ def add_to_cart(request, item_id):
                 ON DUPLICATE KEY UPDATE
                     quantity = quantity + VALUES(quantity)
                 """,
-                [order.id, item.id, 1, str(item.price or 0)]
+                [order.id, item.id, quantity, str(item.price or 0)]
             )
 
             # RECALC TOTAL from line items
@@ -958,12 +960,16 @@ def maps(request):
     #     print("User ID:", order.user.id)  # Debug print in your view
     #     print("Delivery Address:", order.delivery_address)  # Debug print in your view
     # addresses = [order.delivery_address for order in orders if order.delivery_address]
-    info = []
+    info = {}
     for order in orders:
         if order.delivery_address:
             user = get_user("id", order.user.id)
-            print(user.name)
+                 
+                
+            
+            # print(user.name)
             items = get_order_items(order)
+                
             subtotal = 0
             items_with_totals = []
             for item in items:
@@ -975,48 +981,50 @@ def maps(request):
                     'price': float(item[5]),  # item price
                     'total': total,
                 })
-            info.append({'address': order.delivery_address, 'user': {
-                'name': user.name,
-                'items': items_with_totals,
-                'subtotal': subtotal,
-                'address': order.delivery_address,
-                'order_id': order.id,
-                
-            }})
+        order_data = {
+            'address': order.delivery_address,
+            'items': items_with_totals,
+            'subtotal': subtotal,
+            'order_id': order.id,
+        }
+
+        # Group by user name (or user.id if you prefer)
+        if user.name not in info:
+            info[user.name] = []
+        info[user.name].append(order_data)
+
+    # Convert to grouped list format for easy JSON use
+    grouped_info = [
+        {'user': user_name, 'orders': orders}
+        for user_name, orders in info.items()
+    ]
+
+    # print("Addresses JSON:", json.dumps(grouped_info, indent=2))
     # print("Addresses:", addresses)  # Debug print in your view
-    # print("Addresses JSON:", json.dumps(addresses))  # Debug print in your view
+    # print("Addresses JSON:", json.dumps(info))  # Debug print in your view
     return render(request, "maps.html", {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
         'location': {'lat': 40.7607, 'lng': -111.8939},
         'stores_for_map': stores,
         # 'delivery_persons': delivery_people,
         # 'custom_user': get_user("email", request.user.email),
-        'delivery_addresses_with_info_json': json.dumps(info),
+        'delivery_addresses_with_info_json': json.dumps(grouped_info),
         'user_address': user_address,
     })
     
-@login_required
-def shoppingcart(request):
-    user = request.user
-    profile = get_user("email", user.email)
-    print("User profile:", profile.name)
-    print(profile.id)
-    order = get_orders(profile, 'cart')
+def placed_data(request):
+    print("placed data")
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    profile = get_user("email", request.user.email)
+    if not profile:
+        print("no user")
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    order = get_orders(profile, 'placed')
+    print(order)
     if not order:
-        order = []
-        print("No active cart found.")
-        return render(request, "shoppingcart.html", {
-            'items': [],
-            'order': {
-                'subtotal': 0,
-                'tax': 0,
-                'total': 0,
-            },
-            'id': None,
-        })
-    print(len(order))
-    print(order[0].total_amount)
-    print(order[0].id if order else "No order")
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
 
     items = get_order_items(order[0]) if order[0] else []
     subtotal = 0
@@ -1039,7 +1047,187 @@ def shoppingcart(request):
         'tax': tax,
         'total': grand_total,
     }
-    print(order[0].id if order else "No order")
+    print(order_summary)
+
+    return JsonResponse({
+        'items': items_with_totals,
+        'order': order_summary,
+        'id': order[0].id if order else None,
+    })
+    
+    
+def group_data(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    profile = get_user("email", request.user.email)
+    if not profile:
+        print("no user")
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    order = get_orders_in_group(profile, 'cart')
+    if not order:
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+
+    items = get_order_items(order[0]) if order[0] else []
+    subtotal = 0
+    items_with_totals = []
+    for item in items:
+        total = item[2] * item[5]  # quantity * price
+        subtotal += total
+        items_with_totals.append({
+            'name': item[4],  # item name
+            'quantity': item[2],
+            'price': item[5],  # item price
+            'total': total,
+        })
+        
+    tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+    grand_total = round(subtotal + tax, 2)
+
+    order_summary = {
+        'subtotal': subtotal,
+        'tax': tax,
+        'total': grand_total,
+    }
+
+    return JsonResponse({
+        'items': items_with_totals,
+        'order': order_summary,
+        'id': order[0].id if order else None,
+    })
+    
+    
+def cart_data(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    profile = get_user("email", request.user.email)
+    if not profile:
+        print("no user")
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    order = get_orders(profile, 'cart')
+    if not order:
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+
+    items = get_order_items(order[0]) if order[0] else []
+    subtotal = 0
+    items_with_totals = []
+    for item in items:
+        total = item[2] * item[5]  # quantity * price
+        subtotal += total
+        items_with_totals.append({
+            'name': item[4],  # item name
+            'quantity': item[2],
+            'price': item[5],  # item price
+            'total': total,
+        })
+        
+    tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+    grand_total = round(subtotal + tax, 2)
+
+    order_summary = {
+        'subtotal': subtotal,
+        'tax': tax,
+        'total': grand_total,
+    }
+
+    return JsonResponse({
+        'items': items_with_totals,
+        'order': order_summary,
+        'id': order[0].id if order else None,
+    })
+    
+def group_carts(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    
+    profile = get_user("email", request.user.email)
+    if not profile:
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    orders = get_orders(profile, 'cart', 'group')
+    if not orders:
+        return JsonResponse({'carts': []})
+
+    carts = []
+    for order in orders:
+        items = get_order_items(order) if order else []
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+            
+        tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+        grand_total = round(subtotal + tax, 2)
+
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+
+        carts.append({
+            'order_id': order.id,
+            'items': items_with_totals,
+            'order_summary': order_summary,
+        })
+
+    return JsonResponse({'carts': carts})
+
+@login_required
+def shoppingcart(request):
+    # return render(request, "shoppingcart.html")
+
+    user = request.user
+    profile = get_user("email", user.email)
+    print("User profile:", profile.name)
+    print(profile.id)
+    order = get_orders(profile, 'cart')
+    if not order:
+        order = []
+        print("No active cart found.")
+        return render(request, "shoppingcart.html", {
+            'items': [],
+            'order': {
+                'subtotal': 0,
+                'tax': 0,
+                'total': 0,
+            },
+            'id': None,
+        })
+    # print(len(order))
+    # print(order[0].total_amount)
+    # print(order[0].id if order else "No order")
+
+    items = get_order_items(order[0]) if order[0] else []
+    subtotal = 0
+    items_with_totals = []
+    for item in items:
+        total = item[2] * item[5]  # quantity * price
+        subtotal += total
+        items_with_totals.append({
+            'name': item[4],  # item name
+            'quantity': item[2],
+            'price': item[5],  # item price
+            'total': total,
+        })
+        
+    tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+    grand_total = round(subtotal + tax, 2)
+
+    order_summary = {
+        'subtotal': subtotal,
+        'tax': tax,
+        'total': grand_total,
+    }
+    # print(order[0].id if order else "No order")
     # for item in items:
     #     totals.append(item[2] * item[5])  # quantity * price
     # print(items)
