@@ -19,6 +19,7 @@ from django.db import IntegrityError
 from django.db.models import Q
 from django.db.models import Avg, Count
 from django.http import JsonResponse
+from django.db import connection
 import json
 import re
 import requests
@@ -30,7 +31,7 @@ from core.models import (
     Users,
     Stores, Items,
     Orders, OrderItems,
-    Deliveries, Feedback, GroupOrders
+    Deliveries, Feedback, GroupOrders, GroupMembers
 )
 
 """helper functions"""
@@ -247,6 +248,109 @@ def get_my_deliveries(user: Users, delivery_status: str):
         return []
     return deliveries
 
+""" functions from here are for group orders """
+
+"""
+Create a new group order with a list of order IDs and a password.
+Args:
+    order_ids (list[int]): A list of order IDs to be included in the group order.
+    raw_password (str): The raw password to be hashed and stored for the group order.
+    Returns:
+    GroupOrders: The created GroupOrders object.
+"""
+def create_group_order(user: Users, order_ids: list[int], raw_password: str):
+
+    if not order_ids:
+        raise ValueError("order_ids list cannot be empty")
+
+    with transaction.atomic(using='gsharedb'):
+        group = GroupOrders.objects.using('gsharedb').create(description="Group Order", password_hash="")
+        set_group_password(group, raw_password)
+        for oid in order_ids:
+            try:
+                order = Orders.objects.using('gsharedb').get(id=oid, user=user)
+                GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
+            except Orders.DoesNotExist:
+                continue
+        return group
+    
+def add_user_to_group(group: GroupOrders, user: Users, order: Orders = None):
+    try:
+        GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
+        return True
+    except IntegrityError:
+        return False
+
+def remove_user_from_group(group: GroupOrders, user: Users):
+    try:
+        membership = GroupMembers.objects.using('gsharedb').get(group=group, user=user)
+        membership.delete()
+        return True
+    except GroupMembers.DoesNotExist:
+        return False
+    
+def get_group_by_id(group_id: int):
+    try:
+        return GroupOrders.objects.using('gsharedb').get(group_id=group_id)
+    except GroupOrders.DoesNotExist:
+        return None
+
+def get_group_members(group: GroupOrders):
+    return GroupMembers.objects.using('gsharedb').filter(group=group).select_related('user', 'order')
+
+def get_groups_for_user(user: Users):
+    return GroupOrders.objects.using('gsharedb').filter(members=user).distinct()
+
+def get_cart_in_group(user: Users):
+    try:
+        membership = GroupMembers.objects.using('gsharedb').get(user=user, order__status='cart')
+        print(membership)
+        return membership
+    except GroupMembers.DoesNotExist:
+        return None
+
+def get_orders_in_group(group_id: int):
+    order_ids = (
+        GroupMembers.objects.using('gsharedb')
+        .filter(group_id=group_id, order_id__isnull=False)
+        .values_list('order_id', flat=True)
+        .distinct()
+    )
+    return list(
+        Orders.objects.using('gsharedb')
+        .filter(id__in=order_ids)
+    )
+
+def remove_group(group: GroupOrders):
+    try:
+        group.delete()
+        return True
+    except Exception as e:
+        print(f"Error deleting group: {e}")
+        return False
+    
+def get_group_by_user_and_order(user: Users, order: Orders):
+    try:
+        membership = GroupMembers.objects.using('gsharedb').get(user=user, order=order)
+        return membership.group
+    except GroupMembers.DoesNotExist:
+        return None
+    
+def add_order_to_group(group: GroupOrders, user: Users, order: Orders):
+    try:
+        GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
+        return True
+    except IntegrityError:
+        return False
+    
+def remove_order_from_group(group: GroupOrders, order: Orders):
+    try:
+        membership = GroupMembers.objects.using('gsharedb').get(group=group, order=order)
+        membership.delete()
+        return True
+    except GroupMembers.DoesNotExist:
+        return False
+
 def set_group_password(group, raw_password: str):
     # explicitly tell Django to use Argon2 for this hash
     group.password_hash = make_password(raw_password, hasher='argon2')
@@ -256,16 +360,8 @@ def verify_group_password(group, raw_password: str) -> bool:
     # check_password auto-detects the hasher from the stored hash
     return check_password(raw_password, group.password_hash)
 
-def get_orders_in_group(group_id: int):
-    try:
-        group = GroupOrders.objects.using('gsharedb').get(group_id=group_id)
-        order_ids = re.findall(r"\d+", group.list_of_order_ids)
-        return Orders.objects.using('gsharedb').filter(id__in=order_ids)
-    except GroupOrders.DoesNotExist:
-        return Orders.objects.none()
-    
-from django.db import connection
-from django.http import JsonResponse
+
+""""Functions for spatial queries"""
 
 def _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
     if min_lng <= max_lng:
@@ -573,7 +669,6 @@ def add_to_cart(request, item_id, quantity=1):
         messages.error(request, "Profile not found.")
         return redirect('cart')
 
-    print("User profile:", profile.name)
 
     # Grab item
     try:
@@ -593,9 +688,6 @@ def add_to_cart(request, item_id, quantity=1):
             total_amount=0,
             delivery_address = profile.address
         )
-
-    print("Current order total:", order.delivery_address)
-    print("Current order ID:", order.id)
 
     # Upsert into order_items (composite PK table) and recompute total
     with transaction.atomic(using='gsharedb'):
@@ -633,6 +725,45 @@ def add_to_cart(request, item_id, quantity=1):
 
 
     messages.success(request, f"Added {item.name} to your cart.")
+    return redirect('cart')
+
+@login_required
+def remove_from_cart(request, item_id):
+    profile = get_user("email", request.user.email)
+    if not profile:
+        messages.error(request, "Profile not found.")
+        return redirect('cart')
+
+    order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
+    if not order:
+        messages.error(request, "No active cart.")
+        return redirect('cart')
+
+    try:
+        order_item = OrderItems.objects.using('gsharedb').get(order=order, item_id=item_id)
+    except OrderItems.DoesNotExist:
+        messages.error(request, "Item not in cart.")
+        return redirect('cart')
+
+    with transaction.atomic(using='gsharedb'):
+        order_item.delete()
+
+        # RECALC TOTAL from line items
+        with connections['gsharedb'].cursor() as cur:
+            cur.execute(
+                """
+                SELECT COALESCE(SUM(quantity * price), 0)
+                FROM order_items
+                WHERE order_id = %s
+                """,
+                [order.id]
+            )
+            total = cur.fetchone()[0] or 0
+
+        order.total_amount = total
+        order.save(using='gsharedb')
+
+    messages.success(request, f"Removed {order_item.item.name} from your cart.")
     return redirect('cart')
 
 @login_required
