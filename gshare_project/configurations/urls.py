@@ -41,7 +41,9 @@ urlpatterns = [
     path('shoppingcart/cartItems/', views.cart_data, name='cart_items'),
     path('shoppingcart/groupItems/', views.group_data, name='group_items'),
     path('shoppingcart/placedItems/', views.placed_data, name='placed_items'),
-
+    
+    path('shoppingcart/<int:order_id>', views.createGroupForShoppingCart, name='createGroupForShoppingCart'),  
+    path('shoppingcart/removeItem/<int:item_id>/', views.remove_from_cart, name="remove_item"),
 
     path('myorders/', views.myorders, name='order_history'),
     path('cart/payments/', views.payments, name='payments'),

@@ -40,7 +40,8 @@
                             <p class="mb-1 pl-32">Total: ${{ item.total }}</p>
                         </div>
                         <button class="ml-auto self-center">
-                            <a href="" class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md ">Remove item</a>
+                            <a class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
+                            onclick="removeItem({{ item.id }})">Remove item</a>
                         </button>
                     </div>
                 </div>
@@ -55,6 +56,11 @@
             <p class="mb-4 font-bold">Total: ${{ order.total }}</p>
             <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
             onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Proceed to Checkout</button>
+            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+            onclick="createGroup({{ id|default:'null' }})">
+                    Create Group For my Cart
+            </button>
+
 
         </div>
     </div>
@@ -107,7 +113,16 @@
                 const tab = document.getElementById("tab-group");
 
                 if (!data.items || data.items.length === 0) {
-                    tab.innerHTML = "<p class='p-4'>Your cart is empty.</p>";
+                    tab.innerHTML = `<p class='p-4'>Your cart is empty.</p>
+                    </div>
+                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                            <p class="mb-2">Subtotal: $0</p>
+                            <p class="mb-2">Tax: $0</p>
+                            <p class="mb-4 font-bold">Total: $0</p>
+
+                        </div>
+                    </div>`;
                     return;
                 }
 
@@ -122,19 +137,10 @@
                                 <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
                                 <div flex flex-row>
                                     <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
-                                    <input type="number" name="item_amount" value="${item.quantity}" min="1"
-                                        class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
-                                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
-                                            onclick="handleItemClick(this, ${item.id}, this.previousElementSibling.value)">
-                                        Update
-                                    </button>
                                 </div>
                                 <p class="mb-1 pl-32">Price: $${item.price}</p>
                                 <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
                             </div>
-                            <button class="ml-auto self-center">
-                                <a href="" class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md">Remove item</a>
-                            </button>
                         </div>
                     </div>`;
                 });
@@ -162,56 +168,71 @@
         fetch(placedItemsUrl)
             .then(response => response.json())
             .then(data => {
+                console.log(data);
                 const tab = document.getElementById("tab-placed");
 
-                if (!data.items || data.items.length === 0) {
-                    tab.innerHTML = "<p class='p-4'>Your cart is empty.</p>";
+                if (!data.orders || data.orders.length === 0) {
+                    tab.innerHTML = `<p class='p-4'>Your cart is empty.</p>
+                    </div>
+                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                            <p class="mb-2">Subtotal: $0</p>
+                            <p class="mb-2">Tax: $0</p>
+                            <p class="mb-4 font-bold">Total: $0</p>
+
+                        </div>
+                    </div>`;
                     return;
                 }
 
                 let html = `<div class="grid grid-cols-2 h-screen gap-4 p-4">
                                 <div class="col-span-1 bg-white">`;
 
-                data.items.forEach(item => {
+                data.orders.forEach(order => {
                     html += `
-                    <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                        <div class="flex flex-row">
-                            <div class="flex flex-col">
-                                <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                <div flex flex-row>
-                                    <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
-                                    <input type="number" name="item_amount" value="${item.quantity}" min="1"
-                                        class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
-                                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
-                                            onclick="handleItemClick(this, ${item.id}, this.previousElementSibling.value)">
-                                        Update
-                                    </button>
+                        <div class="grid grid-cols-2 gap-4 bg-white shadow-lg rounded-lg overflow-hidden">
+                            <div class="col-span-1 bg-white p-4">
+                                <h2 class="text-2xl font-bold mb-4">Order #${order.id}</h2>
+                    `;
+                    
+                    order.items.forEach(item =>{
+                        html += `
+                        <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                            <div class="flex flex-row">
+                                <div class="flex flex-col">
+                                    <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
+                                    <div flex flex-row>
+                                        <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
+                                    </div>
+                                    <p class="mb-1 pl-32">Price: $${item.price}</p>
+                                    <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
                                 </div>
-                                <p class="mb-1 pl-32">Price: $${item.price}</p>
-                                <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
                             </div>
-                            <button class="ml-auto self-center">
-                                <a href="" class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md">Remove item</a>
-                            </button>
-                        </div>
-                    </div>`;
-                });
-
-                html += `</div>
-                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
-                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                            <p class="mb-2">Subtotal: $${data.order.subtotal}</p>
-                            <p class="mb-2">Tax: $${data.order.tax}</p>
-                            <p class="mb-4 font-bold">Total: $${data.order.total}</p>
-                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-                                    onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
-                                Proceed to Checkout
-                            </button>
-                        </div>
                         </div>`;
+                    });
 
-                tab.innerHTML = html;
+                    html += `
+                        </div>
+                            <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                                <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                                <p class="mb-2">Subtotal: $${order.summary.subtotal}</p>
+                                <p class="mb-2">Tax: $${order.summary.tax}</p>
+                                <p class="mb-4 font-bold">Total: $${order.summary.total}</p>
+                                <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                                        onclick="changeOrderStatus(${order.id || 'null'}, 'placed')">
+                                    Proceed to Checkout
+                                </button>
+                            </div>
+                        </div>`;
             });
+
+            html += `</div>`;
+            tab.innerHTML = html;
+        })
+        .catch(err =>{
+            console.error('Error retreiving data', err);
+        });
+
     }
 
     function displayCart() {
@@ -222,7 +243,16 @@
                 const tab = document.getElementById("tab-cart");
 
                 if (!data.items || data.items.length === 0) {
-                    tab.innerHTML = "<p class='p-4'>Your cart is empty.</p>";
+                    tab.innerHTML = `<p class='p-4'>Your cart is empty.</p>
+                    </div>
+                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                            <p class="mb-2">Subtotal: $0</p>
+                            <p class="mb-2">Tax: $0</p>
+                            <p class="mb-4 font-bold">Total: $0</p>
+
+                        </div>
+                    </div>`;
                     return;
                 }
 
@@ -263,6 +293,10 @@
                             <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
                                     onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
                                 Proceed to Checkout
+                            </button>
+                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                            onclick="createGroup({{ id|default:'null' }})">
+                                Create Group For my Cart
                             </button>
                         </div>
                         </div>`;
@@ -297,6 +331,55 @@
         .catch(error => {
             console.error('Error:', error);
             alert('An error occurred while updating the order status.');
+        });
+    }
+
+    function createGroup(orderId) {
+        const url = `/shoppingcart/${orderId}/`;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+        })
+        .then(response => {
+            if (response.redirected) {
+                window.location.href = response.url;
+            } else if (response.ok) {
+                window.location.reload();
+            } else {
+                console.error("Error when creating a group", response.status);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        })
+    }
+
+    function removeItem(itemId) {
+        console.log("remove item?");
+        console.log(itemId);
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch(`/shoppingcart/removeItem/${itemId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log("removed item");
+                display('cart')
+            } else {
+                console.error(data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Error removing item', err)
         });
     }
     
