@@ -178,6 +178,18 @@
                 popup.classList.add('translate-x-full');
                 map_popup.classList.remove('-translate-x-50');
             });
+
+            document.addEventListener('click', (event) => {
+            const popup = document.getElementById('popup');
+
+            // if popup is currently visible
+            if (!popup.classList.contains('translate-x-full')) {
+                // check if click was *outside* popup
+                if (!popup.contains(event.target)) {
+                    popup.classList.add('translate-x-full');
+                }
+            }
+        });
     
         }
 
