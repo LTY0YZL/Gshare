@@ -996,10 +996,7 @@ def drive_time(user_address, store_address, api_key):
             }
     return None
     
-
-
-@login_required
-def maps(request):
+def maps_data(request):
     stores = Stores.objects.all()
     user = get_user("email", request.user.email)
     user_address = user.address
@@ -1013,19 +1010,19 @@ def maps(request):
                 
             
             # print(user.name)
-            items = get_order_items(order)
+        items = get_order_items(order)
                 
-            subtotal = 0
-            items_with_totals = []
-            for item in items:
-                total = float(item[2]) * float(item[5])  # quantity * price
-                subtotal += total
-                items_with_totals.append({
-                    'name': item[4],  # item name
-                    'quantity': int(item[2]),
-                    'price': float(item[5]),  # item price
-                    'total': total,
-                })
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = float(item[2]) * float(item[5])  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': int(item[2]),
+                'price': float(item[5]),  # item price
+                'total': total,
+            })
         order_data = {
             'address': order.delivery_address,
             'items': items_with_totals,
@@ -1043,12 +1040,20 @@ def maps(request):
         {'user': user_name, 'orders': orders}
         for user_name, orders in info.items()
     ]
+    
+    return JsonResponse(grouped_info, safe=False)
 
+@login_required
+def maps(request):
+    stores = Stores.objects.all()
+    user = get_user("email", request.user.email)
+    user_address = user.address
+    orders = get_orders_by_status('placed')
+    
     return render(request, "maps.html", {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
         'location': {'lat': 40.7607, 'lng': -111.8939},
         'stores_for_map': stores,
-        'delivery_addresses_with_info_json': json.dumps(grouped_info),
         'user_address': user_address,
     })
     

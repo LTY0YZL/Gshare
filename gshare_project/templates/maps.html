@@ -89,7 +89,7 @@
         let map;
         let geocoder;
         let markers = [];
-        const addresses_with_info = JSON.parse('{{ delivery_addresses_with_info_json|escapejs }}');
+        {% comment %} const addresses_with_info = JSON.parse('{{ delivery_addresses_with_info_json|escapejs }}'); {% endcomment %}
         const user_address = '{{ user_address|escapejs }}';
 
 
@@ -109,11 +109,23 @@
                 }
             });
 
+            // Fetch maps data asynchronously after map loads
+            fetch("{% url 'maps_data' %}")
+                .then(res => res.json())
+                .then(data => {
+                    console.log("maps data received:", data);
+                    addMarkers(data);
+                })
+                .catch(err => console.error("Error fetching delivery data:", err));
+        }
+
+        function addMarkers(addresses_with_info) {
             // Add a marker for each address
             addresses_with_info.forEach(userData => {
 
                 // first order for location
                 const firstOrder = userData.orders[0];
+                console.log("Geocoding address:", firstOrder.address);
                 geocoder.geocode({ 'address': firstOrder.address }, (results, status) => {
                     if (status === 'OK') {
                         const location = results[0].geometry.location;
@@ -125,7 +137,65 @@
 
                         marker.addListener('click', () => {
                             // Display user info in your popup
-                            let ordersHTML = '';
+                            showPopup(userData);
+                        });
+                    } else {
+                        console.error("Geocode failed:", status);
+                    }
+                });
+            });
+        }
+
+        function showPopup(userData) {
+            let ordersHTML = userData.orders.map(order => `
+                <div class="border-t border-gray-300 mt-4 pt-4">
+                    <p class="text-gray-700 text-xl"><b>Address:</b> ${order.address}</p>
+                    <ul class="list-disc pl-6">
+                        ${order.items.map(item => `
+                            <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
+                                <span class="font-semibold">${item.name}</span>:
+                                <span class="font-semibold">${item.quantity} × $${item.price} =</span>
+                                <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                    <p class="text-right text-lg font-bold mt-2">Subtotal: $${order.subtotal.toFixed(2)}</p>
+                    <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
+                            onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
+                        Accept Request
+                    </button>
+                </div>
+            `).join('');
+
+            // Inject into popup
+            document.getElementById('popup-content').innerHTML = `
+                <div class="space-y-4">
+                    <h2 class="text-4xl font-bold mb-2 text-center">${userData.user}</h2>
+                    ${ordersHTML}
+                </div>
+            `;
+            document.getElementById('popup').classList.remove('translate-x-full');
+
+            closePopup.addEventListener('click', () => {
+                const popup = document.getElementById('popup');
+                const map_popup = document.getElementById('map_popup');
+                popup.classList.add('translate-x-full');
+                map_popup.classList.remove('-translate-x-50');
+            });
+
+            document.addEventListener('click', (event) => {
+            const popup = document.getElementById('popup');
+
+            // if popup is currently visible
+            if (!popup.classList.contains('translate-x-full')) {
+                // check if click was *outside* popup
+                if (!popup.contains(event.target)) {
+                    popup.classList.add('translate-x-full');
+                }
+            }
+        });
+        }
+                            {% comment %} let ordersHTML = '';
 
                             // loop through each order
                             userData.orders.forEach(order => {
@@ -163,6 +233,8 @@
                     }
                 });
             });
+        } {% endcomment %}
+
             {% comment %} marker = new google.maps.Marker({ map: map, position: location }); {% endcomment %}
 
             {% comment %} marker.addListener('click', () => {
@@ -172,26 +244,9 @@
                 popup.classList.remove('translate-x-full'); {% endcomment %}
             {% comment %} }); {% endcomment %}
 
-            closePopup.addEventListener('click', () => {
-                const popup = document.getElementById('popup');
-                const map_popup = document.getElementById('map_popup');
-                popup.classList.add('translate-x-full');
-                map_popup.classList.remove('-translate-x-50');
-            });
-
-            document.addEventListener('click', (event) => {
-            const popup = document.getElementById('popup');
-
-            // if popup is currently visible
-            if (!popup.classList.contains('translate-x-full')) {
-                // check if click was *outside* popup
-                if (!popup.contains(event.target)) {
-                    popup.classList.add('translate-x-full');
-                }
-            }
-        });
+            
     
-        }
+        {% comment %} } {% endcomment %}
 
         function geocodeAddress() {
             const address = document.getElementById('input_location').value;
@@ -231,6 +286,8 @@
                 alert('An error occurred while updating the order status.');
             });
         }
+
+        window.addEventListener('load', initMap)
     </script>
 
     <script async defer
