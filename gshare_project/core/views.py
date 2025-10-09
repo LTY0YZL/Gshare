@@ -248,6 +248,37 @@ def get_my_deliveries(user: Users, delivery_status: str):
         return []
     return deliveries
 
+""" functions for feedback """
+
+def add_feedback(reviewee: Users, reviewer: Users, order: Orders, feedback_text: str, rating: int):
+    try:
+        feedback = Feedback.objects.using('gsharedb').create(
+            reviewee=reviewee,
+            reviewer=reviewer,
+            order=order,
+            feedback=feedback_text,
+            rating=rating,
+            description_subject=feedback_text[:50] if feedback_text else None
+        )
+        return feedback
+    except IntegrityError as e:
+        print(f"Error adding feedback: {e}")
+        return None
+    
+def get_feedback_for_user(user: Users):
+    feedbacks = Feedback.objects.using('gsharedb').filter(reviewee=user)
+    if not feedbacks.exists():
+        return []
+    return feedbacks
+
+def get_feedback_by_order(order: Orders):
+    try:
+        feedback = Feedback.objects.using('gsharedb').get(order=order)
+        return feedback
+    except Feedback.DoesNotExist:
+        return None
+    
+
 """ functions from here are for group orders """
 
 """
@@ -760,6 +791,10 @@ def remove_from_cart(request, item_id):
 
         order.total_amount = total
         order.save(using='gsharedb')
+
+    # Always return JSON for AJAX
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == "application/json":
+        return JsonResponse({"success": True, "message": f"removed {order_item.item.name} frpm your cart."})
 
     messages.success(request, f"Removed {order_item.item.name} from your cart.")
     return redirect('cart')
