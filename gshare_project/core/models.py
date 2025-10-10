@@ -44,7 +44,7 @@ class Orders(models.Model):
     status = models.CharField(max_length=50, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     delivery_address = models.CharField(max_length=255, null=True, blank=True)
-
+    
     class Meta:
         managed = False
         db_table = 'orders'
@@ -55,6 +55,7 @@ class Feedback(models.Model):
     feedback = models.CharField(max_length=255, null=True, blank=True)
     order = models.OneToOneField('Orders', on_delete=models.CASCADE, primary_key=True)
     rating = models.PositiveSmallIntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    description_subject = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         managed = False
@@ -90,9 +91,9 @@ class Deliveries(models.Model):
 
 class GroupOrders(models.Model):
     # matches your existing table
-    group_id = models.IntegerField(primary_key=True)
+    group_id = models.AutoField(primary_key=True)
     description = models.TextField()
-    password = models.CharField(max_length=255)
+    password_hash = models.CharField(max_length=255)
 
     members = models.ManyToManyField(
         'Users',
@@ -111,12 +112,4 @@ class GroupMembers(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'group_members'
-        constraints = [
-            models.UniqueConstraint(fields=['group', 'user'], name='uq_group_user'),
-        ]
-        indexes = [
-            models.Index(fields=['group'], name='ix_group'),
-            models.Index(fields=['user'], name='ix_user'),
-            models.Index(fields=['order'], name='ix_order'),
-        ]
+        db_table = 'group_orders'

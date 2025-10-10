@@ -24,7 +24,7 @@
     </div>
 
     <!-- pop up html --> 
-     <div id="popup" class="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg h-full transform translate-x-full transition-transform duration-300">
+     <div id="popup" class="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg h-full transform translate-x-full transition-transform duration-300 overflow-y-auto">
         <div class="flex justify-between items-center border-b">
             <button id="closePopup" class="text-gray-500 hover:text-gray-700 ml-auto">&times;</button>
 
@@ -110,46 +110,59 @@
             });
 
             // Add a marker for each address
-            addresses_with_info.forEach(data => {
-                geocoder.geocode({ 'address': data.address }, (results, status) => {
+            addresses_with_info.forEach(userData => {
+
+                // first order for location
+                const firstOrder = userData.orders[0];
+                geocoder.geocode({ 'address': firstOrder.address }, (results, status) => {
                     if (status === 'OK') {
                         const location = results[0].geometry.location;
                         const marker = new google.maps.Marker({
                             map: map,
                             position: location
                         });
-                        markers.push({ marker, user: data.user });
+                        markers.push({ marker, user: userData.user });
 
                         marker.addListener('click', () => {
                             // Display user info in your popup
+                            let ordersHTML = '';
+
+                            // loop through each order
+                            userData.orders.forEach(order => {
+                                ordersHTML += `
+                                    <div class="border-t border-gray-300 mt-4 pt-4">
+                                        <p class="text-gray-700 text-xl"><b>Address:</b> ${order.address}</p>
+                                        <ul class="list-disc pl-6">
+                                            ${order.items.map(item => `
+                                                <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
+                                                    <span class="font-semibold">${item.name}</span>:
+                                                    <span class="font-semibold">${item.quantity} × $${item.price} =</span>
+                                                    <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
+                                                </li>
+                                            `).join('')}
+                                        </ul>
+                                        <p class="text-right text-lg font-bold mt-2">Subtotal: $${order.subtotal.toFixed(2)}</p>
+                                        <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
+                                            onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
+                                            Accept Request
+                                        </button>
+                                    </div>`;
+                            });
+                    
+                            // Inject into popup
                             document.getElementById('popup-content').innerHTML = `
                                 <div class="space-y-4">
-                                    <h2 class="text-4xl font-bold mb-2 text-center">${data.user.name}</h2>
-                                    <p class="text-gray-700 text-2xl mt-4 text-center">${data.user.address}</p>
-                                    <p class="text-gray-700 text-2xl mt-4 text-right mb-8">Total cost of items: $${data.user.subtotal}</p>
-                                    <ul class="list-disc pl-6">
-                                        ${data.user.items.map(item => `
-                                        <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
-                                            <span class="font-semibold">${item.name}</span>:
-                                            <span class="font-semibold">${item.quantity} x $${item.price} =</span>
-                                            <span class="text-blue-700 font-bold">$${item.total}</span>
-                                        </li>
-                                        `).join('')}
-                                    </ul>
-                                    <div class = border-t border-gray-300 flex justify-right>
-                                        <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-4 w-32"
-                                        onclick="changeOrderStatus(${data.user.order_id}, 'inprogress')">Accept Request</button>
-                                    </div>
-                                        <!-- Add more user info as needed -->
+                                    <h2 class="text-4xl font-bold mb-2 text-center">${userData.user}</h2>
+                                    ${ordersHTML}
                                 </div>
                             `;
                             document.getElementById('popup').classList.remove('translate-x-full');
                         });
                     } else {
-                        console.error('Geocode was not successful for the following reason: ' + status);
+                        console.error('Geocode failed: ' + status);
                     }
                 });
-            })
+            });
             {% comment %} marker = new google.maps.Marker({ map: map, position: location }); {% endcomment %}
 
             {% comment %} marker.addListener('click', () => {
@@ -195,7 +208,8 @@
             .then(data => {
                 if (data.success) {
                     alert('Order status updated successfully!');
-                    // Optionally, you can refresh the page or update the UI to reflect the change
+                    window.location.reload();
+                    
                 } else {
                     alert('Failed to update order status.');
                 }
