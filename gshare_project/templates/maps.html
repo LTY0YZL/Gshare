@@ -24,7 +24,7 @@
     </div>
 
     <!-- pop up html --> 
-     <div id="popup" class="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg h-full transform translate-x-full transition-transform duration-300">
+    <div id="popup" class="fixed top-0 right-0 w-1/3 h-full bg-white shadow-2xl z-50 transition-transform transform translate-x-full">
         <div class="flex justify-between items-center border-b">
             <button id="closePopup" class="text-gray-500 hover:text-gray-700 ml-auto">&times;</button>
 
@@ -89,7 +89,7 @@
         let map;
         let geocoder;
         let markers = [];
-        const addresses_with_info = JSON.parse('{{ delivery_addresses_with_info_json|escapejs }}');
+        {% comment %} const addresses_with_info = JSON.parse('{{ delivery_addresses_with_info_json|escapejs }}'); {% endcomment %}
         const user_address = '{{ user_address|escapejs }}';
 
 
@@ -109,47 +109,170 @@
                 }
             });
 
+            // Fetch maps data asynchronously after map loads
+            fetch("{% url 'maps_data' %}")
+                .then(res => res.json())
+                .then(data => {
+                    console.log("maps data received:", data);
+                    addMarkers(data);
+                })
+                .catch(err => console.error("Error fetching delivery data:", err));
+        }
+
+        function addMarkers(addresses_with_info) {
             // Add a marker for each address
-            addresses_with_info.forEach(data => {
-                geocoder.geocode({ 'address': data.address }, (results, status) => {
+            addresses_with_info.forEach(userData => {
+
+                // first order for location
+                const firstOrder = userData.orders[0];
+                const address = firstOrder?.address;
+
+                // Skip missing or invalid addresses
+                if (!address || address.trim().length < 5) {
+                    console.warn("Skipping invalid address:", address);
+                    return;
+                }
+                console.log("Geocoding address:", firstOrder.address);
+                geocoder.geocode({ 'address': firstOrder.address }, (results, status) => {
                     if (status === 'OK') {
                         const location = results[0].geometry.location;
                         const marker = new google.maps.Marker({
                             map: map,
                             position: location
                         });
-                        markers.push({ marker, user: data.user });
+                        markers.push({ marker, user: userData.user });
 
                         marker.addListener('click', () => {
                             // Display user info in your popup
+                            console.log("marker clicked:", userData.user);
+                            showPopup(userData);
+                        });
+                    } else {
+                        console.error("Geocode failed:", status);
+                    }
+                });
+            });
+        }
+        let popupJustOpened = false;
+
+
+        function showPopup(userData) {
+            console.log("popup");
+            console.log(userData.orders[0].items);
+            let ordersHTML = userData.orders.map(order => `
+                <div class="border-t border-gray-300 mt-4 pt-4">
+                    <p class="text-gray-700 text-xl"><b>Address:</b> ${order.address}</p>
+                    <ul class="list-disc pl-6">
+                        ${order.items.map(item => `
+                            <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
+                                <span class="font-semibold">${item.name}</span>:
+                                <span class="font-semibold">${item.quantity} × $${item.price} =</span>
+                                <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                    <p class="text-right text-lg font-bold mt-2">Subtotal: $${order.subtotal.toFixed(2)}</p>
+                    <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
+                            onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
+                        Accept Request
+                    </button>
+                </div>
+            `).join('');
+
+            const popup = document.getElementById('popup');
+            console.log("popup element found?", popup);
+            console.log("popup classes before:", popup?.classList.value);
+
+            popup.classList.remove('translate-x-full');
+            console.log("popup classes after:", popup.classList.value);
+            // Inject into popup
+            document.getElementById('popup-content').innerHTML = `
+                <div class="space-y-4">
+                    <h2 class="text-4xl font-bold mb-2 text-center">${userData.user}</h2>
+                    ${ordersHTML}
+                </div>
+            `;
+            {% comment %} document.getElementById('popup').classList.remove('translate-x-full'); {% endcomment %}
+
+            closePopup.addEventListener('click', () => {
+                const popup = document.getElementById('popup');
+                const map_popup = document.getElementById('map_popup');
+                popup.classList.add('translate-x-full');
+                map_popup.classList.remove('-translate-x-50');
+            });
+
+            {% comment %} document.addEventListener('click', (event) => {
+                const popup = document.getElementById('popup');
+
+                // if popup is currently visible
+                if (!popup.classList.contains('translate-x-full')) {
+                    // check if click was *outside* popup
+                    if (!popup.contains(event.target)) {
+                        popup.classList.add('translate-x-full');
+                    }
+                }
+            }); {% endcomment %}
+            console.log("end");
+            popupJustOpened = true;
+        }
+
+        // global listener for outside clicks
+        document.addEventListener("click", (event) => {
+            const popup = document.getElementById("popup");
+            if (!popup || popup.classList.contains("translate-x-full")) return;
+
+            // Ignore the first click right after popup opens
+            if (popupJustOpened) {
+                popupJustOpened = false;
+                return;
+            }
+
+            // If click was inside popup, ignore
+            if (popup.contains(event.target)) return;
+
+            // Otherwise, close popup
+            popup.classList.add("translate-x-full");
+        });
+                            {% comment %} let ordersHTML = '';
+
+                            // loop through each order
+                            userData.orders.forEach(order => {
+                                ordersHTML += `
+                                    <div class="border-t border-gray-300 mt-4 pt-4">
+                                        <p class="text-gray-700 text-xl"><b>Address:</b> ${order.address}</p>
+                                        <ul class="list-disc pl-6">
+                                            ${order.items.map(item => `
+                                                <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
+                                                    <span class="font-semibold">${item.name}</span>:
+                                                    <span class="font-semibold">${item.quantity} × $${item.price} =</span>
+                                                    <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
+                                                </li>
+                                            `).join('')}
+                                        </ul>
+                                        <p class="text-right text-lg font-bold mt-2">Subtotal: $${order.subtotal.toFixed(2)}</p>
+                                        <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
+                                            onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
+                                            Accept Request
+                                        </button>
+                                    </div>`;
+                            });
+                    
+                            // Inject into popup
                             document.getElementById('popup-content').innerHTML = `
                                 <div class="space-y-4">
-                                    <h2 class="text-4xl font-bold mb-2 text-center">${data.user.name}</h2>
-                                    <p class="text-gray-700 text-2xl mt-4 text-center">${data.user.address}</p>
-                                    <p class="text-gray-700 text-2xl mt-4 text-right mb-8">Total cost of items: $${data.user.subtotal}</p>
-                                    <ul class="list-disc pl-6">
-                                        ${data.user.items.map(item => `
-                                        <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
-                                            <span class="font-semibold">${item.name}</span>:
-                                            <span class="font-semibold">${item.quantity} x $${item.price} =</span>
-                                            <span class="text-blue-700 font-bold">$${item.total}</span>
-                                        </li>
-                                        `).join('')}
-                                    </ul>
-                                    <div class = border-t border-gray-300 flex justify-right>
-                                        <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-4 w-32"
-                                        onclick="changeOrderStatus(${data.user.order_id}, 'inprogress')">Accept Request</button>
-                                    </div>
-                                        <!-- Add more user info as needed -->
+                                    <h2 class="text-4xl font-bold mb-2 text-center">${userData.user}</h2>
+                                    ${ordersHTML}
                                 </div>
                             `;
                             document.getElementById('popup').classList.remove('translate-x-full');
                         });
                     } else {
-                        console.error('Geocode was not successful for the following reason: ' + status);
+                        console.error('Geocode failed: ' + status);
                     }
                 });
-            })
+            });
+        } {% endcomment %}
+
             {% comment %} marker = new google.maps.Marker({ map: map, position: location }); {% endcomment %}
 
             {% comment %} marker.addListener('click', () => {
@@ -159,14 +282,9 @@
                 popup.classList.remove('translate-x-full'); {% endcomment %}
             {% comment %} }); {% endcomment %}
 
-            closePopup.addEventListener('click', () => {
-                const popup = document.getElementById('popup');
-                const map_popup = document.getElementById('map_popup');
-                popup.classList.add('translate-x-full');
-                map_popup.classList.remove('-translate-x-50');
-            });
+            
     
-        }
+        {% comment %} } {% endcomment %}
 
         function geocodeAddress() {
             const address = document.getElementById('input_location').value;
@@ -195,7 +313,8 @@
             .then(data => {
                 if (data.success) {
                     alert('Order status updated successfully!');
-                    // Optionally, you can refresh the page or update the UI to reflect the change
+                    window.location.reload();
+                    
                 } else {
                     alert('Failed to update order status.');
                 }
@@ -205,6 +324,8 @@
                 alert('An error occurred while updating the order status.');
             });
         }
+
+        window.addEventListener('load', initMap)
     </script>
 
     <script async defer

@@ -34,10 +34,20 @@ urlpatterns = [
     path('browse/', views.browse_items, name='browse_items'),
     path('cart/', views.cart, name='cart'),
     # path('cart/', views.cart, name='shoppingcart'),
-    path('cart/add/<int:item_id>/', views.add_to_cart, name='add_to_cart'),
+    path('cart/add/<int:item_id>/<int:quantity>/', views.add_to_cart, name='add_to_cart'),
     path('change_order_status/<int:order_id>/<str:new_status>/', views.change_order_status_json, name='change_order_status_json'),
     path('checkout/', views.checkout, name='checkout'),
     path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
+    path('shoppingcart/cartItems/', views.cart_data, name='cart_items'),
+    path('shoppingcart/groupItems/', views.group_data, name='group_items'),
+    path('shoppingcart/placedItems/', views.placed_data, name='placed_items'),
+    
+    path('shoppingcart/<int:order_id>', views.createGroupForShoppingCart, name='createGroupForShoppingCart'),  
+    path('shoppingcart/removeItem/<int:item_id>/', views.remove_from_cart, name="remove_item"),
+    
+    path("maps/maps-data/", views.maps_data, name="maps_data"),
+
+
     path('myorders/', views.myorders, name='order_history'),
     path('cart/payments/', views.payments, name='payments'),
     # path('chat/', include('chat.urls')),

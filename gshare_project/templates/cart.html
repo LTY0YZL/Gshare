@@ -14,63 +14,34 @@
 
     <div class="container py-8">
         <div class="flex justify-center mt-2">
-            <form action="{% url 'cart' %}" method="get" class="mb-6 border border-gray-300 p-4 rounded-lg bg-white shadow-md w-1/2 flex flex-row flex-wrap gap-6 items-start ml-16">                <input type="hidden" name="store_filter" id="store_filter" value="{{ store_filter|default:'All' }}">
-                <div class="flex flex0-col items-start">
-                    <p class="font-bold mb-2">Price Range</p>
-                    <div name="PriceButtons flex flex-wrap gap-4 mb-4">
-                        <label class="flex items-center ml-2">
-                            <input type="radio" id="Any" name="Price-Range" value="Any" checked class="mr-2">
-                            Any
-                        </label>
-                        <label class="flex items-center ml-2">
-                            <input type="radio" id="0-10" name="Price-Range" value="0-10" class="mr-2">
-                            0-$10
-                        </label>
-                        <label class="flex items-center ml-2">
-                            <input type="radio" id="10-25" name="Price-Range" value="10-25" class="mr-2">
-                            $10-$25
-                        </label>
-                        <label class="flex items-center ml-2">
-                            <input type="radio" id="25-50" name="Price-Range" value="25-50" class="mr-2">
-                            $25-$50
-                        </label>
-                        <label class="flex items-center ml-2">
-                            <input type="radio" id="50-100" name="Price-Range" value="50-100" class="mr-2">
-                            $50-$100
-                        </label>
-                        <label class="flex items-center ml-2">
-                            <input type="radio" id="100+" name="Price-Range" value="100+" class="mr-2">
-                            $100+
-                        </label>      
-                    </div>
+            <form action="{% url 'cart' %}" method="get" class="mb-6 border border-gray-300 p-4 rounded-lg bg-white shadow-md w-1/2 flex flex-row flex-wrap gap-6 items-start ml-16">
+                <input type="hidden" name="store_filter" id="store_filter" value="{{ store_filter|default:'All' }}">
+
+                <div class="flex flex-col items-start">
+                    <label class="font-bold mb-2" for="Price-Range">Price Range</label>
+                        <select name="Price-Range" id="Price-Range" class="border rounded-lg px-3 py-2">
+                            <option value="Any" selected>Any</option>
+                            <option value="0-10">0-$10</option>
+                            <option value="10-25">$10-$25</option>
+                            <option value="25-50">$25-$50</option>
+                            <option value="50-100">$50-$100</option>
+                            <option value="100+">$100+</option>
+                        </select>
                 </div>
             
-                <div class="flex flex-cols items-start">
-                    <p class = "font-bold mb-2">Stores</p>
-                    <div name="StoresButtons" class="flex flex-col gap-2 mb-4">
-                        <label class="flex items-center ml-2">
-                            <input type="radio" id="Walmart" name="Stores" value="Walmart" class="mr-2">
-                            Walmart
-                        </label>
-                        <label class="flex items-center ml-2">
-                            <input type="radio" id="Target" name="Stores" value="Target" class="mr-2">
-                            Target
-                        </label>
-                        <label class="flex items-center ml-2">
-                            <input type="radio" id="Costco" name="Stores" value="Costco" class="mr-2">
-                            Costco
-                        </label>
-                        <label class="flex items-center ml-2">
-                            <input type="radio" id="Kroger" name="Stores" value="Kroger" class="mr-2"
-                            {% if store_filter == 'Kroger' %}checked{% endif %}>
-                            Kroger
-                        </label>
-                        <label class="flex items-center ml-2">
-                            <input type="radio" id="All" name="Stores" value="All" class="mr-2"
-                                {% if store_filter|default:'All' == 'All' %}checked{% endif %}>
-                            All
-                        </label>
-                    </div>
+                <div class="flex flex-col items-start">
+                    <label class="flex flex-col">
+                        <span class="font-bold mb-2">Store</span>
+                        <select id="StoresSelect" name="Stores" class="border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="All" {% if store_filter == 'All' %}selected{% endif %}>All</option>
+                            <option value="Walmart" {% if store_filter == 'Walmart' %}selected{% endif %}>Walmart</option>
+                            <option value="Target" {% if store_filter == 'Target' %}selected{% endif %}>Target</option>
+                            <option value="Costco" {% if store_filter == 'Costco' %}selected{% endif %}>Costco</option>
+                            <option value="Kroger" {% if store_filter == 'Kroger' %}selected{% endif %}>Kroger</option>
+                        </select>
+                    </label>
+                </div>
+
                     <div id="krogerBox" class="basis-full mt-2 {% if store_filter == 'Kroger' %}block{% else %}hidden{% endif %}">                        <div class="border rounded-lg bg-white shadow-md p-3">
                             <div class="text-sm text-gray-600 mb-2">Search in Kroger</div>
                             <div class="flex flex-wrap gap-2 items-end">
@@ -206,13 +177,13 @@
         const ammountInput = element.querySelector('input[name="item_ammount"]');
         const itemAmmount = ammountInput ? ammountInput.value : 1;
 
-        fetch(`/cart/add/${item_id}/`, {
+        fetch(`/cart/add/${item_id}/${itemAmmount}/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrf_token
             },
-            body: JSON.stringify({ 'item_ammount': itemAmmount })
+            {% comment %} body: JSON.stringify({ 'item_ammount': itemAmmount }) {% endcomment %}
         })
         .then(response => {
             const contentType = response.headers.get("content-type");
@@ -230,19 +201,18 @@
         });
     }
     (function(){
-    const radios = document.querySelectorAll('input[name="Stores"]');
+    const select = document.querySelectorAll('StoresSelect');
     const hidden = document.getElementById('store_filter');
     const box = document.getElementById('krogerBox');
 
     function toggleKrogerBox(){
-      const checked = document.querySelector('input[name="Stores"]:checked');
-      const val = (checked && checked.value) || hidden.value || 'All';
-      hidden.value = val;
+        const val = select.value;
+        hidden.value = val;
       if (val === 'Kroger') box.classList.remove('hidden');
       else box.classList.add('hidden');
     }
 
-    radios.forEach(r => r.addEventListener('change', toggleKrogerBox));
+    select.addEventListener('change', toggleKrogerBox);
     toggleKrogerBox();
   })();
   

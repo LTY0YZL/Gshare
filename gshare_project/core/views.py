@@ -8,7 +8,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User as AuthUser
+from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password, check_password
 from django.contrib import messages
 from django.utils import timezone
 from django.db import connections
@@ -18,14 +19,19 @@ from django.db import IntegrityError
 from django.db.models import Q
 from django.db.models import Avg, Count
 from django.http import JsonResponse
+from django.db import connection
 import json
+import re
+import requests
+from core.utils.geo import geoLoc
+from urllib.parse import urlencode
 from . import kroger_api
 
 from core.models import (
     Users,
     Stores, Items,
     Orders, OrderItems,
-    Deliveries, Feedback
+    Deliveries, Feedback, GroupOrders, GroupMembers
 )
 
 """helper functions"""
@@ -91,19 +97,28 @@ Args:
 Returns:
     Users: The updated user object if the user exists, otherwise None.
 """
-def create_user_signin(name: str, email: str, address: str = "Not provided", phone: str | None = None):
-  
-    try:
-        with transaction.atomic(using='gsharedb'):
-            return Users.objects.using('gsharedb').create(
-                name=name,
-                email=email,     # email is unique but nullable
-                phone=phone,     # optional
-                address=address  # REQUIRED by your schema
-            )
-    except IntegrityError as e:
-        # e.g., duplicate email or other constraint violations
-        raise
+def create_user_signin(name: str, email: str, address: str = "Not provided", phone: str | None = None, request=None):
+    lat, lng = 0, 0
+
+    if address != "Not provided":
+        lat, lng = geoLoc(address)
+
+    print(f"Geocoded {address} to lat={lat}, lng={lng}")
+
+    if lat != 0 and lng != 0:
+        try:
+            with transaction.atomic(using='gsharedb'):
+                return Users.objects.using('gsharedb').create(
+                    name=name,
+                    email=email,     # email is unique but nullable
+                    phone=phone,     # optional
+                    address=address,  # REQUIRED by your schema
+                    latitude= lat,
+                    longitude= lng
+                )
+        except IntegrityError as e:
+            # e.g., duplicate email or other constraint violations
+            raise
 
 """
 Edit the quantity of a specific item in an order.
@@ -233,6 +248,151 @@ def get_my_deliveries(user: Users, delivery_status: str):
         return []
     return deliveries
 
+""" functions from here are for group orders """
+
+"""
+Create a new group order with a list of order IDs and a password.
+Args:
+    order_ids (list[int]): A list of order IDs to be included in the group order.
+    raw_password (str): The raw password to be hashed and stored for the group order.
+    Returns:
+    GroupOrders: The created GroupOrders object.
+"""
+def create_group_order(user: Users, order_ids: list[int], raw_password: str):
+
+    if not order_ids:
+        raise ValueError("order_ids list cannot be empty")
+
+    with transaction.atomic(using='gsharedb'):
+        group = GroupOrders.objects.using('gsharedb').create(description="Group Order", password_hash="")
+        set_group_password(group, raw_password)
+        for oid in order_ids:
+            try:
+                order = Orders.objects.using('gsharedb').get(id=oid, user=user)
+                GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
+            except Orders.DoesNotExist:
+                continue
+        return group
+    
+def add_user_to_group(group: GroupOrders, user: Users, order: Orders = None):
+    try:
+        GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
+        return True
+    except IntegrityError:
+        return False
+
+def remove_user_from_group(group: GroupOrders, user: Users):
+    try:
+        membership = GroupMembers.objects.using('gsharedb').get(group=group, user=user)
+        membership.delete()
+        return True
+    except GroupMembers.DoesNotExist:
+        return False
+    
+def get_group_by_id(group_id: int):
+    try:
+        return GroupOrders.objects.using('gsharedb').get(group_id=group_id)
+    except GroupOrders.DoesNotExist:
+        return None
+
+def get_group_members(group: GroupOrders):
+    return GroupMembers.objects.using('gsharedb').filter(group=group).select_related('user', 'order')
+
+def get_groups_for_user(user: Users):
+    return GroupOrders.objects.using('gsharedb').filter(members=user).distinct()
+
+def get_cart_in_group(user: Users):
+    try:
+        membership = GroupMembers.objects.using('gsharedb').get(user=user, order__status='cart')
+        print(membership)
+        return membership
+    except GroupMembers.DoesNotExist:
+        return None
+
+def get_orders_in_group(group_id: int):
+    order_ids = (
+        GroupMembers.objects.using('gsharedb')
+        .filter(group_id=group_id, order_id__isnull=False)
+        .values_list('order_id', flat=True)
+        .distinct()
+    )
+    return list(
+        Orders.objects.using('gsharedb')
+        .filter(id__in=order_ids)
+    )
+
+def remove_group(group: GroupOrders):
+    try:
+        group.delete()
+        return True
+    except Exception as e:
+        print(f"Error deleting group: {e}")
+        return False
+    
+def get_group_by_user_and_order(user: Users, order: Orders):
+    try:
+        membership = GroupMembers.objects.using('gsharedb').get(user=user, order=order)
+        return membership.group
+    except GroupMembers.DoesNotExist:
+        return None
+    
+def add_order_to_group(group: GroupOrders, user: Users, order: Orders):
+    try:
+        GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
+        return True
+    except IntegrityError:
+        return False
+    
+def remove_order_from_group(group: GroupOrders, order: Orders):
+    try:
+        membership = GroupMembers.objects.using('gsharedb').get(group=group, order=order)
+        membership.delete()
+        return True
+    except GroupMembers.DoesNotExist:
+        return False
+
+def set_group_password(group, raw_password: str):
+    # explicitly tell Django to use Argon2 for this hash
+    group.password_hash = make_password(raw_password, hasher='argon2')
+    group.save(using='gsharedb')
+
+def verify_group_password(group, raw_password: str) -> bool:
+    # check_password auto-detects the hasher from the stored hash
+    return check_password(raw_password, group.password_hash)
+
+
+""""Functions for spatial queries"""
+
+def _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
+    if min_lng <= max_lng:
+        rect_wkt = f"POLYGON(({min_lng} {min_lat},{min_lng} {max_lat},{max_lng} {max_lat},{max_lng} {min_lat},{min_lng} {min_lat}))"
+        sql = """
+          SELECT id, name, address, ST_X(location) AS lng, ST_Y(location) AS lat
+          FROM users
+          WHERE MBRIntersects(location, ST_SRID(ST_PolygonFromText(%s), 4326))
+          {exclude}
+          LIMIT %s
+        """
+        exclude_clause = "AND id <> %s" if exclude_id is not None else ""
+        params = [rect_wkt] + ([exclude_id] if exclude_id is not None else []) + [limit]
+        with connection.cursor() as cur:
+            cur.execute(sql.format(exclude=exclude_clause), params)
+            rows = cur.fetchall()
+        return [{"id": r[0], "name": r[1], "address": r[2],
+                 "longitude": float(r[3]), "latitude": float(r[4])} for r in rows]
+    else:
+        # Antimeridian split
+        left = _users_in_viewport_spatial(min_lat, min_lng, max_lat, 180.0, limit, exclude_id)
+        right = _users_in_viewport_spatial(min_lat, -180.0, max_lat, max_lng, limit, exclude_id)
+        seen, out = set(), []
+        for row in left + right:
+            if row["id"] in seen: 
+                continue
+            seen.add(row["id"]); out.append(row)
+            if len(out) >= limit: 
+                break
+        return out
+
 """Main functions"""
 
 def home(request):
@@ -282,7 +442,7 @@ def signup_view(request):
         if User.objects.filter(username=u).exists():
             messages.error(request, "Username taken")
             return redirect('login')
-
+        
 
         # Create auth user in default DB
         auth_user = User.objects.create_user(username=u, email=e, password=p)
@@ -295,7 +455,7 @@ def signup_view(request):
         # Create business profile in gsharedb
         full_name = " ".join(part for part in [f, l] if part) or u  # fallback to username
         try:
-            create_user_signin(full_name, e, address=addr, phone=phone)
+            create_user_signin(full_name, e, address=addr, phone=phone,request=request)
         except IntegrityError as ex:
             # roll back auth user if business insert fails
             auth_user.delete()
@@ -499,16 +659,16 @@ Returns:
     Redirects to the cart page.
 """
 @login_required
-def add_to_cart(request, item_id):
+def add_to_cart(request, item_id, quantity=1):
     
     print("Adding item to cart:", item_id)
+    print("Quantity:", quantity)
 
     profile = get_user("email", request.user.email)
     if not profile:
         messages.error(request, "Profile not found.")
         return redirect('cart')
 
-    print("User profile:", profile.name)
 
     # Grab item
     try:
@@ -529,9 +689,6 @@ def add_to_cart(request, item_id):
             delivery_address = profile.address
         )
 
-    print("Current order total:", order.delivery_address)
-    print("Current order ID:", order.id)
-
     # Upsert into order_items (composite PK table) and recompute total
     with transaction.atomic(using='gsharedb'):
         with connections['gsharedb'].cursor() as cur:
@@ -543,7 +700,7 @@ def add_to_cart(request, item_id):
                 ON DUPLICATE KEY UPDATE
                     quantity = quantity + VALUES(quantity)
                 """,
-                [order.id, item.id, 1, str(item.price or 0)]
+                [order.id, item.id, quantity, str(item.price or 0)]
             )
 
             # RECALC TOTAL from line items
@@ -569,6 +726,50 @@ def add_to_cart(request, item_id):
 
     messages.success(request, f"Added {item.name} to your cart.")
     return redirect('cart')
+
+@login_required
+def remove_from_cart(request, item_id):
+    profile = get_user("email", request.user.email)
+    if not profile:
+        messages.error(request, "Profile not found.")
+        return redirect('cart')
+
+    order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
+    if not order:
+        messages.error(request, "No active cart.")
+        return redirect('cart')
+
+    try:
+        order_item = OrderItems.objects.using('gsharedb').get(order=order, item_id=item_id)
+    except OrderItems.DoesNotExist:
+        messages.error(request, "Item not in cart.")
+        return redirect('cart')
+
+    with transaction.atomic(using='gsharedb'):
+        order_item.delete()
+
+        # RECALC TOTAL from line items
+        with connections['gsharedb'].cursor() as cur:
+            cur.execute(
+                """
+                SELECT COALESCE(SUM(quantity * price), 0)
+                FROM order_items
+                WHERE order_id = %s
+                """,
+                [order.id]
+            )
+            total = cur.fetchone()[0] or 0
+
+        order.total_amount = total
+        order.save(using='gsharedb')
+
+    # Always return JSON for AJAX
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == "application/json":
+        return JsonResponse({"success": True, "message": f"removed {order_item.item.name} frpm your cart."})
+
+    messages.success(request, f"Removed {order_item.item.name} from your cart.")
+    return redirect('cart')
+
 
 @login_required
 def cart(request):
@@ -749,80 +950,173 @@ def checkout(request):
         'custom_user': profile,
     })
 
+import random
+def estimate_order_time(user_address, store_address, num_items, api_key):
+    
+    drive_info = drive_time(user_address, store_address, api_key)
+    if not drive_info:
+        return None
+    
+    time_to_store = drive_info["duration_value"] / 60
+    round_trip = time_to_store * 2
+    
+    shopping_time = num_items * 1.5
+    
+    total_time = round_trip + shopping_time
+    
+    variation = random.uniform(0.9, 1.1)
+    total_time *= variation
+    
+    
+    return {
+        'distance': drive_info["distance_text"],
+        'drive_time': round(round_trip, 1),
+        'shopping_time': round(shopping_time, 1),
+        'total_estimate': round(total_time, 1),
+    }
+    
+def drive_time(user_address, store_address, api_key):
+    url = f"https://maps.googleapis.com/maps/api/distancematrix/json?origins={user_address}&destination={store_address}&key={api_key}"
+    
+    response = response.get(url)
+    data = response.json()
+    
+    if data["status"] == "OK":
+        element = data['rows'][0]["elements"][0]
+        if element["status"] == "OK":
+            distance_text = element["distance"]["text"]
+            distance_value = element["distance"]["value"]
+            duration_text = element["duration"]["text"]
+            duration_value = element["duration"]["value"]
+            return {
+                "distance_text": distance_text,
+                "distance_value": distance_value,
+                "duration_text": duration_text,
+                "duration_value": duration_value,
+            }
+    return None
+    
+def maps_data(request):
+    stores = Stores.objects.all()
+    user = get_user("email", request.user.email)
+    user_address = user.address
+    orders = get_orders_by_status('placed')
+
+    info = {}
+    for order in orders:
+        if order.delivery_address:
+            user = get_user("id", order.user.id)
+                 
+                
+            
+            # print(user.name)
+        items = get_order_items(order)
+                
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = float(item[2]) * float(item[5])  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': int(item[2]),
+                'price': float(item[5]),  # item price
+                'total': total,
+            })
+        order_data = {
+            'address': order.delivery_address,
+            'items': items_with_totals,
+            'subtotal': subtotal,
+            'order_id': order.id,
+        }
+
+        # Group by user name (or user.id if you prefer)
+        if user.name not in info:
+            info[user.name] = []
+        info[user.name].append(order_data)
+
+    # Convert to grouped list format for easy JSON use
+    grouped_info = [
+        {'user': user_name, 'orders': orders}
+        for user_name, orders in info.items()
+    ]
+    
+    return JsonResponse(grouped_info, safe=False)
 
 @login_required
 def maps(request):
     stores = Stores.objects.all()
     user = get_user("email", request.user.email)
     user_address = user.address
-    #delivery_people = ProfileUser.objects.filter(user_type__in=['delivery','both'])
     orders = get_orders_by_status('placed')
-    # print(orders.user)
-    # print(orders)  # Debug print in your view
-    # for order in orders:
-    #     print("Order ID:", order.id)  # Debug print in your view
-    #     print("User ID:", order.user.id)  # Debug print in your view
-    #     print("Delivery Address:", order.delivery_address)  # Debug print in your view
-    # addresses = [order.delivery_address for order in orders if order.delivery_address]
-    info = []
-    for order in orders:
-        if order.delivery_address:
-            user = get_user("id", order.user.id)
-            print(user.name)
-            items = get_order_items(order)
-            subtotal = 0
-            items_with_totals = []
-            for item in items:
-                total = float(item[2]) * float(item[5])  # quantity * price
-                subtotal += total
-                items_with_totals.append({
-                    'name': item[4],  # item name
-                    'quantity': int(item[2]),
-                    'price': float(item[5]),  # item price
-                    'total': total,
-                })
-            info.append({'address': order.delivery_address, 'user': {
-                'name': user.name,
-                'items': items_with_totals,
-                'subtotal': subtotal,
-                'address': order.delivery_address,
-                'order_id': order.id,
-                
-            }})
-    # print("Addresses:", addresses)  # Debug print in your view
-    # print("Addresses JSON:", json.dumps(addresses))  # Debug print in your view
+    
     return render(request, "maps.html", {
         'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
         'location': {'lat': 40.7607, 'lng': -111.8939},
         'stores_for_map': stores,
-        # 'delivery_persons': delivery_people,
-        # 'custom_user': get_user("email", request.user.email),
-        'delivery_addresses_with_info_json': json.dumps(info),
         'user_address': user_address,
     })
     
-@login_required
-def shoppingcart(request):
-    user = request.user
-    profile = get_user("email", user.email)
-    print("User profile:", profile.name)
-    print(profile.id)
-    order = get_orders(profile, 'cart')
-    if not order:
-        order = []
-        print("No active cart found.")
-        return render(request, "shoppingcart.html", {
-            'items': [],
-            'order': {
-                'subtotal': 0,
-                'tax': 0,
-                'total': 0,
-            },
-            'id': None,
+def placed_data(request):
+    print("placed data")
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    profile = get_user("email", request.user.email)
+    if not profile:
+        print("no user")
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    orders = get_orders(profile, 'placed')
+    print(orders)
+    if not orders:
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+
+    order_list = []
+    
+    for order in orders:
+        items = get_order_items(order) if order else []
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+        
+        tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+        grand_total = round(subtotal + tax, 2)
+
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+        order_list.append({
+            'id': order.id,
+            'summary': order_summary,
+            'items': items_with_totals,
         })
-    print(len(order))
-    print(order[0].total_amount)
-    print(order[0].id if order else "No order")
+
+    return JsonResponse({
+        'orders': order_list
+    })
+    
+    
+def group_data(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    profile = get_user("email", request.user.email)
+    if not profile:
+        print("no user")
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    order = get_orders_in_group(profile, 'cart')
+    if not order:
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
 
     items = get_order_items(order[0]) if order[0] else []
     subtotal = 0
@@ -845,7 +1139,147 @@ def shoppingcart(request):
         'tax': tax,
         'total': grand_total,
     }
-    print(order[0].id if order else "No order")
+
+    return JsonResponse({
+        'items': items_with_totals,
+        'order': order_summary,
+        'id': order[0].id if order else None,
+    })
+    
+    
+def cart_data(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    profile = get_user("email", request.user.email)
+    if not profile:
+        print("no user")
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    order = get_orders(profile, 'cart')
+    if not order:
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+
+    items = get_order_items(order[0]) if order[0] else []
+    subtotal = 0
+    items_with_totals = []
+    for item in items:
+        total = item[2] * item[5]  # quantity * price
+        subtotal += total
+        items_with_totals.append({
+            'name': item[4],  # item name
+            'quantity': item[2],
+            'price': item[5],  # item price
+            'total': total,
+        })
+        
+    tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+    grand_total = round(subtotal + tax, 2)
+
+    order_summary = {
+        'subtotal': subtotal,
+        'tax': tax,
+        'total': grand_total,
+    }
+
+    return JsonResponse({
+        'items': items_with_totals,
+        'order': order_summary,
+        'id': order[0].id if order else None,
+    })
+    
+def group_carts(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    
+    profile = get_user("email", request.user.email)
+    if not profile:
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    orders = get_orders(profile, 'cart', 'group')
+    if not orders:
+        return JsonResponse({'carts': []})
+
+    carts = []
+    for order in orders:
+        items = get_order_items(order) if order else []
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+            
+        tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+        grand_total = round(subtotal + tax, 2)
+
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+
+        carts.append({
+            'order_id': order.id,
+            'items': items_with_totals,
+            'order_summary': order_summary,
+        })
+
+    return JsonResponse({'carts': carts})
+
+@login_required
+def shoppingcart(request):
+    # return render(request, "shoppingcart.html")
+
+    user = request.user
+    profile = get_user("email", user.email)
+    print("User profile:", profile.name)
+    print(profile.id)
+    order = get_orders(profile, 'cart')
+    if not order:
+        order = []
+        print("No active cart found.")
+        return render(request, "shoppingcart.html", {
+            'items': [],
+            'order': {
+                'subtotal': 0,
+                'tax': 0,
+                'total': 0,
+            },
+            'id': None,
+        })
+    # print(len(order))
+    # print(order[0].total_amount)
+    # print(order[0].id if order else "No order")
+
+    items = get_order_items(order[0]) if order[0] else []
+    subtotal = 0
+    items_with_totals = []
+    for item in items:
+        total = item[2] * item[5]  # quantity * price
+        subtotal += total
+        print(item)
+        items_with_totals.append({
+            'id': item[1],  # item id
+            'name': item[4],  # item name
+            'quantity': item[2],
+            'price': item[5],  # item price
+            'total': total,
+        })
+        
+    tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+    grand_total = round(subtotal + tax, 2)
+
+    order_summary = {
+        'subtotal': subtotal,
+        'tax': tax,
+        'total': grand_total,
+    }
+    # print(order[0].id if order else "No order")
     # for item in items:
     #     totals.append(item[2] * item[5])  # quantity * price
     # print(items)
@@ -899,3 +1333,35 @@ def myorders(request):
 @login_required
 def payments(request):
     return render(request, "paymentsPage.html")
+
+def createGroupForShoppingCart(request, order_id):
+    user = get_user("email", request.user.email)
+
+
+    orderGroup = create_group_order(user, [order_id], "testPassword")
+    print(orderGroup)
+
+    return redirect('shoppingcart')
+
+import math
+def pickup_price(user_location, drop_off_location, num_items, store_address, api_key, base_rate=2.0, scale=0.3, item_rate=0.3):
+    
+    distance_from_user_to_store = drive_time(user_location, store_address, api_key)
+    distance_from_dropoff_to_store = drive_time(drop_off_location, store_address, api_key)
+    
+    time_taken = estimate_order_time(user_location, store_address, num_items, api_key)
+    time_cost = time_taken['total_estimate'] * 0.05
+    
+    diff_distance = abs(distance_from_user_to_store['distance_value'] - distance_from_dropoff_to_store['distance_value'])
+    distance_cost = base_rate * (1-math.exp(scale * diff_distance**base_rate))
+    
+    item_cost = num_items * item_rate
+    
+    total_cost = round(base_rate + distance_cost + item_cost + time_cost)
+    
+    return {
+        'distance_difference': diff_distance,
+        'distance_cost': distance_cost,
+        'time_cost': time_cost,
+        'total_cost': total_cost,
+    }

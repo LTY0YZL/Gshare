@@ -11,14 +11,39 @@
 {% include "navbar.html" %}
 <body>
     {% csrf_token %}
-    <div class="grid grid-cols-2 h-screen gap-4 p-4">
+    <div class="tabsList">
+        <button class="tabButton active" onclick="display('cart', this)">Cart</button>
+        <button class="tabButton" onclick="display('group', this)">Group Cart</button>
+        <button class="tabButton" onclick="display('placed', this)">Orders in Progress</button>
+    </div>
+
+    {% comment %} <div id="tab-cart" class="tab-content"></div> {% endcomment %}
+    <div id="tab-group" class="tab-content hidden"></div>
+    <div id="tab-placed" class="tab-content hidden"></div>
+    
+    <div id="tab-cart" class="tab-content grid grid-cols-2 h-screen gap-4 p-4">
         <div class="col-span-1 bg-white">
             {% for item in items %}
                 <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                    <h2 class="text-xl font-bold mb-2 pl-8">{{ item.name }}</h2>
-                    <p class="mb-1 pl-32">Quantity: {{ item.quantity }}</p>
-                    <p class="mb-1 pl-32">Price: ${{ item.price }}</p>
-                    <p class="mb-1 pl-32">Total: ${{ item.total }}</p>
+                    <div class="flex flex-row">
+                        <div class="flex flex-col">
+                            <h2 class="text-xl font-bold mb-2 pl-8">{{ item.name }}</h2>
+                            <div flex flex-row>
+                                <p class="mb-1 pl-32">Quantity: {{ item.quantity }}</p>
+                                <input type="number" name="item_amount" value="{{item.quantity}}" min="1" class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
+                                <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
+                                onclick="handleItemClick(this, {{ item.id }}, {{ item_amount.value }})">
+                                    Update
+                                </button>
+                            </div>
+                            <p class="mb-1 pl-32">Price: ${{ item.price }}</p>
+                            <p class="mb-1 pl-32">Total: ${{ item.total }}</p>
+                        </div>
+                        <button class="ml-auto self-center">
+                            <a class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
+                            onclick="removeItem({{ item.id }})">Remove item</a>
+                        </button>
+                    </div>
                 </div>
             {% empty %}
             <p class="p-4">Your cart is empty.</p>
@@ -31,36 +56,358 @@
             <p class="mb-4 font-bold">Total: ${{ order.total }}</p>
             <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
             onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Proceed to Checkout</button>
+            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+            onclick="createGroup({{ id|default:'null' }})">
+                    Create Group For my Cart
+            </button>
+
 
         </div>
     </div>
 </body>
+<style>
+    .tabsList {
+    display: flex;
+    justify-content: center;
+    background-color: #DBEAFE; /* Tailwind blue-100 */
+    border-bottom: 2px solid #93C5FD; /* Tailwind blue-300 */
+    padding: 0.5rem;
+    gap: 0.5rem;
+    }
+
+    .tabButton {
+    background-color: #60A5FA; /* Tailwind blue-400 */
+    color: white;
+    padding: 0.5rem 1.25rem;
+    font-weight: 600;
+    border-radius: 0.5rem 0.5rem 0 0;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    }
+
+    .tabButton:hover {
+    background-color: #3B82F6; /* Tailwind blue-500 */
+    transform: translateY(-1px);
+    }
+
+    .tabButton.active {
+    background-color: #2563EB; /* Tailwind blue-600 */
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+    }
+    
+</style>
 <script>
-        function changeOrderStatus(orderId, newStatus) {
-            if(!orderId) {
-                alert('Invalid order.');
-                return;
-            }
-            fetch(`/change_order_status/${orderId}/${newStatus}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'  // Include CSRF token for security
-                }
-            })
+    function display(tabName, btn) {
+        // Hide all tabs
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add("hidden")); 
+
+        // Show the selected tab
+        const tab = document.getElementById("tab-" + tabName);
+        tab.classList.remove("hidden"); 
+
+        if (tabName == 'cart') {
+            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
+
+            // Set this button as active
+            btn.classList.add('active');
+            displayCart();
+        }
+        else if (tabName == 'group') {
+            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
+
+            // Set this button as active
+            btn.classList.add('active');
+            displayGroupCart();
+        }
+        else if (tabName == 'placed') {
+            console.log("placed pressed")
+            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
+
+            // Set this button as active
+            btn.classList.add('active');
+            displayPlacedOrders();
+        }
+    }
+
+    function displayGroupCart() {
+        const groupItemsUrl = "{% url 'group_items' %}"
+        console.log("group data")
+        fetch(groupItemsUrl)
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    alert('Order status updated successfully!');
-                    location.reload();
-                    // Optionally, you can refresh the page or update the UI to reflect the change
-                } else {
-                    alert('Failed to update order status.');
+                const tab = document.getElementById("tab-group");
+
+                if (!data.items || data.items.length === 0) {
+                    tab.innerHTML = `<p class='p-4'>Your cart is empty.</p>
+                    </div>
+                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                            <p class="mb-2">Subtotal: $0</p>
+                            <p class="mb-2">Tax: $0</p>
+                            <p class="mb-4 font-bold">Total: $0</p>
+
+                        </div>
+                    </div>`;
+                    return;
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while updating the order status.');
+
+                let html = `<div class="grid grid-cols-2 h-screen gap-4 p-4">
+                                <div class="col-span-1 bg-white">`;
+
+                data.items.forEach(item => {
+                    html += `
+                    <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                        <div class="flex flex-row">
+                            <div class="flex flex-col">
+                                <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
+                                <div flex flex-row>
+                                    <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
+                                </div>
+                                <p class="mb-1 pl-32">Price: $${item.price}</p>
+                                <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+
+                html += `</div>
+                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                            <p class="mb-2">Subtotal: $${data.order.subtotal}</p>
+                            <p class="mb-2">Tax: $${data.order.tax}</p>
+                            <p class="mb-4 font-bold">Total: $${data.order.total}</p>
+                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                                    onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
+                                Proceed to Checkout
+                            </button>
+                        </div>
+                        </div>`;
+
+                tab.innerHTML = html;
             });
+    }
+
+    function displayPlacedOrders() {
+        const placedItemsUrl = "{% url 'placed_items' %}"
+        console.log("placed data")
+        fetch(placedItemsUrl)
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+                const tab = document.getElementById("tab-placed");
+
+                if (!data.orders || data.orders.length === 0) {
+                    tab.innerHTML = `<p class='p-4'>Your cart is empty.</p>
+                    </div>
+                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                            <p class="mb-2">Subtotal: $0</p>
+                            <p class="mb-2">Tax: $0</p>
+                            <p class="mb-4 font-bold">Total: $0</p>
+
+                        </div>
+                    </div>`;
+                    return;
+                }
+
+                let html = `<div class="grid grid-cols-2 h-screen gap-4 p-4">
+                                <div class="col-span-1 bg-white">`;
+
+                data.orders.forEach(order => {
+                    html += `
+                        <div class="grid grid-cols-2 gap-4 bg-white shadow-lg rounded-lg overflow-hidden">
+                            <div class="col-span-1 bg-white p-4">
+                                <h2 class="text-2xl font-bold mb-4">Order #${order.id}</h2>
+                    `;
+                    
+                    order.items.forEach(item =>{
+                        html += `
+                        <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                            <div class="flex flex-row">
+                                <div class="flex flex-col">
+                                    <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
+                                    <div flex flex-row>
+                                        <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
+                                    </div>
+                                    <p class="mb-1 pl-32">Price: $${item.price}</p>
+                                    <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
+                                </div>
+                            </div>
+                        </div>`;
+                    });
+
+                    html += `
+                        </div>
+                            <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                                <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                                <p class="mb-2">Subtotal: $${order.summary.subtotal}</p>
+                                <p class="mb-2">Tax: $${order.summary.tax}</p>
+                                <p class="mb-4 font-bold">Total: $${order.summary.total}</p>
+                                <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                                        onclick="changeOrderStatus(${order.id || 'null'}, 'placed')">
+                                    Proceed to Checkout
+                                </button>
+                            </div>
+                        </div>`;
+            });
+
+            html += `</div>`;
+            tab.innerHTML = html;
+        })
+        .catch(err =>{
+            console.error('Error retreiving data', err);
+        });
+
+    }
+
+    function displayCart() {
+        const cartItemsUrl = "{% url 'cart_items' %}";
+        fetch(cartItemsUrl)
+            .then(response => response.json())
+            .then(data => {
+                const tab = document.getElementById("tab-cart");
+
+                if (!data.items || data.items.length === 0) {
+                    tab.innerHTML = `<p class='p-4'>Your cart is empty.</p>
+                    </div>
+                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                            <p class="mb-2">Subtotal: $0</p>
+                            <p class="mb-2">Tax: $0</p>
+                            <p class="mb-4 font-bold">Total: $0</p>
+
+                        </div>
+                    </div>`;
+                    return;
+                }
+
+                let html = `<div class="grid grid-cols-2 h-screen gap-4 p-4">
+                                <div class="col-span-1 bg-white">`;
+
+                data.items.forEach(item => {
+                    html += `
+                    <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                        <div class="flex flex-row">
+                            <div class="flex flex-col">
+                                <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
+                                <div flex flex-row>
+                                    <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
+                                    <input type="number" name="item_amount" value="${item.quantity}" min="1"
+                                        class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
+                                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
+                                            onclick="handleItemClick(this, ${item.id}, this.previousElementSibling.value)">
+                                        Update
+                                    </button>
+                                </div>
+                                <p class="mb-1 pl-32">Price: $${item.price}</p>
+                                <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
+                            </div>
+                            <button class="ml-auto self-center">
+                                <a href="" class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md">Remove item</a>
+                            </button>
+                        </div>
+                    </div>`;
+                });
+
+                html += `</div>
+                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
+                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                            <p class="mb-2">Subtotal: $${data.order.subtotal}</p>
+                            <p class="mb-2">Tax: $${data.order.tax}</p>
+                            <p class="mb-4 font-bold">Total: $${data.order.total}</p>
+                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                                    onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
+                                Proceed to Checkout
+                            </button>
+                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                            onclick="createGroup({{ id|default:'null' }})">
+                                Create Group For my Cart
+                            </button>
+                        </div>
+                        </div>`;
+
+                tab.innerHTML = html;
+            });
+    }
+
+    function changeOrderStatus(orderId, newStatus) {
+        console.log(orderId);
+        if(!orderId) {
+            alert('Invalid order.');
+            return;
         }
+        fetch(`/change_order_status/${orderId}/${newStatus}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'  // Include CSRF token for security
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Order status updated successfully!');
+                location.reload();
+                // Optionally, you can refresh the page or update the UI to reflect the change
+            } else {
+                alert('Failed to update order status.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while updating the order status.');
+        });
+    }
+
+    function createGroup(orderId) {
+        const url = `/shoppingcart/${orderId}/`;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+        })
+        .then(response => {
+            if (response.redirected) {
+                window.location.href = response.url;
+            } else if (response.ok) {
+                window.location.reload();
+            } else {
+                console.error("Error when creating a group", response.status);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        })
+    }
+
+    function removeItem(itemId) {
+        console.log("remove item?");
+        console.log(itemId);
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch(`/shoppingcart/removeItem/${itemId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log("removed item");
+                display('cart')
+            } else {
+                console.error(data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Error removing item', err)
+        });
+    }
+    
 </script>
