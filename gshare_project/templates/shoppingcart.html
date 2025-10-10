@@ -12,9 +12,9 @@
 <body>
     {% csrf_token %}
     <div class="tabsList">
-        <button class="Buttoncolor text-white px-4 py-2 hover:bg-blue-600 rounded-t-lg" onclick="display('cart')">Cart</button>
-        <button class="Buttoncolor" onclick="display('group')">Group cart</button>
-        <button class="Buttoncolor" onclick="display('placed')">Orders in Progress</button>
+        <button class="tabButton active" onclick="display('cart', this)">Cart</button>
+        <button class="tabButton" onclick="display('group', this)">Group Cart</button>
+        <button class="tabButton" onclick="display('placed', this)">Orders in Progress</button>
     </div>
 
     {% comment %} <div id="tab-cart" class="tab-content"></div> {% endcomment %}
@@ -67,24 +67,39 @@
 </body>
 <style>
     .tabsList {
-        display: flex;
-        padding: 4px;
-        justify-content: center;
-        background-color: #bfdbfe; /* Tailwind's blue-100 */
-    }
-    .Buttoncolor {
-        background-color: #60A5FA; /* Tailwind's blue-400 */
-        color: white;
-        padding: 4px;
+    display: flex;
+    justify-content: center;
+    background-color: #DBEAFE; /* Tailwind blue-100 */
+    border-bottom: 2px solid #93C5FD; /* Tailwind blue-300 */
+    padding: 0.5rem;
+    gap: 0.5rem;
     }
 
-    .Buttoncolor:hover {
-        background-color #3B82F6;
+    .tabButton {
+    background-color: #60A5FA; /* Tailwind blue-400 */
+    color: white;
+    padding: 0.5rem 1.25rem;
+    font-weight: 600;
+    border-radius: 0.5rem 0.5rem 0 0;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    }
+
+    .tabButton:hover {
+    background-color: #3B82F6; /* Tailwind blue-500 */
+    transform: translateY(-1px);
+    }
+
+    .tabButton.active {
+    background-color: #2563EB; /* Tailwind blue-600 */
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
     }
     
 </style>
 <script>
-    function display(tabName) {
+    function display(tabName, btn) {
         // Hide all tabs
         document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add("hidden")); 
 
@@ -93,13 +108,25 @@
         tab.classList.remove("hidden"); 
 
         if (tabName == 'cart') {
+            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
+
+            // Set this button as active
+            btn.classList.add('active');
             displayCart();
         }
         else if (tabName == 'group') {
+            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
+
+            // Set this button as active
+            btn.classList.add('active');
             displayGroupCart();
         }
         else if (tabName == 'placed') {
             console.log("placed pressed")
+            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
+
+            // Set this button as active
+            btn.classList.add('active');
             displayPlacedOrders();
         }
     }
