@@ -394,6 +394,49 @@ def verify_group_password(group, raw_password: str) -> bool:
 
 """"Functions for spatial queries"""
 
+"""
+    Retrieve orders associated with users within a specified geographical viewport.
+
+    Args:
+        min_lat (float): Minimum latitude of the viewport.
+        min_lng (float): Minimum longitude of the viewport.
+        max_lat (float): Maximum latitude of the viewport.
+        max_lng (float): Maximum longitude of the viewport.
+        limit (int): Maximum number of orders to retrieve (default: 500).
+
+    Returns:
+        list: A list of dictionaries containing order details and user information.
+"""
+def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500):
+    
+    # Get users within the viewport
+    users_in_viewport = _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit)
+
+    if not users_in_viewport:
+        return []  # No users found in the viewport
+
+    # Extract user IDs from the users in the viewport
+    user_ids = [user['id'] for user in users_in_viewport]
+
+    # Fetch orders for the users in the viewport
+    orders = Orders.objects.using('gsharedb').filter(user_id__in=user_ids).select_related('user')
+
+    # Prepare the output
+    orders_with_users = []
+    for order in orders:
+        user = next((u for u in users_in_viewport if u['id'] == order.user_id), None)
+        if user:
+            orders_with_users.append({
+                'order_id': order.id,
+                'user': user,
+                'status': order.status,
+                'total_amount': float(order.total_amount or 0),
+                'order_date': order.order_date,
+                'delivery_address': order.delivery_address,
+            })
+
+    return orders_with_users
+
 def _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
     if min_lng <= max_lng:
         rect_wkt = f"POLYGON(({min_lng} {min_lat},{min_lng} {max_lat},{max_lng} {max_lat},{max_lng} {min_lat},{min_lng} {min_lat}))"
