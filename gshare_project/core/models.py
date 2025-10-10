@@ -9,6 +9,8 @@ class Users(models.Model):
     phone = models.CharField(max_length=20, null=True, blank=True)
     address = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True) 
+    latitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
+    longitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
 
     class Meta:
         managed = False
@@ -42,7 +44,7 @@ class Orders(models.Model):
     status = models.CharField(max_length=50, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     delivery_address = models.CharField(max_length=255, null=True, blank=True)
-
+    
     class Meta:
         managed = False
         db_table = 'orders'
@@ -53,6 +55,7 @@ class Feedback(models.Model):
     feedback = models.CharField(max_length=255, null=True, blank=True)
     order = models.OneToOneField('Orders', on_delete=models.CASCADE, primary_key=True)
     rating = models.PositiveSmallIntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    description_subject = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         managed = False
@@ -85,3 +88,28 @@ class Deliveries(models.Model):
     class Meta:
         managed = False
         db_table = 'deliveries'
+
+class GroupOrders(models.Model):
+    # matches your existing table
+    group_id = models.AutoField(primary_key=True)
+    description = models.TextField()
+    password_hash = models.CharField(max_length=255)
+
+    members = models.ManyToManyField(
+        'Users',
+        through='GroupMembers',
+        related_name='groups_joined',
+    )
+
+    class Meta:
+        managed = False          # set True only if Django should create/migrate it
+        db_table = 'group_orders'
+
+class GroupMembers(models.Model):
+    group = models.ForeignKey(GroupOrders,on_delete=models.CASCADE,db_column='group_id',related_name='memberships',null=True,blank=True)
+    user = models.ForeignKey('Users',on_delete=models.CASCADE,db_column='user_id',related_name='group_memberships',null=True,blank=True)
+    order = models.ForeignKey('Orders',on_delete=models.SET_NULL,db_column='order_id',related_name='groupmembers',null=True,blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'group_members'

@@ -206,13 +206,13 @@
         const ammountInput = element.querySelector('input[name="item_ammount"]');
         const itemAmmount = ammountInput ? ammountInput.value : 1;
 
-        fetch(`/cart/add/${item_id}/`, {
+        fetch(`/cart/add/${item_id}/${itemAmmount}/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrf_token
             },
-            body: JSON.stringify({ 'item_ammount': itemAmmount })
+            {% comment %} body: JSON.stringify({ 'item_ammount': itemAmmount }) {% endcomment %}
         })
         .then(response => {
             const contentType = response.headers.get("content-type");
