@@ -55,6 +55,7 @@ class Feedback(models.Model):
     feedback = models.CharField(max_length=255, null=True, blank=True)
     order = models.OneToOneField('Orders', on_delete=models.CASCADE, primary_key=True)
     rating = models.PositiveSmallIntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    description_subject = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         managed = False
