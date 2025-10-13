@@ -27,12 +27,15 @@ from core.utils.geo import geoLoc
 from urllib.parse import urlencode
 from . import kroger_api
 import stripe
+from datetime import timedelta
+
 
 from core.models import (
     Users,
     Stores, Items,
     Orders, OrderItems,
-    Deliveries, Feedback, GroupOrders, GroupMembers
+    Deliveries, Feedback, GroupOrders, GroupMembers,
+    RecurringCart, RecurringCartItem
 )
 
 """helper functions"""
@@ -540,7 +543,7 @@ def signup_view(request):
             # roll back auth user if business insert fails
             auth_user.delete()
             messages.error(request, f"Could not create profile: {ex}")
-            return redirect('home')
+            return redirect('signup')
 
 
         # Login and redirect
@@ -1546,3 +1549,136 @@ def getUserProfile(request, userID):
         return render(request, 'aboutUserPage.html', context=context)
 
     return render(request, 'aboutUserPage.html', context=context)
+
+
+@login_required
+def create_recurring_cart(request):
+    messages.info(request, " ")
+    return redirect('recurring_carts')
+
+@login_required
+def manage_recurring_carts(request):
+    profile = get_object_or_404(Users.objects.using('gsharedb'), email=request.user.email)
+    carts = RecurringCart.objects.using('gsharedb').filter(user=profile).prefetch_related('items__item')
+    context = {'carts': carts}
+    return render(request, 'scheduled_orders.html', context)
+
+@login_required
+def create_recurring_from_order(request, order_id):
+    profile = get_object_or_404(Users.objects.using('gsharedb'), email=request.user.email)
+    original_order = get_object_or_404(Orders.objects.using('gsharedb'), pk=order_id, user=profile)
+
+    new_recurring_cart = RecurringCart.objects.using('gsharedb').create(
+        user=profile,
+        name=f"Recurring from Order #{original_order.id}",
+        frequency='weekly',
+        status='enabled',
+        next_order_date=timezone.now().date() + timedelta(days=7)
+    )
+
+    items_to_copy = []
+    with connections['gsharedb'].cursor() as cursor:
+        cursor.execute("SELECT item_id, quantity FROM order_items WHERE order_id = %s", [original_order.id])
+        items_to_copy = cursor.fetchall()
+
+    for item_id, quantity in items_to_copy:
+        RecurringCartItem.objects.using('gsharedb').create(
+            recurring_cart=new_recurring_cart,
+            item_id=item_id,  
+            quantity=quantity
+        )
+    
+    messages.success(request, f"Successfully created a new recurring list from Order #{original_order.id}.")
+    return redirect('manage_recurring_carts')
+
+@login_required
+def toggle_recurring_cart_status(request, cart_id):
+    cart = get_object_or_404(RecurringCart.objects.using('gsharedb'), pk=cart_id, user__email=request.user.email)
+    if cart.status == 'enabled':
+        cart.status = 'paused'
+    else:
+        cart.status = 'enabled'
+    cart.save(using='gsharedb')
+    return redirect('manage_recurring_carts')
+
+@login_required
+def delete_recurring_cart(request, cart_id):
+    cart = get_object_or_404(RecurringCart.objects.using('gsharedb'), pk=cart_id, user__email=request.user.email)
+    cart_name = cart.name
+    cart.delete()
+    messages.success(request, f"Successfully deleted the recurring list: '{cart_name}'.")
+    return redirect('manage_recurring_carts')
+
+@login_required
+def scheduled_orders(request):
+    profile = get_object_or_404(Users.objects.using('gsharedb'), email=request.user.email)
+    carts = RecurringCart.objects.using('gsharedb').filter(user=profile).prefetch_related('items__item')
+    context = {'carts': carts}
+    return render(request, "scheduled_orders.html", context)
+
+@login_required
+def updateScheduledOrders(request, cart_id):
+    user = get_user("email", request.user.email)
+    if request.method == 'POST':
+        try:
+            cart = RecurringCart.objects.using('gsharedb').get(id=cart_id, user=user)
+        except RecurringCart.DoesNotExist:
+            messages.error(request, "Recurring cart not found.")
+            return redirect('scheduled_orders')
+
+        # Update next date of order
+        nextDate = request.POST.get('next_order_date')
+        if nextDate:
+            try:
+                cart.next_order_date = timezone.datetime.fromisoformat(nextDate).date()
+            except ValueError:
+                messages.error(request, "Invalid date format.")
+                return redirect('scheduled_orders')
+
+        # Update item quantities
+        for item in cart.items.all():
+            quantity_key = f'quantity_{item.id}'
+            quantity_str = request.POST.get(quantity_key)
+            if quantity_str:
+                try:
+                    quantity = int(quantity_str)
+                    if quantity > 0:
+                        item.quantity = quantity
+                        item.save(using='gsharedb')
+                    else:
+                        messages.warning(request, f"Quantity for {item.item.name} must be greater than 0.")
+                except ValueError:
+                    messages.error(request, f"Invalid quantity for {item.item.name}.")
+                    return redirect('scheduled_orders')
+
+        cart.save(using='gsharedb')
+        messages.success(request, "Recurring cart updated successfully.")
+        return redirect('scheduled_orders')  
+
+    return redirect('scheduled_orders')
+
+@login_required
+def create_recurring_cart(request):
+    return redirect('scheduled_orders')
+
+@login_required
+def toggle_cart_status(request, cart_id):
+    user = get_user("email", request.user.email)
+    if request.method == "POST":
+        recurringCart = RecurringCart.objects.using('gsharedb').get(id=cart_id, user=user)
+        cartStatus = request.POST.get("cartStatus")
+        if cartStatus == "enabled":
+            recurringCart.status = "disabled"
+        else:
+            recurringCart.status = "enabled"
+        recurringCart.save(using='gsharedb')
+        return redirect('scheduled_orders')
+    return redirect('scheduled_orders')
+
+@login_required
+def delete_cart(request, cart_id):
+    user = get_user("email", request.user.email)
+    if request.method == "POST":
+        recurringCart = RecurringCart.objects.using('gsharedb').get(id=cart_id, user=user)
+        recurringCart.delete(using='gsharedb')
+    return redirect('scheduled_orders')
