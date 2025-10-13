@@ -363,7 +363,7 @@ def remove_group(group: GroupOrders):
     
 def get_group_by_user_and_order(user: Users, order: Orders):
     try:
-        membership = GroupMembers.objects.using('gsharedb').get(user=user, order=order).first()
+        membership = GroupMembers.objects.using('gsharedb').get(user=user, order=order)
         return membership.group
     except GroupMembers.DoesNotExist:
         return None
@@ -1320,10 +1320,11 @@ def payments(request):
     order = get_orders(user, "cart").first()
 
     group = get_group_by_user_and_order(user, order)
+    print(group)
 
-    orders = get_orders_in_group(group.group_id)
-
-    print(orders)
+    if group is not None:
+        orders = get_orders_in_group(group.group_id)
+    print(order)
 
     return render(request, "paymentsPage.html")
 
