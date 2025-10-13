@@ -178,6 +178,17 @@ def get_orders_by_status(order_status: str):
         return []
     return orders
 
+def get_most_recent_order(user: Users, delivery_person: Users, status: str):
+    try:
+        Delivery = Deliveries.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status)
+
+        for d in Delivery:
+            order = Orders.objects.using('gsharedb').get(id=d.order.id, user=user)
+        return order
+
+    except Orders.DoesNotExist:
+        return None
+
 """
 Retrieve all items in a specific order from the 'gsharedb' database.
 
@@ -265,7 +276,22 @@ def add_feedback(reviewee: Users, reviewer: Users, order: Orders, feedback_text:
     except IntegrityError as e:
         print(f"Error adding feedback: {e}")
         return None
-    
+
+def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, rating: int):
+    try:
+        feedback = Feedback.objects.using('gsharedb').create(
+            reviewee=reviewee,
+            reviewer=reviewer,
+            feedback=feedback_text,
+            order=None,
+            rating=rating,
+            description_subject=feedback_text[:50] if feedback_text else None
+        )
+        return feedback
+    except IntegrityError as e:
+        print(f"Error adding feedback: {e}")
+        return None
+
 def get_feedback_for_user(user: Users):
     feedbacks = Feedback.objects.using('gsharedb').filter(reviewee=user)
     if not feedbacks.exists():
@@ -1317,7 +1343,7 @@ def myorders(request):
 @login_required
 def payments(request):
     user = get_user("email", request.user.email)
-    order = get_orders(user, "cart").first()
+    order = get_orders(user, "cart")
 
     group = get_group_by_user_and_order(user, order)
     print(group)
