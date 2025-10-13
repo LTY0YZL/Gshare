@@ -1317,9 +1317,12 @@ def myorders(request):
 @login_required
 def payments(request):
     user = get_user("email", request.user.email)
+    print(request.user.email)
     order = get_orders(user, "cart").first()
+    print(order)
 
     group = get_group_by_user_and_order(user, order)
+    print(group)
 
     orders = get_orders_in_group(group.group_id)
 
