@@ -25,6 +25,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('about/', views.aboutus, name='aboutus'),
     path('profile/', views.userprofile, name='profile'),
+    path('profile/<int:userID>/', views.getUserProfile, name="getUserProfile"),
     path('menu/', views.menu, name='menu'),
     path('groups/', include('chat.urls')),
     path('maps/', views.maps, name="maps"),
