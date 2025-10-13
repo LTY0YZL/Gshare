@@ -1332,6 +1332,8 @@ def payments(request):
 
 @login_required
 def paymentsCheckout(request):
+
+    # change order status to placed upon successful payment
     try:
         stripe.api_key = settings.STRIPE_SECRET_KEY
         profile = get_user("email", request.user.email)
