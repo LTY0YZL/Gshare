@@ -363,7 +363,7 @@ def remove_group(group: GroupOrders):
     
 def get_group_by_user_and_order(user: Users, order: Orders):
     try:
-        membership = GroupMembers.objects.using('gsharedb').get(user=user, order=order).first()
+        membership = GroupMembers.objects.using('gsharedb').get(user=user, order=order)
         return membership.group
     except GroupMembers.DoesNotExist:
         return None
