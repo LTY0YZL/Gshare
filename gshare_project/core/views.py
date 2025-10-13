@@ -1029,8 +1029,17 @@ def toggle_cart_status(request, cart_id):
 
 @login_required
 def delete_cart(request, cart_id):
+<<<<<<< Updated upstream
     user = get_user("email", request.user.email)
     if request.method == "POST":
         recurringCart = RecurringCart.objects.using('gsharedb').get(id=cart_id, user=user)
         recurringCart.delete(using='gsharedb')
     return redirect('scheduled_orders')
+=======
+    return redirect('scheduled_orders')
+
+# Need to look into django amangement system, crons jobs, etc for automatic orders.
+# amybe just a function that we can run through a comamand that will automatically 
+# check for a recurring order in 5 minutes and if the day matches, do the process
+# for display purposes.
+>>>>>>> Stashed changes
