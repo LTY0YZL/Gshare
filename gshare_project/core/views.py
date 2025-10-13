@@ -26,6 +26,7 @@ import requests
 from core.utils.geo import geoLoc
 from urllib.parse import urlencode
 from . import kroger_api
+import stripe
 
 from core.models import (
     Users,
@@ -1417,7 +1418,71 @@ def myorders(request):
 
 @login_required
 def payments(request):
+    user = get_user("email", request.user.email)
+    print(request.user.email)
+    order = get_orders(user, "cart").first()
+    print(order)
+
+    group = get_group_by_user_and_order(user, order)
+    print(group)
+
+    orders = get_orders_in_group(group.group_id)
+
+    print(orders)
+
     return render(request, "paymentsPage.html")
+
+@login_required
+def paymentsCheckout(request):
+
+    # change order status to placed upon successful payment
+    try:
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        profile = get_user("email", request.user.email)
+        try:
+            orders = get_orders(profile, "cart")
+            if not orders:
+                messages.error(request, "No items in the cart to checkout.")
+                return redirect('cart')
+            order = orders[0]
+            orderItems = get_order_items(order)
+        except Exception:
+            messages.error(request, "No items in the cart to checkout.")
+            return redirect('cart')
+        
+        if not orderItems:
+            messages.error(request, "Cart is empty.")
+            return redirect('cart')
+        
+        itemObjects = []
+        for oi in orderItems:
+            # oi is a tuple: (order_id, item_id, quantity, price, name, price, store_id)
+            itemObjects.append({
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': oi[4],
+                    },
+                    'unit_amount': int(oi[3] * 100),  # price in cents
+                },
+                'quantity': oi[2],
+            })
+
+        checkoutSession = stripe.checkout.Session.create(
+            line_items=itemObjects,
+            mode='payment',
+            success_url="http://127.0.0.1:8000/",
+            cancel_url="http://127.0.0.1:8000/cart/payments",
+        )
+        return redirect(checkoutSession.url)
+    except stripe.error.StripeError as e:
+        messages.error(request, f"Payment error: {e.user_message}")
+        return redirect('payments')
+    except Exception as e:
+        print(f"A serious error occurred: {e}. We have been notified.")
+        messages.error(request, "An unexpected error occurred. Please try again.")
+        return redirect('payments')  # Added return
+
 
 def createGroupForShoppingCart(request, order_id):
     user = get_user("email", request.user.email)
