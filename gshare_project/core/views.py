@@ -54,6 +54,12 @@ def get_user_ratings(user_id: int):
     avg_rating = feedbacks.aggregate(Avg('rating'))['rating__avg']
     return feedbacks, avg_rating
 
+def get_most_recent_order(user: Users, delivery_person: Users, status: str):
+    try:
+        order = Deliveries.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status).latest('order_date')
+        return order
+    except Orders.DoesNotExist:
+        return None
 
 """
 Retrieve a user from the 'gsharedb' database based on a specific field and value.
@@ -250,12 +256,11 @@ def get_my_deliveries(user: Users, delivery_status: str):
 
 """ functions for feedback """
 
-def add_feedback(reviewee: Users, reviewer: Users, order: Orders, feedback_text: str, rating: int):
+def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, rating: int):
     try:
         feedback = Feedback.objects.using('gsharedb').create(
             reviewee=reviewee,
             reviewer=reviewer,
-            order=order,
             feedback=feedback_text,
             rating=rating,
             description_subject=feedback_text[:50] if feedback_text else None
@@ -1359,3 +1364,34 @@ def myorders(request):
 @login_required
 def payments(request):
     return render(request, "paymentsPage.html")
+
+@login_required
+def getUserProfile(request, userID):
+    authUser = get_user("email", request.user.email)
+    reviewee = get_user("id", userID)
+    userReviews = get_user_ratings(userID)
+    latestOrder = get_most_recent_order(authUser, reviewee, "done")
+    
+    context = {
+        'user': reviewee,
+        'userReviews': userReviews[0],
+        'latestOrder': latestOrder,
+    }
+
+    if request.method == 'POST':
+        reviewText = (request.POST.get('review') or '').strip()
+        try:
+            reviewRating = int(request.POST.get('rating') or 0)
+        except (TypeError, ValueError):
+            reviewRating = 0
+
+        if latestOrder is None:
+            messages.error(request, "You can only leave a review if you have a completed order with this user.")
+            return render(request, 'aboutUserPage.html', context=context)
+
+        add_feedback(reviewee, authUser, reviewText, reviewRating)
+        messages.success(request, "Review posted.")
+        context['userReviews'] = get_user_ratings(userID)[0]
+        return render(request, 'aboutUserPage.html', context=context)
+
+    return render(request, 'aboutUserPage.html', context=context)
