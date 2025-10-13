@@ -17,7 +17,7 @@
             Open Popup
         </button> {% endcomment %}
         <div id="map_popup" class="flex justify-center items-center w-full">
-            <div id='map' class="w-1/3  h-96 mt-4 border border-gray-300 rounded-lg shadow-lg">
+            <div id='map' class="w-2/3  h-96 mt-4 border border-gray-300 rounded-lg shadow-lg">
 
             </div>
         </div>
@@ -31,8 +31,8 @@
         </div>
 
         <div class="flex items-center justify-center border-b-gray">
-            <button id="shop" class="bg-[#EBE5FA] w-1/2 h-1/14 text-lg font-bold">Shopping Cart</button>
-            <button id="person" class="bg-white w-1/2 h-1/14 text-lg font-bold hover:bg-[#B299EA]">People</button>
+            <button id="shop" class="bg-[#EBE5FA] w-1/2 h-1/12 text-lg font-bold">Shopping Cart</button>
+            <button id="person" class="bg-white w-1/2 h-1/12 text-lg font-bold hover:bg-[#B299EA]">People</button>
         </div>
 
         <div id="popup-content" class="p-6"></div>
@@ -53,6 +53,8 @@
         const shop = document.getElementById('shop');
         const person = document.getElementById('person');
         const map_popup = document.getElementById('map_popup');
+        const shoppingcart = document.getElementById('shoppingcart');
+        const people = document.getElementById('people');
 
         // openPopup.addEventListener('click', () => {
         //     popup.classList.remove('translate-x-full');
@@ -91,6 +93,7 @@
         let markers = [];
         {% comment %} const addresses_with_info = JSON.parse('{{ delivery_addresses_with_info_json|escapejs }}'); {% endcomment %}
         const user_address = '{{ user_address|escapejs }}';
+        let fetchTimeout = null; // for debouncing
 
 
         function initMap() {
@@ -109,8 +112,31 @@
                 }
             });
 
+            map.addListener("idle", () => {
+                if (fetchTimeout) clearTimeout(fetchTimeout);
+                fetchTimeout = setTimeout(fetchMapData, 500); // wait 0.5s after idle
+            });
+
+        }
+
+        function fetchMapData() {
+
+            const bounds = map.getBounds();
+            if (!bounds) {
+                console.warn("Map bounds not available yet.");
+                return;
+            }
+
+            const ne = bounds.getNorthEast();
+            const sw = bounds.getSouthWest();
+            const maxLat = ne.lat();
+            const maxLng = ne.lng();
+            const minLat = sw.lat();
+            const minLng = sw.lng();
+
             // Fetch maps data asynchronously after map loads
-            fetch("{% url 'maps_data' %}")
+            const url = `/maps/maps-data/${minLat}/${minLng}/${maxLat}/${maxLng}/`;
+            fetch(url)
                 .then(res => res.json())
                 .then(data => {
                     console.log("maps data received:", data);
@@ -325,7 +351,7 @@
             });
         }
 
-        window.addEventListener('load', initMap)
+        {% comment %} window.addEventListener('load', initMap) {% endcomment %}
     </script>
 
     <script async defer

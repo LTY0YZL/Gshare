@@ -419,7 +419,7 @@ def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500):
     user_ids = [user['id'] for user in users_in_viewport]
 
     # Fetch orders for the users in the viewport
-    orders = Orders.objects.using('gsharedb').filter(user_id__in=user_ids).select_related('user')
+    orders = Orders.objects.using('gsharedb').filter(user_id__in=user_ids, status="placed").select_related('user')
 
     # Prepare the output
     orders_with_users = []
@@ -1070,14 +1070,20 @@ def drive_time(user_address, store_address, api_key):
             }
     return None
     
-def maps_data(request):
+def maps_data(request, min_lat, min_lng, max_lat, max_lng):
+    
+    min_lat = float(min_lat)
+    min_lng = float(min_lng)
+    max_lat = float(max_lat)
+    max_lng = float(max_lng)
+    
     stores = Stores.objects.all()
     user = get_user("email", request.user.email)
     user_address = user.address
     orders = get_orders_by_status('placed')
-
+    print("maps data")
     info = {}
-    for order in orders:
+    for order in orders_in_viewport(min_lat, min_lng, max_lat, max_lng):
         if order.delivery_address:
             user = get_user("id", order.user.id)
                  
