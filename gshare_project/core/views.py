@@ -190,6 +190,7 @@ def get_order_items(order: Orders):
 
      # Upsert into order_items (composite PK table) and recompute total
     with transaction.atomic(using='gsharedb'):
+        print("Fetching items for order:", order.id)
         with connections['gsharedb'].cursor() as cur:
             # Fetch items with their details
             cur.execute(
@@ -207,6 +208,29 @@ def get_order_items(order: Orders):
    # if not items.exists():
    #     return []
     return items
+
+def get_order_items_by_order_id(order_id: int):
+     # Upsert into order_items (composite PK table) and recompute total
+    with transaction.atomic(using='gsharedb'):
+        print("Fetching items for order:", order_id)
+        with connections['gsharedb'].cursor() as cur:
+            # Fetch items with their details
+            cur.execute(
+                """
+                SELECT oi.*, i.name, i.price, i.store_id
+                FROM order_items oi
+                JOIN items i ON oi.item_id = i.id
+                WHERE oi.order_id = %s
+                """,
+                [order_id]
+            )
+
+        items = cur.fetchall()
+   # items = OrderItems.objects.using('gsharedb').filter(order=order).select_related('item')
+   # if not items.exists():
+   #     return []
+    return items
+
 
 """
 Change the status of an order in the 'gsharedb' database.
@@ -438,7 +462,7 @@ def verify_group_password(group, raw_password: str) -> bool:
 def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500):
     
     # Get users within the viewport
-    users_in_viewport = _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit)
+    users_in_viewport = _users_in_viewport(min_lat, min_lng, max_lat, max_lng, limit)
 
     if not users_in_viewport:
         return []  # No users found in the viewport
@@ -465,35 +489,32 @@ def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500):
 
     return orders_with_users
 
-def _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
+"""
+Return users whose (latitude, longitude) fall inside the map viewport.
+Works with your current schema: latitude, longitude DECIMAL(9,6).
+Handles antimeridian (min_lng > max_lng).
+"""
+
+def _users_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
+    qs = (Users.objects.using('gsharedb')        # ← use MySQL
+          .filter(latitude__isnull=False, longitude__isnull=False))
+
+    if exclude_id is not None:
+        qs = qs.exclude(id=exclude_id)
+
+    lat_q = Q(latitude__gte=min_lat, latitude__lte=max_lat)
     if min_lng <= max_lng:
-        rect_wkt = f"POLYGON(({min_lng} {min_lat},{min_lng} {max_lat},{max_lng} {max_lat},{max_lng} {min_lat},{min_lng} {min_lat}))"
-        sql = """
-          SELECT id, name, address, ST_X(location) AS lng, ST_Y(location) AS lat
-          FROM users
-          WHERE MBRIntersects(location, ST_SRID(ST_PolygonFromText(%s), 4326))
-          {exclude}
-          LIMIT %s
-        """
-        exclude_clause = "AND id <> %s" if exclude_id is not None else ""
-        params = [rect_wkt] + ([exclude_id] if exclude_id is not None else []) + [limit]
-        with connection.cursor() as cur:
-            cur.execute(sql.format(exclude=exclude_clause), params)
-            rows = cur.fetchall()
-        return [{"id": r[0], "name": r[1], "address": r[2],
-                 "longitude": float(r[3]), "latitude": float(r[4])} for r in rows]
+        lng_q = Q(longitude__gte=min_lng, longitude__lte=max_lng)
+        qs = qs.filter(lat_q & lng_q)
     else:
-        # Antimeridian split
-        left = _users_in_viewport_spatial(min_lat, min_lng, max_lat, 180.0, limit, exclude_id)
-        right = _users_in_viewport_spatial(min_lat, -180.0, max_lat, max_lng, limit, exclude_id)
-        seen, out = set(), []
-        for row in left + right:
-            if row["id"] in seen: 
-                continue
-            seen.add(row["id"]); out.append(row)
-            if len(out) >= limit: 
-                break
-        return out
+        qs = qs.filter(lat_q & (Q(longitude__gte=min_lng) | Q(longitude__lte=max_lng)))
+
+    rows = list(qs.values("id", "name", "address", "longitude", "latitude")[:limit])
+    for r in rows:
+        r["longitude"] = float(r["longitude"])
+        r["latitude"]  = float(r["latitude"])
+    return rows
+
 
 """Main functions"""
 
@@ -1111,14 +1132,14 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
     orders = get_orders_by_status('placed')
     print("maps data")
     info = {}
-    for order in orders_in_viewport(min_lat, min_lng, max_lat, max_lng):
-        if order.delivery_address:
-            user = get_user("id", order.user.id)
-                 
-                
+    oiv = orders_in_viewport(min_lat, min_lng, max_lat, max_lng)
+    for order in oiv:
+        if order['delivery_address']:
+            user = get_user("id", order['user']['id'])
+
             
-            # print(user.name)
-        items = get_order_items(order)
+        print(order['order_id'])
+        items = get_order_items_by_order_id(order['order_id'])
                 
         subtotal = 0
         items_with_totals = []
@@ -1132,10 +1153,10 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
                 'total': total,
             })
         order_data = {
-            'address': order.delivery_address,
+            'address': order['delivery_address'],
             'items': items_with_totals,
             'subtotal': subtotal,
-            'order_id': order.id,
+            'order_id': order['order_id'],
         }
 
         # Group by user name (or user.id if you prefer)
