@@ -851,7 +851,7 @@ def add_to_cart(request, item_id, quantity=1):
     return redirect('cart')
 
 @login_required
-def remove_from_cart(request, item_id):
+def remove_from_cart(request, item_id, quantity=1):
     profile = get_user("email", request.user.email)
     if not profile:
         messages.error(request, "Profile not found.")
@@ -862,36 +862,49 @@ def remove_from_cart(request, item_id):
         messages.error(request, "No active cart.")
         return redirect('cart')
 
-    try:
-        order_item = OrderItems.objects.using('gsharedb').get(order=order, item_id=item_id)
-    except OrderItems.DoesNotExist:
-        messages.error(request, "Item not in cart.")
-        return redirect('cart')
-
     with transaction.atomic(using='gsharedb'):
-        order_item.delete()
 
         # RECALC TOTAL from line items
         with connections['gsharedb'].cursor() as cur:
-            cur.execute(
-                """
-                SELECT COALESCE(SUM(quantity * price), 0)
-                FROM order_items
-                WHERE order_id = %s
-                """,
-                [order.id]
-            )
-            total = cur.fetchone()[0] or 0
+            cur.execute("""
+                SELECT quantity FROM order_items
+                WHERE order_id=%s AND item_id=%s
+                LIMIT 1
+            """, [order.id, item_id])
+            line = cur.fetchone()
+            if not line:
+                messages.warning(request, "Item not found in cart.")
+                return redirect("cart_view")
+
+            if line[0] > quantity:
+                cur.execute("UPDATE order_items SET quantity=quantity-%s WHERE order_id=%s AND item_id=%s ", [quantity, order.id, item_id])
+            else:
+                cur.execute("DELETE FROM order_items WHERE order_id=%s AND item_id=%s ", [order.id, item_id])
+
+            # 3) Recompute order total
+            cur.execute("""
+                UPDATE orders o
+                JOIN (
+                    SELECT order_id, COALESCE(SUM(price * quantity),0) AS total
+                    FROM order_items
+                    WHERE order_id=%s
+                ) t ON t.order_id = o.id
+                SET o.total_amount = t.total
+                WHERE o.id=%s
+            """, [order.id, order.id])
+            total = cur.fetchone() or 0
 
         order.total_amount = total
         order.save(using='gsharedb')
 
+        item = Items.objects.using('gsharedb').filter(id=item_id).first()
+
     # Always return JSON for AJAX
     if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == "application/json":
-        return JsonResponse({"success": True, "message": f"removed {order_item.item.name} frpm your cart."})
+        return JsonResponse({"success": True, "message": f"removed {item.name} frpm your cart."})
 
-    messages.success(request, f"Removed {order_item.item.name} from your cart.")
-    return redirect('cart')
+    messages.success(request, f"Removed {item.name} from your cart.")
+    return redirect('shoppingcart')
 
 
 @login_required
