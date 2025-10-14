@@ -56,6 +56,7 @@
             <p class="mb-4 font-bold">Total: ${{ order.total }}</p>
             <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
             onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Proceed to Checkout</button>
+            <input type="text" id="group_password" name="group_password" placeholder="Enter group password" class="w-full p-2 border border-gray-300 rounded-lg bg-white text-black mt-4 mb-4">
             <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
             onclick="createGroup({{ id|default:'null' }})">
                     Create Group For my Cart
@@ -321,6 +322,7 @@
                                     onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
                                 Proceed to Checkout
                             </button>
+                            <input type="text" id="group_password" name="group_password" placeholder="Enter group password" class="w-full p-2 border border-gray-300 rounded-lg bg-white text-black mt-4 mb-4">
                             <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
                             onclick="createGroup({{ id|default:'null' }})">
                                 Create Group For my Cart
@@ -360,24 +362,31 @@
             alert('An error occurred while updating the order status.');
         });
     }
-
+    
     function createGroup(orderId) {
+        const raw_password = document.getElementById("group_password").value;
+        if (!raw_password) {
+            alert("Please enter a password for the group.");
+            return;
+        }
         const url = `/shoppingcart/${orderId}/`;
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
         fetch(url, {
             method: 'POST',
             headers: {
+                'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
+            body: JSON.stringify({ password: raw_password })
         })
-        .then(response => {
-            if (response.redirected) {
-                window.location.href = response.url;
-            } else if (response.ok) {
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`Group created! Group ID: ${data.group_id}`);
                 window.location.reload();
             } else {
-                console.error("Error when creating a group", response.status);
+                console.error("Server error:", data.error);
             }
         })
         .catch(error => {

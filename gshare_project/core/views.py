@@ -281,6 +281,34 @@ def get_feedback_by_order(order: Orders):
 
 """ functions from here are for group orders """
 
+@login_required
+def create_group_order_json(request, order_id: int):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        raw_password = data.get('password')
+        
+        if not raw_password:
+            return JsonResponse({'error': 'Password is required'}, status=400)
+        
+        profile = get_user("email", request.user.email)
+        if not profile:
+            return JsonResponse({'error': 'Profile not found'}, status=404)
+        
+        try:
+            order = Orders.objects.using('gsharedb').get(id=order_id, user=profile)
+        except Orders.DoesNotExist:
+            return JsonResponse({'error': 'Order not found'}, status=404)
+        
+        print(f"Creating group order for user {profile.email} with order {order_id}")
+        try:
+            group = create_group_order(profile, [order_id], raw_password)
+            return JsonResponse({'success': True, 'group_id': group.id})
+        except Exception as e:
+            print(f"Error creating group order: {e}")
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
 """
 Create a new group order with a list of order IDs and a password.
 Args:
@@ -290,7 +318,7 @@ Args:
     GroupOrders: The created GroupOrders object.
 """
 def create_group_order(user: Users, order_ids: list[int], raw_password: str):
-
+    print(f"Creating group order for user {user.email} with orders {order_ids}")
     if not order_ids:
         raise ValueError("order_ids list cannot be empty")
 
@@ -1193,37 +1221,49 @@ def group_data(request):
     if not profile:
         print("no user")
         return JsonResponse({'error': 'Profile not found'}, status=404)
-
-    order = get_orders_in_group(profile, 'cart')
-    if not order:
+    groups = get_groups_for_user(profile)
+    if not groups:
         return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+    
+    orders = []
+    for group in groups:
+        group_orders = get_orders_in_group(profile, group.id)
+        if group_orders:
+            orders.extend(group_orders)
+    # order = get_orders_in_group(profile, 'cart')
+    if not orders:
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+    order_info = []
+    for order in orders:
+        items = get_order_items(order) if order else []
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+            
+        tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+        grand_total = round(subtotal + tax, 2)
 
-    items = get_order_items(order[0]) if order[0] else []
-    subtotal = 0
-    items_with_totals = []
-    for item in items:
-        total = item[2] * item[5]  # quantity * price
-        subtotal += total
-        items_with_totals.append({
-            'name': item[4],  # item name
-            'quantity': item[2],
-            'price': item[5],  # item price
-            'total': total,
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+        order_info.append({
+            'id': order.id,
+            'summary': order_summary,
+            'items': items_with_totals,
         })
-        
-    tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
-    grand_total = round(subtotal + tax, 2)
-
-    order_summary = {
-        'subtotal': subtotal,
-        'tax': tax,
-        'total': grand_total,
-    }
 
     return JsonResponse({
-        'items': items_with_totals,
-        'order': order_summary,
-        'id': order[0].id if order else None,
+        'orders': order_info
     })
     
     
@@ -1317,8 +1357,6 @@ def shoppingcart(request):
 
     user = request.user
     profile = get_user("email", user.email)
-    print("User profile:", profile.name)
-    print(profile.id)
     order = get_orders(profile, 'cart')
     if not order:
         order = []
