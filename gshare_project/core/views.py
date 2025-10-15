@@ -1351,11 +1351,49 @@ def payments(request):
     group = get_group_by_user_and_order(user, order)
     print(group)
 
+    carts_in_group = []
+    members_payments = []
+
     if group is not None:
         orders = get_orders_in_group(group.group_id)
+        members = get_group_members(group)
+        
+        # carts data
+        for ord in orders:
+            items = get_order_items(ord)
+            subtotal = sum(item[2] * item[5] for item in items)  # quantity * price
+            tax = round(subtotal * Decimal(0.07), 2)
+            total = round(subtotal + tax, 2)
+            user_name = ord.user.name
+            carts_in_group.append({
+                'user_name': user_name,
+                'total': total,
+            })
+        
+        for member in members:
+            delivery_pref = f"Delivered to {member.user.address}" 
+            payment_status = "⏳" 
+            if member.order:
+                if member.order.status == 'cart':
+                    payment_status = "🛒"
+                elif member.order.status == 'placed':
+                    payment_status = "✅"
+                elif member.order.status == 'pending':
+                    payment_status = "⏳"
+                else:
+                    payment_status = "🔄"  # For other statuses like 'inprogress'
+            members_payments.append({
+                'user_name': member.user.name,
+                'delivery_pref': delivery_pref,
+                'payment_status': payment_status,
+            })
     print(order)
 
-    return render(request, "paymentsPage.html")
+    context = {
+        'carts_in_group': carts_in_group,
+        'members_payments': members_payments,
+    }
+    return render(request, "paymentsPage.html", context)
 
 @login_required
 def paymentsCheckout(request):
