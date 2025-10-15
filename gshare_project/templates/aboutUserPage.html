@@ -96,7 +96,6 @@
                 
             <div style="display: flex; flex-direction: column; width: 66%; padding: 5px;">
                 <!-- New Review -->
-                {% if latestOrder %}
                 <div>
                     <form method="post" action="{% url 'getUserProfile' user.id %}">
                         {% csrf_token %}
@@ -134,25 +133,23 @@
                         </div>
                     </form>
                 </div>
-                {% else %}
-                <div style="padding:8px; border:1px solid #e5e7eb; border-radius:6px; background:#fafafa; color:#374151; margin-bottom:8px;">
-                    You can only leave a review after you have a completed order with this user.
-                </div>
-                {% endif %}
 
                 <div style="border-top: solid #e5e7eb; max-height: 70vh; overflow-y: auto; width: 98%;">
                     <p style="font-weight: bolder;">
                         Past Reviews
                     </p>
                     {% if userReviews %}
-                    <div name="eachReview" style="border: 1px solid #e5e7eb; padding: 3px; margin: 2px;">
-                        <h4 style="margin-left: 1px;" name="title"></h4>
-                        <textarea disabled style="display: flex; width: 98%; border: 1px solid #d1d5db; margin: 3px; padding: 1px;"></textarea>
+                        {% for userReview in userReviews %}
 
-                    </div>
-                    {% else %}
-                        <div style="display: flex; justify-content: center; margin: 3px;">No past reviews found for {{ user.name }}!</div>
+                        <div name="eachReview" style="border: 1px solid #e5e7eb; padding: 3px; margin: 2px;">
+                            <h4 style="margin-left: 1px;" name="title">{{ userReview.description_subject }}</h4>
+                            <textarea disabled style="display: flex; width: 98%; border: 1px solid #d1d5db; margin: 3px; padding: 1px;">{{userReview.feedback}}</textarea>
 
+                        </div>
+                        
+                        {% endfor %}
+                        {% else %}
+                            <div style="display: flex; justify-content: center; margin: 3px;">No past reviews found for {{ user.name }}!</div>
                     {% endif %}
                     
                 </div>
