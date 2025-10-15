@@ -326,6 +326,7 @@ def create_group_order_json(request, order_id: int):
         print(f"Creating group order for user {profile.email} with order {order_id}")
         try:
             group = create_group_order(profile, [order_id], raw_password)
+            print("created group")
             return JsonResponse({'success': True, 'group_id': group.group_id})
         except Exception as e:
             print(f"Error creating group order: {e}")
@@ -360,7 +361,7 @@ def create_group_order(user: Users, order_ids: list[int], raw_password: str):
                 print("I'm lost")
             except Orders.DoesNotExist:
                 continue
-        print(f"Created group order {group.id} with password hash {group.password_hash}")
+        print(f"Created group order {group.group_id} with password hash {group.password_hash}")
         return group
     
 def add_user_to_group_json(request, group: GroupOrders, password: str):
@@ -455,8 +456,10 @@ def get_groups_for_user(user: Users):
     return GroupMembers.objects.using('gsharedb').filter(user=user).distinct()
 
 def get_cart_in_group(user: Users, group: GroupOrders):
+    print(user, group)
     try:
-        membership = GroupMembers.objects.using('gsharedb').filter(user=user, group=group)
+        membership = GroupMembers.objects.using('gsharedb').get(user=user, group=group)
+        print(membership.order)
         if membership.order and membership.order.status == 'cart':
             return membership.order
         return None
@@ -1332,10 +1335,10 @@ def group_data(request):
     
     orders = []
     for group in groups:
-        order = get_cart_in_group(profile, group)
+        order = get_cart_in_group(profile, group.group_id)
         print("order in group:", order)
         if order:
-            orders.extend(order)
+            orders.append(order)
     # order = get_orders_in_group(profile, 'cart')
     print("orders:", orders)
     if not orders:
