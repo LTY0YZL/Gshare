@@ -360,12 +360,76 @@ def create_group_order(user: Users, order_ids: list[int], raw_password: str):
         print(f"Created group order {group.id} with password hash {group.password_hash}")
         return group
     
+def add_user_to_group_json(request, group: GroupOrders, password: str):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        password = data.get('password')
+        
+        if not password:
+            return JsonResponse({'error': 'Password is required'}, status=400)
+        
+        profile = get_user("email", request.user.email)
+        if not profile:
+            return JsonResponse({'error': 'Profile not found'}, status=404)
+        
+        group = get_group_by_id(data.get('group_id'))
+        if not group:
+            return JsonResponse({'error': 'Group not found'}, status=404)
+        
+        if not verify_group_password(group, password):
+            return JsonResponse({'error': 'Invalid password'}, status=403)
+        
+        print(f"Adding user {profile.email} to group {group.id}")
+        try:
+            success = add_user_to_group(group, profile)
+            if success:
+                return JsonResponse({'success': True})
+            else:
+                return JsonResponse({'error': 'User already in group'}, status=400)
+        except Exception as e:
+            print(f"Error adding user to group: {e}")
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
 def add_user_to_group(group: GroupOrders, user: Users, order: Orders = None):
     try:
         GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
         return True
     except IntegrityError:
         return False
+    
+def remove_user_from_group_json(request, group: GroupOrders, password: str):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        password = data.get('password')
+        
+        if not password:
+            return JsonResponse({'error': 'Password is required'}, status=400)
+        
+        profile = get_user("email", request.user.email)
+        if not profile:
+            return JsonResponse({'error': 'Profile not found'}, status=404)
+        
+        group = get_group_by_id(data.get('group_id'))
+        if not group:
+            return JsonResponse({'error': 'Group not found'}, status=404)
+        
+        if not verify_group_password(group, password):
+            return JsonResponse({'error': 'Invalid password'}, status=403)
+        
+        print(f"Removing user {profile.email} from group {group.id}")
+        try:
+            success = remove_user_from_group(group, profile)
+            if success:
+                return JsonResponse({'success': True})
+            else:
+                return JsonResponse({'error': 'User not in group'}, status=404)
+        except Exception as e:
+            print(f"Error removing user from group: {e}")
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
 
 def remove_user_from_group(group: GroupOrders, user: Users):
     try:
@@ -385,13 +449,14 @@ def get_group_members(group: GroupOrders):
     return GroupMembers.objects.using('gsharedb').filter(group=group).select_related('user', 'order')
 
 def get_groups_for_user(user: Users):
-    return GroupOrders.objects.using('gsharedb').filter(members=user).distinct()
+    return GroupMembers.objects.using('gsharedb').filter(user=user).distinct()
 
-def get_cart_in_group(user: Users):
+def get_cart_in_group(user: Users, group: GroupOrders):
     try:
-        membership = GroupMembers.objects.using('gsharedb').get(user=user, order__status='cart')
-        print(membership)
-        return membership
+        membership = GroupMembers.objects.using('gsharedb').filter(user=user, group=group)
+        if membership.order and membership.order.status == 'cart':
+            return membership.order
+        return None
     except GroupMembers.DoesNotExist:
         return None
 
@@ -1245,7 +1310,7 @@ def placed_data(request):
             'summary': order_summary,
             'items': items_with_totals,
         })
-
+    print(order_list)
     return JsonResponse({
         'orders': order_list
     })
@@ -1264,10 +1329,12 @@ def group_data(request):
     
     orders = []
     for group in groups:
-        group_orders = get_orders_in_group(profile, group.id)
-        if group_orders:
-            orders.extend(group_orders)
+        order = get_cart_in_group(profile, group)
+        print("order in group:", order)
+        if order:
+            orders.extend(order)
     # order = get_orders_in_group(profile, 'cart')
+    print("orders:", orders)
     if not orders:
         return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
     order_info = []

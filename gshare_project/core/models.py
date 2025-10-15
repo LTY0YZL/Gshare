@@ -112,4 +112,4 @@ class GroupMembers(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'group_orders'
+        db_table = 'group_members'
