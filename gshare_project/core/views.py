@@ -359,11 +359,12 @@ def get_group_members(group: GroupOrders):
 def get_groups_for_user(user: Users):
     return GroupOrders.objects.using('gsharedb').filter(members=user).distinct()
 
-def get_cart_in_group(user: Users):
+def get_cart_in_group(user: Users, group: GroupOrders):
     try:
-        membership = GroupMembers.objects.using('gsharedb').get(user=user, order__status='cart')
-        print(membership)
-        return membership
+        membership = GroupMembers.objects.using('gsharedb').filter(user=user, group=group)
+        if membership.order and membership.order.status == 'cart':
+            return membership.order
+        return None
     except GroupMembers.DoesNotExist:
         return None
 
