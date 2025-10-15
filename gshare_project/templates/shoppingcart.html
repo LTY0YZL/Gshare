@@ -101,36 +101,46 @@
 </style>
 <script>
     function display(tabName, btn) {
+        console.log("display() called with tabName:", tabName, "btn:", btn);
+
         // Hide all tabs
-        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add("hidden")); 
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            if (!tab) console.warn("⚠️ Found undefined tab-content element");
+            tab.classList.add("hidden");
+        }); 
 
         // Show the selected tab
         const tab = document.getElementById("tab-" + tabName);
+        console.log("Found tab element:", tab);
+        if (!tab) {
+            console.warn(`display(): tab element 'tab-${tabName}' not found`);
+            return;
+        }
         tab.classList.remove("hidden"); 
 
-        if (tabName == 'cart') {
-            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
+        // Remove active state from all buttons
+        const allButtons = document.querySelectorAll('.tabButton');
+        console.log("Found tabButton count:", allButtons.length);
+        allButtons.forEach(button => {
+            if (!button) console.warn("⚠️ Undefined tabButton found");
+            else button.classList.remove('active');
+        });
 
-            // Set this button as active
+        // Add active state only if a button was passed in
+        if (btn && btn.classList) {
             btn.classList.add('active');
+        }
+
+        // Load content depending on tab
+        if (tabName === 'cart') {
             displayCart();
-        }
-        else if (tabName == 'group') {
-            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
-
-            // Set this button as active
-            btn.classList.add('active');
+        } else if (tabName === 'group') {
             displayGroupCart();
-        }
-        else if (tabName == 'placed') {
-            console.log("placed pressed")
-            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
-
-            // Set this button as active
-            btn.classList.add('active');
+        } else if (tabName === 'placed') {
             displayPlacedOrders();
         }
     }
+
 
     function displayGroupCart() {
         const groupItemsUrl = "{% url 'group_items' %}"
@@ -403,9 +413,16 @@
             method: 'POST',
             headers: {
                 'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+
             },
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 console.log("removed item");
