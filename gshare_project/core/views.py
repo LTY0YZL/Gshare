@@ -187,6 +187,17 @@ def get_orders_by_status(order_status: str):
         return []
     return orders
 
+def get_most_recent_order(user: Users, delivery_person: Users, status: str):
+    try:
+        Delivery = Deliveries.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status)
+
+        for d in Delivery:
+            order = Orders.objects.using('gsharedb').get(id=d.order.id, user=user)
+        return order
+
+    except Orders.DoesNotExist:
+        return None
+
 """
 Retrieve all items in a specific order from the 'gsharedb' database.
 
@@ -273,7 +284,22 @@ def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, rating: i
     except IntegrityError as e:
         print(f"Error adding feedback: {e}")
         return None
-    
+
+def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, rating: int):
+    try:
+        feedback = Feedback.objects.using('gsharedb').create(
+            reviewee=reviewee,
+            reviewer=reviewer,
+            feedback=feedback_text,
+            order=None,
+            rating=rating,
+            description_subject=feedback_text[:50] if feedback_text else None
+        )
+        return feedback
+    except IntegrityError as e:
+        print(f"Error adding feedback: {e}")
+        return None
+
 def get_feedback_for_user(user: Users):
     feedbacks = Feedback.objects.using('gsharedb').filter(reviewee=user)
     if not feedbacks.exists():
@@ -371,7 +397,8 @@ def remove_group(group: GroupOrders):
     
 def get_group_by_user_and_order(user: Users, order: Orders):
     try:
-        membership = GroupMembers.objects.using('gsharedb').get(user=user, order=order)
+        membership = GroupMembers.objects.using('gsharedb').filter(user=user, order=order).first()
+        print(membership)
         return membership.group
     except GroupMembers.DoesNotExist:
         return None
@@ -1422,18 +1449,54 @@ def myorders(request):
 @login_required
 def payments(request):
     user = get_user("email", request.user.email)
-    print(request.user.email)
     order = get_orders(user, "cart").first()
-    print(order)
 
     group = get_group_by_user_and_order(user, order)
     print(group)
 
-    orders = get_orders_in_group(group.group_id)
+    carts_in_group = []
+    members_payments = []
 
-    print(orders)
+    if group is not None:
+        orders = get_orders_in_group(group.group_id)
+        members = get_group_members(group)
+        
+        # carts data
+        for ord in orders:
+            items = get_order_items(ord)
+            subtotal = sum(item[2] * item[5] for item in items)  # quantity * price
+            tax = round(subtotal * Decimal(0.07), 2)
+            total = round(subtotal + tax, 2)
+            user_name = ord.user.name
+            carts_in_group.append({
+                'user_name': user_name,
+                'total': total,
+            })
+        
+        for member in members:
+            delivery_pref = f"Delivered to {member.user.address}" 
+            payment_status = "⏳" 
+            if member.order:
+                if member.order.status == 'cart':
+                    payment_status = "🛒"
+                elif member.order.status == 'placed':
+                    payment_status = "✅"
+                elif member.order.status == 'pending':
+                    payment_status = "⏳"
+                else:
+                    payment_status = "🔄"  # For other statuses like 'inprogress'
+            members_payments.append({
+                'user_name': member.user.name,
+                'delivery_pref': delivery_pref,
+                'payment_status': payment_status,
+            })
+    print(order)
 
-    return render(request, "paymentsPage.html")
+    context = {
+        'carts_in_group': carts_in_group,
+        'members_payments': members_payments,
+    }
+    return render(request, "paymentsPage.html", context)
 
 @login_required
 def paymentsCheckout(request):

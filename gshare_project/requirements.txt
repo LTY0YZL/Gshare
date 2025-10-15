@@ -8,3 +8,5 @@ django_tailwind_cli
 requests
 django-q2
 honcho
+stripe
+argon2-cffi
