@@ -285,33 +285,32 @@ def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, rating: i
         print(f"Error adding feedback: {e}")
         return None
 
-def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, rating: int):
+def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, subject: str, rating: int):
     try:
         feedback = Feedback.objects.using('gsharedb').create(
             reviewee=reviewee,
             reviewer=reviewer,
             feedback=feedback_text,
-            order=None,
             rating=rating,
-            description_subject=feedback_text[:50] if feedback_text else None
+            description_subject= subject
         )
         return feedback
     except IntegrityError as e:
         print(f"Error adding feedback: {e}")
         return None
-
 def get_feedback_for_user(user: Users):
     feedbacks = Feedback.objects.using('gsharedb').filter(reviewee=user)
     if not feedbacks.exists():
         return []
     return feedbacks
 
-def get_feedback_by_order(order: Orders):
+def get_feedback_by_order(reviewee: Users, reviewer: Users):
     try:
-        feedback = Feedback.objects.using('gsharedb').get(order=order)
+        feedback = Feedback.objects.using('gsharedb').get(reviewee=reviewee, reviewer=reviewer)
         return feedback
     except Feedback.DoesNotExist:
         return None
+
     
 
 """ functions from here are for group orders """
@@ -365,15 +364,17 @@ def get_group_members(group: GroupOrders):
     return GroupMembers.objects.using('gsharedb').filter(group=group).select_related('user', 'order')
 
 def get_groups_for_user(user: Users):
-    return GroupOrders.objects.using('gsharedb').filter(members=user).distinct()
+    return GroupMembers.objects.using('gsharedb').filter(users=user).distinct()
 
-def get_cart_in_group(user: Users):
+def get_cart_in_group(user: Users, group: GroupOrders):
     try:
-        membership = GroupMembers.objects.using('gsharedb').get(user=user, order__status='cart')
-        print(membership)
-        return membership
+        membership = GroupMembers.objects.using('gsharedb').filter(user=user, group=group)
+        if membership.order and membership.order.status == 'cart':
+            return membership.order
+        return None
     except GroupMembers.DoesNotExist:
         return None
+    
 
 def get_orders_in_group(group_id: int):
     order_ids = (
@@ -1445,6 +1446,41 @@ def myorders(request):
     # print(items_with_totals)
     
     return render(request, 'ordershistory.html', {'orders_with_items': orders_with_items})
+
+@login_required
+def getUserProfile(request, userID):
+    authUser = get_user("email", request.user.email)
+    reviewee = get_user("id", userID)
+    userReviews = get_user_ratings(userID)
+    #latestOrder = get_most_recent_order(authUser, reviewee, "done")
+    
+    context = {
+        'user': reviewee,
+        'userReviews': userReviews[0],
+        #'latestOrder': latestOrder,
+    }
+
+    if request.method == 'POST':
+        reviewText = (request.POST.get('review') or '').strip()
+        try:
+            reviewRating = int(request.POST.get('rating') or 1)
+        except (TypeError, ValueError):
+            reviewRating = 1
+        
+        subject = "Bad Delivery"
+        print(authUser)
+        print(reviewee)
+
+        #if latestOrder is None:
+        #    messages.error(request, "You can only leave a review if you have a completed order with this user.")
+        #    return render(request, 'aboutUserPage.html', context=context)
+
+        add_feedback(reviewee, authUser, reviewText, subject, reviewRating)
+        messages.success(request, "Review posted.")
+        context['userReviews'] = get_user_ratings(userID)[0]
+        return render(request, 'aboutUserPage.html', context=context)
+
+    return render(request, 'aboutUserPage.html', context=context)
 
 @login_required
 def payments(request):
