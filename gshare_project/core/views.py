@@ -288,7 +288,6 @@ def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, rating: i
             reviewee=reviewee,
             reviewer=reviewer,
             feedback=feedback_text,
-            order=None,
             rating=rating,
             description_subject=feedback_text[:50] if feedback_text else None
         )
@@ -303,12 +302,13 @@ def get_feedback_for_user(user: Users):
         return []
     return feedbacks
 
-def get_feedback_by_order(order: Orders):
+def get_feedback_by_order(reviewee: Users, reviewer: Users):
     try:
-        feedback = Feedback.objects.using('gsharedb').get(order=order)
+        feedback = Feedback.objects.using('gsharedb').get(reviewee=reviewee, reviewer=reviewer)
         return feedback
     except Feedback.DoesNotExist:
         return None
+
     
 
 """ functions from here are for group orders """
