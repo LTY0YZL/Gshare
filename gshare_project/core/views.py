@@ -357,7 +357,7 @@ def get_group_members(group: GroupOrders):
     return GroupMembers.objects.using('gsharedb').filter(group=group).select_related('user', 'order')
 
 def get_groups_for_user(user: Users):
-    return GroupOrders.objects.using('gsharedb').filter(members=user).distinct()
+    return GroupOrders.objects.using('gsharedb').filter(users=user).distinct()
 
 def get_cart_in_group(user: Users, group: GroupOrders):
     try:
@@ -367,6 +367,7 @@ def get_cart_in_group(user: Users, group: GroupOrders):
         return None
     except GroupMembers.DoesNotExist:
         return None
+    
 
 def get_orders_in_group(group_id: int):
     order_ids = (
