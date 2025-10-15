@@ -1,8 +1,8 @@
 body {
     margin: 0;
     padding: 0;
-    background-color: #1A2037;
-    color: #3A97D4;
+    background-color: white; 
+    color: black;
 }
 
 .main-container {
@@ -24,27 +24,27 @@ body {
 
 .btn-primary {
     padding: 0.5rem 1rem;
-    background: #3a96d489;
-    color: #1A2037;
+    background: #007bff; 
+    color: white; 
     border: none;
     border-radius: 0.25rem;
 }
 
 .btn-primary:hover {
-    background: #3A97D4;
+    background: #0056b3; 
 }
 
 .cart-card {
     border-radius: 0.5rem;
     margin-bottom: 1rem;
     overflow: hidden;
-    border: 1px solid #3A97D4;
+    border: 1px solid #ddd; 
 }
 
 .cart-header {
     padding: 0.5rem;
-    background: #3A97D4;
-    color: #1A2037;
+    background: #f5f5f5; 
+    color: black;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -52,26 +52,27 @@ body {
 
 .btn-toggle {
     padding: 0.25rem 0.5rem;
-    color: #1A2037;
-    border: none;
+    color: black; 
+    border: 1px solid #ddd;
     border-radius: 0.25rem;
+    background: transparent; 
 }
 
 .btn-toggle.enabled {
-    background: #ffc10788;
+    background: #f5f5f5; 
 }
 
 .btn-toggle.enabled:hover {
-    background: #ffc107;
+    background: #e9ecef; 
 }
 
 .btn-toggle.disabled {
-    background: #3A97D4;
+    background: #6c757d; 
 }
 
 .btn-delete {
     padding: 0.25rem 0.5rem;
-    background: #d83b4b9c;
+    background: #dc3545; 
     color: white;
     border: none;
     border-radius: 0.25rem;
@@ -79,7 +80,7 @@ body {
 }
 
 .btn-delete:hover {
-    background-color: #ff0404 !important;
+    background-color: #c82333 !important; 
 }
 
 .form-inline {
@@ -88,19 +89,25 @@ body {
 
 .update-form {
     padding: 0.5rem;
-    border: 1px solid #3A97D4;
+    border: 1px solid #ddd; 
 }
 
 .label-date {
-    border-bottom: 0.1px solid rgba(255, 255, 255, 0.356);
+    border-bottom: 0.1px solid #ddd;
     margin-bottom: 2px;
     padding-bottom: 1px;
     margin-right: 1rem;
 }
 
+.auto-order-date {
+    background-color: white; 
+    color: black;  
+    border: 1px solid #ddd;  
+}
+
 .auto-order-date:hover {
-    background-color: #3a96d450;
-    color: #1A2037;
+    background-color: #f5f5f5;  
+    color: black; 
 }
 
 .items-container {
@@ -114,7 +121,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 0.25rem 0;
-    border-bottom: 0.1px solid rgba(255, 255, 255, 0.356);
+    border-bottom: 0.1px solid #ddd;
 }
 
 .item-name {
@@ -129,11 +136,14 @@ body {
 .qty-input {
     padding-left: 5px;
     width: 10rem;
+    background-color: white;  
+    color: black; 
+    border: 1px solid #ddd; 
 }
 
 .qty-input:hover {
-    background-color: #3a96d450;
-    color: #1A2037;
+    background-color: #f5f5f5;  
+    color: black;
 }
 
 .save-container {
