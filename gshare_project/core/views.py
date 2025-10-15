@@ -364,7 +364,8 @@ def create_group_order(user: Users, order_ids: list[int], raw_password: str):
         print(f"Created group order {group.group_id} with password hash {group.password_hash}")
         return group
     
-def add_user_to_group_json(request, group: GroupOrders, password: str):
+def add_user_to_group_json(request, group: int):
+    print("add_user_to_group_json called with group:", group)
     if request.method == 'POST':
         data = json.loads(request.body)
         password = data.get('password')
@@ -376,16 +377,17 @@ def add_user_to_group_json(request, group: GroupOrders, password: str):
         if not profile:
             return JsonResponse({'error': 'Profile not found'}, status=404)
         
-        group = get_group_by_id(data.get('group_id'))
-        if not group:
+        group_info = get_group_by_id(group)
+        print("group_info:", group_info)
+        if not group_info:
             return JsonResponse({'error': 'Group not found'}, status=404)
         
-        if not verify_group_password(group, password):
+        if not verify_group_password(group_info, password):
             return JsonResponse({'error': 'Invalid password'}, status=403)
         
-        print(f"Adding user {profile.email} to group {group.id}")
+        print(f"Adding user {profile.email} to group {group_info.id}")
         try:
-            success = add_user_to_group(group, profile)
+            success = add_user_to_group(group_info, profile)
             if success:
                 return JsonResponse({'success': True})
             else:
@@ -403,7 +405,7 @@ def add_user_to_group(group: GroupOrders, user: Users, order: Orders = None):
     except IntegrityError:
         return False
     
-def remove_user_from_group_json(request, group: GroupOrders, password: str):
+def remove_user_from_group_json(request, group: GroupOrders):
     if request.method == 'POST':
         data = json.loads(request.body)
         password = data.get('password')
@@ -1400,6 +1402,7 @@ def cart_data(request):
             'quantity': item[2],
             'price': item[5],  # item price
             'total': total,
+            'id': item[1],  # item id
         })
         
     tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
@@ -1410,7 +1413,6 @@ def cart_data(request):
         'tax': tax,
         'total': grand_total,
     }
-
     return JsonResponse({
         'items': items_with_totals,
         'order': order_summary,

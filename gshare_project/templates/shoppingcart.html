@@ -32,7 +32,7 @@
                                 <p class="mb-1 pl-32">Quantity: {{ item.quantity }}</p>
                                 <input type="number" name="item_amount" value="{{item.quantity}}" min="1" class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
                                 <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
-                                onclick="handleItemClick(this, {{ item.id }}, {{ item_amount.value }})">
+                                onclick="updateItemNum(this, {{ item.id }}, this.previousElementSibling.value)">
                                     Update
                                 </button>
                             </div>
@@ -74,7 +74,7 @@
             class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
             <div class="bg-white p-6 rounded-2xl shadow-lg w-96">
                 <h2 class="text-2xl font-bold mb-4">Enter Details</h2>
-                <form id="popupForm" onsubmit="submitPopup(event)">
+                <form id="popupForm" onsubmit="submitPopup(event, 'cart')">
                     <div class="mb-3">
                         <label class="block font-semibold mb-1">Group Id</label>
                         <input type="text" id="GroupId" name="GroupId"
@@ -183,70 +183,121 @@
 
 
     function displayGroupCart() {
-        const groupItemsUrl = "{% url 'group_items' %}";
-        console.log("group data");
+    const groupItemsUrl = "{% url 'group_items' %}";
+    console.log("Fetching group cart...");
 
-        fetch(groupItemsUrl)
-            .then(response => response.json())
-            .then(data => {
-                const tab = document.getElementById("tab-group");
-                console.log('group cart response:', data);
+    fetch(groupItemsUrl)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            console.log('group items response:', data);
+            const tab = document.getElementById("tab-group");
+            const orders = Array.isArray(data) ? data : (Array.isArray(data.orders) ? data.orders : []);
 
-                if (!data.items || data.items.length === 0) {
-                    tab.innerHTML = `
-                        <div class="col-span-1 bg-white">
-                            <p class='p-4'>Your group cart is empty.</p>
-                        </div>
-                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
-                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                            <p class="mb-2">Subtotal: $0</p>
-                            <p class="mb-2">Tax: $0</p>
-                            <p class="mb-4 font-bold">Total: $0</p>
-                        </div>`;
-                    return;
-                }
+            if (orders.length === 0) {
+                tab.innerHTML = `<p class='p-4'>You have no group orders.</p>`;
+                return;
+            }
 
-                // Left side: item list
-                let html = `<div class="col-span-1 bg-white">`;
+            let html = '';
 
-                data.items.forEach(item => {
-                    html += `
-                    <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                        <div class="flex flex-row">
-                            <div class="flex flex-col">
-                                <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                <div flex flex-row>
-                                    <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
+            orders.forEach(order => {
+                const items = Array.isArray(order.items) ? order.items : [];
+                const summary = order.summary || {};
+                const subtotal = Number(summary.subtotal) || 0;
+                const tax = Number(summary.tax) || 0;
+                const total = Number(summary.total) || 0;
+                const orderId = order.id || 'null';
+
+                html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
+
+                // Left column — Items
+                html += `<div class="col-span-1 bg-white">`;
+                if (items.length === 0) {
+                    html += `<p class="p-4">No items for this group order.</p>`;
+                } else {
+                    items.forEach(item => {
+                        const qty = Number(item.quantity) || 0;
+                        const price = Number(item.price) || 0;
+                        const totalItem = Number(item.total) || (qty * price);
+                        html += `
+                        <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                            <div class="flex flex-row">
+                                <div class="flex flex-col">
+                                    <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
+                                    <div class="flex flex-row">
+                                        <p class="mb-1 pl-32">Quantity: ${qty}</p>
+                                    </div>
+                                    <p class="mb-1 pl-32">Price: $${price.toFixed(2)}</p>
+                                    <p class="mb-1 pl-32 font-bold">Total: $${totalItem.toFixed(2)}</p>
                                 </div>
-                                <p class="mb-1 pl-32">Price: $${item.price}</p>
-                                <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
                             </div>
-                        </div>
-                    </div>`;
-                });
+                        </div>`;
+                    });
+                }
+                html += `</div>`;
 
-                // Right side: summary
+                // Right column — Summary + Popup trigger
                 html += `
-                    </div>
-                    <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
-                        <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                        <p class="mb-2">Subtotal: $${data.order.subtotal}</p>
-                        <p class="mb-2">Tax: $${data.order.tax}</p>
-                        <p class="mb-4 font-bold">Total: $${data.order.total}</p>
-                        <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-                                onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
-                            Proceed to Checkout
-                        </button>
-                        button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
-                                onclick="remove_from_group()">
-                            leave Group Order
-                        </button>
-                    </div>`;
+                <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
+                    <h2 class="text-2xl font-bold mb-4">Group Order Summary</h2>
+                    <p class="mb-2">Subtotal: $${subtotal.toFixed(2)}</p>
+                    <p class="mb-2">Tax: $${tax.toFixed(2)}</p>
+                    <p class="mb-4 font-bold">Total: $${total.toFixed(2)}</p>
+                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
+                            onclick="openPopup('group')">
+                        Leave Group Order
+                    </button>
+                </div>
+                </div>`;
+            });
 
-                tab.innerHTML = html;
-            })
-            .catch(err => console.error('Error retrieving group cart:', err));
-        }
+            // Add popup modal once
+            html += `
+            <!-- Popup Modal -->
+            <div id="popupModal"
+                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+                <div class="bg-white p-6 rounded-2xl shadow-lg w-96">
+                    <h2 class="text-2xl font-bold mb-4">Leave Group</h2>
+                    <form id="popupForm" onsubmit="submitPopup(event, 'group')">
+                        <div class="mb-3">
+                            <label class="block font-semibold mb-1">Group ID</label>
+                            <input type="text" id="GroupId" name="GroupId"
+                                class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
+                                required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="block font-semibold mb-1">Password</label>
+                            <input type="text" id="Password" name="Password"
+                                class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
+                                required>
+                        </div>
+                        <div class="flex justify-end space-x-2 mt-4">
+                            <button type="button"
+                                    class="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400"
+                                    onclick="closePopup()">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+                                Submit
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>`;
+
+            tab.innerHTML = html;
+        })
+        .catch(err => {
+            console.error('Error retrieving group cart:', err);
+            const tab = document.getElementById("tab-group");
+            tab.innerHTML = `<p class="p-4">Error loading group orders.</p>`;
+        });
+}
+
 
 
     function displayPlacedOrders() {
@@ -365,7 +416,7 @@
                                     <input type="number" name="item_amount" value="${item.quantity}" min="1"
                                         class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
                                     <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
-                                            onclick="handleItemClick(this, ${item.id}, this.previousElementSibling.value)">
+                                            onclick="updateItemNum(this, ${item.id}, this.previousElementSibling.value)">
                                         Update
                                     </button>
                                 </div>
@@ -410,7 +461,7 @@
                     class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
                     <div class="bg-white p-6 rounded-2xl shadow-lg w-96">
                         <h2 class="text-2xl font-bold mb-4">Enter Details</h2>
-                        <form id="popupForm" onsubmit="submitPopup(event)">
+                        <form id="popupForm" onsubmit="submitPopup(event, 'cart')">
                             <div class="mb-3">
                                 <label class="block font-semibold mb-1">Group Id</label>
                                 <input type="text" id="GroupId" name="GroupId"
@@ -509,45 +560,76 @@
         })
     }
 
-function openPopup() {
-    document.getElementById('popupModal').classList.remove('hidden');
-}
+    function openPopup() {
+        document.getElementById('popupModal').classList.remove('hidden');
+    }
 
-function closePopup() {
-    document.getElementById('popupModal').classList.add('hidden');
-}
+    function closePopup() {
+        document.getElementById('popupModal').classList.add('hidden');
+    }
 
-function submitPopup(event) {
-    event.preventDefault(); // prevent page reload
+    function submitPopup(event, tabName) {
+        event.preventDefault(); // prevent page reload
 
-    const groupId = document.getElementById('groupId').value;
-    const Password = document.getElementById('Password').value;
+        const groupId = document.getElementById('GroupId').value;
+        const Password = document.getElementById('Password').value;
 
-    console.log("Field 1:", groupId);
-    console.log("Field 2:", Password);
+        console.log("Field 1:", groupId);
+        console.log("Field 2:", Password);
 
-    const url = `/shoppingcart/add_user_to_group/${groupId}/`;
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        if (!groupId || !Password) {
+            alert('Please fill out both fields.');
+            return;
+        }
 
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken
-        },
-        body: JSON.stringify({ password: raw_password })
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log('Success:', data);
-        closePopup();
-    })
-    .catch(error => console.error('Error:', error));
+        const url = tabName === 'cart' ? `/shoppingcart/add_user_to_group/${groupId}/` : `/shoppingcart/remove_user_from_group/${groupId}/`;
+        console.log("Submitting to URL:", url);
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ password: Password })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Success:', data);
+            closePopup();
+        })
+        .catch(error => console.error('Error:', error));
 
     }
 
     function remove_from_group() {
-        console.log("remove from group?");
+        event.preventDefault(); // prevent page reload
+
+        const groupId = document.getElementById('groupId').value;
+        const Password = document.getElementById('Password').value;
+
+        console.log("Field 1:", groupId);
+        console.log("Field 2:", Password);
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ password: raw_password })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Success:', data);
+            closePopup();
+        })
+        .catch(error => console.error('Error:', error));
+
     }
 
 
@@ -580,6 +662,40 @@ function submitPopup(event) {
         })
         .catch(err => {
             console.error('Error removing item', err)
+        });
+    }
+
+    function updateItemNum(button, itemId, newQuantity) {
+        console.log("update item num?");
+        console.log(itemId);
+        console.log(newQuantity);
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch(`/shoppingcart/updateItem/${itemId}/${newQuantity}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ quantity: newQuantity })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                console.log("updated item quantity");
+                display('cart')
+            } else {
+                console.error(data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Error updating item quantity', err)
         });
     }
     
