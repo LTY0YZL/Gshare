@@ -326,7 +326,7 @@ def create_group_order_json(request, order_id: int):
         print(f"Creating group order for user {profile.email} with order {order_id}")
         try:
             group = create_group_order(profile, [order_id], raw_password)
-            return JsonResponse({'success': True, 'group_id': group.id})
+            return JsonResponse({'success': True, 'group_id': group.group_id})
         except Exception as e:
             print(f"Error creating group order: {e}")
             return JsonResponse({'error': str(e)}, status=500)
@@ -348,13 +348,16 @@ def create_group_order(user: Users, order_ids: list[int], raw_password: str):
 
     with transaction.atomic(using='gsharedb'):
         group = GroupOrders.objects.using('gsharedb').create(description="Group Order", password_hash="")
+        print(f"Created group order with ID: {group.group_id}")
         set_group_password(group, raw_password)
         for oid in order_ids:
+            print(f"Adding order {oid} to group {group.group_id}")
             try:
                 print(f"Adding order {oid} to group")
                 order = Orders.objects.using('gsharedb').get(id=oid, user=user)
-                print(f"Found order {order.id} for user {user.email}")
+                print(f"Found order {oid} for user {user.email}")
                 GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
+                print("I'm lost")
             except Orders.DoesNotExist:
                 continue
         print(f"Created group order {group.id} with password hash {group.password_hash}")
