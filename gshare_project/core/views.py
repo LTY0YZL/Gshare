@@ -26,6 +26,7 @@ import requests
 from core.utils.geo import geoLoc
 from urllib.parse import urlencode
 from . import kroger_api
+import stripe
 
 from core.models import (
     Users,
@@ -183,6 +184,17 @@ def get_orders_by_status(order_status: str):
         return []
     return orders
 
+def get_most_recent_order(user: Users, delivery_person: Users, status: str):
+    try:
+        Delivery = Deliveries.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status)
+
+        for d in Delivery:
+            order = Orders.objects.using('gsharedb').get(id=d.order.id, user=user)
+        return order
+
+    except Orders.DoesNotExist:
+        return None
+
 """
 Retrieve all items in a specific order from the 'gsharedb' database.
 
@@ -269,7 +281,22 @@ def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, rating: i
     except IntegrityError as e:
         print(f"Error adding feedback: {e}")
         return None
-    
+
+def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, rating: int):
+    try:
+        feedback = Feedback.objects.using('gsharedb').create(
+            reviewee=reviewee,
+            reviewer=reviewer,
+            feedback=feedback_text,
+            order=None,
+            rating=rating,
+            description_subject=feedback_text[:50] if feedback_text else None
+        )
+        return feedback
+    except IntegrityError as e:
+        print(f"Error adding feedback: {e}")
+        return None
+
 def get_feedback_for_user(user: Users):
     feedbacks = Feedback.objects.using('gsharedb').filter(reviewee=user)
     if not feedbacks.exists():
@@ -335,15 +362,17 @@ def get_group_members(group: GroupOrders):
     return GroupMembers.objects.using('gsharedb').filter(group=group).select_related('user', 'order')
 
 def get_groups_for_user(user: Users):
-    return GroupOrders.objects.using('gsharedb').filter(members=user).distinct()
+    return GroupMembers.objects.using('gsharedb').filter(users=user).distinct()
 
-def get_cart_in_group(user: Users):
+def get_cart_in_group(user: Users, group: GroupOrders):
     try:
-        membership = GroupMembers.objects.using('gsharedb').get(user=user, order__status='cart')
-        print(membership)
-        return membership
+        membership = GroupMembers.objects.using('gsharedb').filter(user=user, group=group)
+        if membership.order and membership.order.status == 'cart':
+            return membership.order
+        return None
     except GroupMembers.DoesNotExist:
         return None
+    
 
 def get_orders_in_group(group_id: int):
     order_ids = (
@@ -367,7 +396,8 @@ def remove_group(group: GroupOrders):
     
 def get_group_by_user_and_order(user: Users, order: Orders):
     try:
-        membership = GroupMembers.objects.using('gsharedb').get(user=user, order=order)
+        membership = GroupMembers.objects.using('gsharedb').filter(user=user, order=order).first()
+        print(membership)
         return membership.group
     except GroupMembers.DoesNotExist:
         return None
@@ -1395,3 +1425,103 @@ def getUserProfile(request, userID):
         return render(request, 'aboutUserPage.html', context=context)
 
     return render(request, 'aboutUserPage.html', context=context)
+    user = get_user("email", request.user.email)
+    order = get_orders(user, "cart").first()
+
+    group = get_group_by_user_and_order(user, order)
+    print(group)
+
+    carts_in_group = []
+    members_payments = []
+
+    if group is not None:
+        orders = get_orders_in_group(group.group_id)
+        members = get_group_members(group)
+        
+        # carts data
+        for ord in orders:
+            items = get_order_items(ord)
+            subtotal = sum(item[2] * item[5] for item in items)  # quantity * price
+            tax = round(subtotal * Decimal(0.07), 2)
+            total = round(subtotal + tax, 2)
+            user_name = ord.user.name
+            carts_in_group.append({
+                'user_name': user_name,
+                'total': total,
+            })
+        
+        for member in members:
+            delivery_pref = f"Delivered to {member.user.address}" 
+            payment_status = "⏳" 
+            if member.order:
+                if member.order.status == 'cart':
+                    payment_status = "🛒"
+                elif member.order.status == 'placed':
+                    payment_status = "✅"
+                elif member.order.status == 'pending':
+                    payment_status = "⏳"
+                else:
+                    payment_status = "🔄"  # For other statuses like 'inprogress'
+            members_payments.append({
+                'user_name': member.user.name,
+                'delivery_pref': delivery_pref,
+                'payment_status': payment_status,
+            })
+    print(order)
+
+    context = {
+        'carts_in_group': carts_in_group,
+        'members_payments': members_payments,
+    }
+    return render(request, "paymentsPage.html", context)
+
+@login_required
+def paymentsCheckout(request):
+
+    # change order status to placed upon successful payment
+    try:
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        profile = get_user("email", request.user.email)
+        try:
+            orders = get_orders(profile, "cart")
+            if not orders:
+                messages.error(request, "No items in the cart to checkout.")
+                return redirect('cart')
+            order = orders[0]
+            orderItems = get_order_items(order)
+        except Exception:
+            messages.error(request, "No items in the cart to checkout.")
+            return redirect('cart')
+        
+        if not orderItems:
+            messages.error(request, "Cart is empty.")
+            return redirect('cart')
+        
+        itemObjects = []
+        for oi in orderItems:
+            # oi is a tuple: (order_id, item_id, quantity, price, name, price, store_id)
+            itemObjects.append({
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': oi[4],
+                    },
+                    'unit_amount': int(oi[3] * 100),  # price in cents
+                },
+                'quantity': oi[2],
+            })
+
+        checkoutSession = stripe.checkout.Session.create(
+            line_items=itemObjects,
+            mode='payment',
+            success_url="http://127.0.0.1:8000/",
+            cancel_url="http://127.0.0.1:8000/cart/payments",
+        )
+        return redirect(checkoutSession.url)
+    except stripe.error.StripeError as e:
+        messages.error(request, f"Payment error: {e.user_message}")
+        return redirect('payments')
+    except Exception as e:
+        print(f"A serious error occurred: {e}. We have been notified.")
+        messages.error(request, "An unexpected error occurred. Please try again.")
+        return redirect('payments')  # Added return

@@ -1,1 +1,19 @@
-{% include 'navbar.html' %}
+{% load tailwind_cli%}
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Us</title>
+    {% tailwind_css %}
+</head>
+<body class="bg-gray-100 min-h-screen">
+    {% include "navbar.html" %}
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold text-center mb-6">About G-Share</h1>
+        <p class="text-lg text-center mb-4">G-Share is a community-based grocery delivery platform that connects neighbors for efficient and cost-effective shopping.</p>
+        <p class="text-center">Learn more about our mission, features, and how to get started.</p>
+    </div>
+</body>
+</html>

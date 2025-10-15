@@ -6,3 +6,5 @@ daphne
 channels
 django_tailwind_cli
 requests
+stripe
+argon2-cffi
