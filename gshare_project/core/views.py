@@ -351,10 +351,13 @@ def create_group_order(user: Users, order_ids: list[int], raw_password: str):
         set_group_password(group, raw_password)
         for oid in order_ids:
             try:
+                print(f"Adding order {oid} to group")
                 order = Orders.objects.using('gsharedb').get(id=oid, user=user)
+                print(f"Found order {order.id} for user {user.email}")
                 GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
             except Orders.DoesNotExist:
                 continue
+        print(f"Created group order {group.id} with password hash {group.password_hash}")
         return group
     
 def add_user_to_group(group: GroupOrders, user: Users, order: Orders = None):
