@@ -62,6 +62,7 @@
                     Create Group For my Cart
             </button>
             <!-- Trigger button -->
+            <p>Join an existing group by clicking the button</p>
             <button
                 class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
                 onclick="openPopup()">
@@ -246,6 +247,7 @@
                     <p class="mb-2">Subtotal: $${subtotal.toFixed(2)}</p>
                     <p class="mb-2">Tax: $${tax.toFixed(2)}</p>
                     <p class="mb-4 font-bold">Total: $${total.toFixed(2)}</p>
+                    <p>Join an existing group by clicking the button</p>
                     <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
                             onclick="openPopup('group')">
                         Leave Group Order
@@ -450,6 +452,7 @@
                             onclick="createGroup({{ id|default:'null' }})">
                         Create Group For my Cart
                     </button>
+                    <p class="pt-4 text-2xl font-bold mb-4">Join an existing group by clicking the button</p>
                     <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
                             onclick="openPopup()">
                         Join Group Order
