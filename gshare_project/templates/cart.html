@@ -172,50 +172,45 @@
     }
 </style>
 <script>
-    const csrf_token = "{{ csrf_token }}";
-    function handleItemClick(element, item_id) {
-        const ammountInput = element.querySelector('input[name="item_ammount"]');
-        const itemAmmount = ammountInput ? ammountInput.value : 1;
+  function getCookie(name){
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+  const CSRF = getCookie('csrftoken');
 
-        fetch(`/cart/add/${item_id}/${itemAmmount}/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrf_token
-            },
-            {% comment %} body: JSON.stringify({ 'item_ammount': itemAmmount }) {% endcomment %}
-        })
-        .then(response => {
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-                return response.json();
-            } else {
-                throw new Error("Not authenticated or not found");
-            }
-        })
-        .then(data => {
-            console.log(data);
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
-    }
-    (function(){
-    const select = document.querySelectorAll('StoresSelect');
+  function handleItemClick(element, item_id) {
+    const input = element.querySelector('input[name="item_ammount"]');
+    const qty = input ? input.value : 1;
+
+    fetch(`/cart/add/${item_id}/${qty}/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF,
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(r => (r.headers.get('content-type')||'').includes('application/json') ? r.json() : Promise.reject('Not JSON'))
+    .then(data => console.log('Added:', data))
+    .catch(err => console.error('Add failed:', err));
+  }
+
+  (function(){
+    const select = document.getElementById('StoresSelect');
     const hidden = document.getElementById('store_filter');
-    const box = document.getElementById('krogerBox');
+    const box    = document.getElementById('krogerBox');
 
     function toggleKrogerBox(){
-        const val = select.value;
-        hidden.value = val;
+      const val = select.value;
+      hidden.value = val;
       if (val === 'Kroger') box.classList.remove('hidden');
-      else box.classList.add('hidden');
+      else                  box.classList.add('hidden');
     }
 
+    toggleKrogerBox();                 
     select.addEventListener('change', toggleKrogerBox);
-    toggleKrogerBox();
   })();
-  
+
   function addKrogerItem(name, price){
     if (!name || !price) {
       alert('This item is missing a price and cannot be added.');
@@ -223,35 +218,34 @@
     }
     fetch("{% url 'add_kroger_item_to_cart' %}", {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf_token },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
       body: JSON.stringify({ product_name: name, product_price: price })
     })
-    .then(r => {
-      const ct = r.headers.get('content-type')||'';
-      return ct.includes('application/json') ? r.json() : {};
-    })
-    .then(data => {
-      console.log('Added Kroger item:', name, price, data);
-    })
-    .catch(err => {
-      console.error(err);
-      alert('Failed to add item to cart.');
-    });
+    .then(r => (r.headers.get('content-type')||'').includes('application/json') ? r.json() : {})
+    .then(data => console.log('Added Kroger item:', name, price, data))
+    .catch(err => { console.error(err); alert('Failed to add item to cart.'); });
   }
 
   function addKrogerCardClick(el, name, price){
     const qtyInput = el.querySelector('input[name="item_ammount"]');
     const qty = qtyInput ? parseInt(qtyInput.value || '1', 10) : 1;
-
     if (!price) { alert('This item is missing a price and cannot be added.'); return; }
 
     fetch("{% url 'add_kroger_item_to_cart' %}", {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf_token },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
       body: JSON.stringify({ product_name: name, product_price: price, item_ammount: qty })
     })
     .then(r => (r.headers.get('content-type')||'').includes('application/json') ? r.json() : {})
-    .then(data => { console.log('Added', name, qty); })
+    .then(data => console.log('Added', name, 'x', qty))
     .catch(err => { console.error(err); alert('Failed to add item to cart.'); });
   }
 </script>
