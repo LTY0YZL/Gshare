@@ -187,17 +187,6 @@ def get_orders_by_status(order_status: str):
         return []
     return orders
 
-def get_most_recent_order(user: Users, delivery_person: Users, status: str):
-    try:
-        Delivery = Deliveries.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status)
-
-        for d in Delivery:
-            order = Orders.objects.using('gsharedb').get(id=d.order.id, user=user)
-        return order
-
-    except Orders.DoesNotExist:
-        return None
-
 """
 Retrieve all items in a specific order from the 'gsharedb' database.
 
@@ -522,18 +511,10 @@ def remove_group(group: GroupOrders):
         return False
     
 def get_group_by_user_and_order(user: Users, order: Orders):
-    try:
-        membership = GroupMembers.objects.using('gsharedb').filter(user=user, order=order).first()
-        print(membership)
-        if membership is not None:
-            if membership is not None:
-            return membership.group
-        
-        return None
-
-        return None
-    except GroupMembers.DoesNotExist:
-        return None
+    membership = GroupMembers.objects.using('gsharedb').filter(user=user, order=order).first()
+    if membership:
+        return membership.group
+    return None
     
 def add_order_to_group(group: GroupOrders, user: Users, order: Orders):
     try:
