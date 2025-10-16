@@ -43,7 +43,10 @@ urlpatterns = [
     path('shoppingcart/groupItems/', views.group_data, name='group_items'),
     path('shoppingcart/placedItems/', views.placed_data, name='placed_items'),
     
-    path('shoppingcart/<int:order_id>', views.createGroupForShoppingCart, name='createGroupForShoppingCart'),  
+    path('shoppingcart/<int:order_id>/', views.create_group_order_json, name='create_group_order_json'),  
+    path('shoppingcart/add_user_to_group/<int:group>/', views.add_user_to_group_json, name='add_user_to_group_json'),
+    path('shoppingcart/remove_user_from_group/<int:group>/', views.remove_user_from_group_json, name='remove_user_from_group_json'),
+    path('shoppingcart/updateItem/<int:item_id>/<int:quantity>/', views.add_to_cart, name='add_to_cart'),
     path('shoppingcart/removeItem/<int:item_id>/', views.remove_from_cart, name="remove_item"),
     
     path("maps/maps-data/<str:min_lat>/<str:min_lng>/<str:max_lat>/<str:max_lng>/", views.maps_data, name="maps_data"),

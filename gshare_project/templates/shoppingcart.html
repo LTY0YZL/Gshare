@@ -32,7 +32,7 @@
                                 <p class="mb-1 pl-32">Quantity: {{ item.quantity }}</p>
                                 <input type="number" name="item_amount" value="{{item.quantity}}" min="1" class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
                                 <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
-                                onclick="handleItemClick(this, {{ item.id }}, {{ item_amount.value }})">
+                                onclick="updateItemNum(this, {{ item.id }}, this.previousElementSibling.value)">
                                     Update
                                 </button>
                             </div>
@@ -56,13 +56,55 @@
             <p class="mb-4 font-bold">Total: ${{ order.total }}</p>
             <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
             onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Proceed to Checkout</button>
+            <input type="text" id="group_password" name="group_password" placeholder="Enter group password" class="w-full p-2 border border-gray-300 rounded-lg bg-white text-black mt-4 mb-4">
             <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
             onclick="createGroup({{ id|default:'null' }})">
                     Create Group For my Cart
             </button>
-
-
+            <!-- Trigger button -->
+            <p>Join an existing group by clicking the button</p>
+            <button
+                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
+                onclick="openPopup()">
+                Join Group Order
+            </button>
         </div>
+
+        <!-- Popup Modal -->
+        <div id="popupModal"
+            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+            <div class="bg-white p-6 rounded-2xl shadow-lg w-96">
+                <h2 class="text-2xl font-bold mb-4">Enter Details</h2>
+                <form id="popupForm" onsubmit="submitPopup(event, 'cart')">
+                    <div class="mb-3">
+                        <label class="block font-semibold mb-1">Group Id</label>
+                        <input type="text" id="GroupId" name="GroupId"
+                            class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
+                            required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block font-semibold mb-1">Password</label>
+                        <input type="text" id="Password" name="Password"
+                            class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
+                            required>
+                    </div>
+                    <div class="flex justify-end space-x-2 mt-4">
+                        <button type="button"
+                                class="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400"
+                                onclick="closePopup()">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+                            Submit
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+
+
     </div>
 </body>
 <style>
@@ -100,167 +142,245 @@
 </style>
 <script>
     function display(tabName, btn) {
+        console.log("display() called with tabName:", tabName, "btn:", btn);
+
         // Hide all tabs
-        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add("hidden")); 
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            if (!tab) console.warn("Found undefined tab-content element");
+            tab.classList.add("hidden");
+        }); 
 
         // Show the selected tab
         const tab = document.getElementById("tab-" + tabName);
+        console.log("Found tab element:", tab);
+        if (!tab) {
+            console.warn(`display(): tab element 'tab-${tabName}' not found`);
+            return;
+        }
         tab.classList.remove("hidden"); 
 
-        if (tabName == 'cart') {
-            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
+        // Remove active state from all buttons
+        const allButtons = document.querySelectorAll('.tabButton');
+        console.log("Found tabButton count:", allButtons.length);
+        allButtons.forEach(button => {
+            if (!button) console.warn("Undefined tabButton found");
+            else button.classList.remove('active');
+        });
 
-            // Set this button as active
+        // Add active state only if a button was passed in
+        if (btn && btn.classList) {
             btn.classList.add('active');
+        }
+
+        // Load content depending on tab
+        if (tabName === 'cart') {
             displayCart();
-        }
-        else if (tabName == 'group') {
-            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
-
-            // Set this button as active
-            btn.classList.add('active');
+        } else if (tabName === 'group') {
             displayGroupCart();
-        }
-        else if (tabName == 'placed') {
-            console.log("placed pressed")
-            document.querySelectorAll('.tabButton').forEach(button => button.classList.remove('active'));
-
-            // Set this button as active
-            btn.classList.add('active');
+        } else if (tabName === 'placed') {
             displayPlacedOrders();
         }
     }
 
+
     function displayGroupCart() {
-        const groupItemsUrl = "{% url 'group_items' %}"
-        console.log("group data")
-        fetch(groupItemsUrl)
-            .then(response => response.json())
-            .then(data => {
-                const tab = document.getElementById("tab-group");
+    const groupItemsUrl = "{% url 'group_items' %}";
+    console.log("Fetching group cart...");
 
-                if (!data.items || data.items.length === 0) {
-                    tab.innerHTML = `<p class='p-4'>Your cart is empty.</p>
-                    </div>
-                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
-                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                            <p class="mb-2">Subtotal: $0</p>
-                            <p class="mb-2">Tax: $0</p>
-                            <p class="mb-4 font-bold">Total: $0</p>
+    fetch(groupItemsUrl)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            console.log('group items response:', data);
+            const tab = document.getElementById("tab-group");
+            const orders = Array.isArray(data) ? data : (Array.isArray(data.orders) ? data.orders : []);
 
-                        </div>
-                    </div>`;
-                    return;
-                }
+            if (orders.length === 0) {
+                tab.innerHTML = `<p class='p-4'>You have no group orders.</p>`;
+                return;
+            }
 
-                let html = `<div class="grid grid-cols-2 h-screen gap-4 p-4">
-                                <div class="col-span-1 bg-white">`;
+            let html = '';
 
-                data.items.forEach(item => {
-                    html += `
-                    <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                        <div class="flex flex-row">
-                            <div class="flex flex-col">
-                                <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                <div flex flex-row>
-                                    <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
-                                </div>
-                                <p class="mb-1 pl-32">Price: $${item.price}</p>
-                                <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
-                            </div>
-                        </div>
-                    </div>`;
-                });
+            orders.forEach(order => {
+                const items = Array.isArray(order.items) ? order.items : [];
+                const summary = order.summary || {};
+                const subtotal = Number(summary.subtotal) || 0;
+                const tax = Number(summary.tax) || 0;
+                const total = Number(summary.total) || 0;
+                const orderId = order.id || 'null';
 
-                html += `</div>
-                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
-                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                            <p class="mb-2">Subtotal: $${data.order.subtotal}</p>
-                            <p class="mb-2">Tax: $${data.order.tax}</p>
-                            <p class="mb-4 font-bold">Total: $${data.order.total}</p>
-                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-                                    onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
-                                Proceed to Checkout
-                            </button>
-                        </div>
-                        </div>`;
+                html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
 
-                tab.innerHTML = html;
-            });
-    }
-
-    function displayPlacedOrders() {
-        const placedItemsUrl = "{% url 'placed_items' %}"
-        console.log("placed data")
-        fetch(placedItemsUrl)
-            .then(response => response.json())
-            .then(data => {
-                console.log(data);
-                const tab = document.getElementById("tab-placed");
-
-                if (!data.orders || data.orders.length === 0) {
-                    tab.innerHTML = `<p class='p-4'>Your cart is empty.</p>
-                    </div>
-                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
-                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                            <p class="mb-2">Subtotal: $0</p>
-                            <p class="mb-2">Tax: $0</p>
-                            <p class="mb-4 font-bold">Total: $0</p>
-
-                        </div>
-                    </div>`;
-                    return;
-                }
-
-                let html = `<div class="grid grid-cols-2 h-screen gap-4 p-4">
-                                <div class="col-span-1 bg-white">`;
-
-                data.orders.forEach(order => {
-                    html += `
-                        <div class="grid grid-cols-2 gap-4 bg-white shadow-lg rounded-lg overflow-hidden">
-                            <div class="col-span-1 bg-white p-4">
-                                <h2 class="text-2xl font-bold mb-4">Order #${order.id}</h2>
-                    `;
-                    
-                    order.items.forEach(item =>{
+                // Left column — Items
+                html += `<div class="col-span-1 bg-white">`;
+                if (items.length === 0) {
+                    html += `<p class="p-4">No items for this group order.</p>`;
+                } else {
+                    items.forEach(item => {
+                        const qty = Number(item.quantity) || 0;
+                        const price = Number(item.price) || 0;
+                        const totalItem = Number(item.total) || (qty * price);
                         html += `
                         <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
                             <div class="flex flex-row">
                                 <div class="flex flex-col">
                                     <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                    <div flex flex-row>
-                                        <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
+                                    <div class="flex flex-row">
+                                        <p class="mb-1 pl-32">Quantity: ${qty}</p>
                                     </div>
-                                    <p class="mb-1 pl-32">Price: $${item.price}</p>
-                                    <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
+                                    <p class="mb-1 pl-32">Price: $${price.toFixed(2)}</p>
+                                    <p class="mb-1 pl-32 font-bold">Total: $${totalItem.toFixed(2)}</p>
                                 </div>
                             </div>
                         </div>`;
                     });
+                }
+                html += `</div>`;
 
-                    html += `
-                        </div>
-                            <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
-                                <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                                <p class="mb-2">Subtotal: $${order.summary.subtotal}</p>
-                                <p class="mb-2">Tax: $${order.summary.tax}</p>
-                                <p class="mb-4 font-bold">Total: $${order.summary.total}</p>
-                                <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-                                        onclick="changeOrderStatus(${order.id || 'null'}, 'placed')">
-                                    Proceed to Checkout
-                                </button>
-                            </div>
-                        </div>`;
+                // Right column — Summary + Popup trigger
+                html += `
+                <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
+                    <h2 class="text-2xl font-bold mb-4">Group Order Summary</h2>
+                    <p class="mb-2">Subtotal: $${subtotal.toFixed(2)}</p>
+                    <p class="mb-2">Tax: $${tax.toFixed(2)}</p>
+                    <p class="mb-4 font-bold">Total: $${total.toFixed(2)}</p>
+                    <p>Join an existing group by clicking the button</p>
+                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
+                            onclick="openPopup('group')">
+                        Leave Group Order
+                    </button>
+                </div>
+                </div>`;
             });
 
-            html += `</div>`;
+            // Add popup modal once
+            html += `
+            <!-- Popup Modal -->
+            <div id="popupModal"
+                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+                <div class="bg-white p-6 rounded-2xl shadow-lg w-96">
+                    <h2 class="text-2xl font-bold mb-4">Leave Group</h2>
+                    <form id="popupForm" onsubmit="submitPopup(event, 'group')">
+                        <div class="mb-3">
+                            <label class="block font-semibold mb-1">Group ID</label>
+                            <input type="text" id="GroupId" name="GroupId"
+                                class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
+                                required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="block font-semibold mb-1">Password</label>
+                            <input type="text" id="Password" name="Password"
+                                class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
+                                required>
+                        </div>
+                        <div class="flex justify-end space-x-2 mt-4">
+                            <button type="button"
+                                    class="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400"
+                                    onclick="closePopup()">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+                                Submit
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>`;
+
             tab.innerHTML = html;
         })
-        .catch(err =>{
-            console.error('Error retreiving data', err);
+        .catch(err => {
+            console.error('Error retrieving group cart:', err);
+            const tab = document.getElementById("tab-group");
+            tab.innerHTML = `<p class="p-4">Error loading group orders.</p>`;
         });
+}
 
-    }
+
+
+    function displayPlacedOrders() {
+        const placedItemsUrl = "{% url 'placed_items' %}";
+        fetch(placedItemsUrl)
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                console.log('placed items response:', data);
+                const tab = document.getElementById("tab-placed");
+                const orders = Array.isArray(data) ? data : (Array.isArray(data.orders) ? data.orders : []);
+
+                if (orders.length === 0) {
+                    tab.innerHTML = `<p class='p-4'>You have no placed orders.</p>`;
+                    return;
+                }
+
+                let html = '';
+                orders.forEach(order => {
+                    const items = Array.isArray(order.items) ? order.items : [];
+                    const summary = order.summary || {};
+                    const subtotal = Number(summary.subtotal) || 0;
+                    const tax = Number(summary.tax) || 0;
+                    const total = Number(summary.total) || 0;
+                    const orderId = order.id || 'null';
+
+                    html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
+
+                    // left column - items (same style as displayCart)
+                    html += `<div class="col-span-1 bg-white">`;
+                    if (items.length === 0) {
+                        html += `<p class="p-4">No items for this order.</p>`;
+                    } else {
+                        items.forEach(item => {
+                            const itemQty = Number(item.quantity) || 0;
+                            const itemPrice = Number(item.price) || 0;
+                            const itemTotal = Number(item.total) || (itemQty * itemPrice);
+                            html += `
+                            <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                                <div class="flex flex-row">
+                                    <div class="flex flex-col">
+                                        <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
+                                        <div flex flex-row>
+                                            <p class="mb-1 pl-32">Quantity: ${itemQty}</p>
+                                            <input type="number" name="item_amount" value="${itemQty}" min="1"
+                                                class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
+                                        </div>
+                                        <p class="mb-1 pl-32">Price: $${itemPrice.toFixed(2)}</p>
+                                        <p class="mb-1 pl-32"><b>Total: $${itemTotal.toFixed(2)}</b></p>
+                                    </div>
+                                </div>
+                            </div>`;
+                        });
+                    }
+                    html += `</div>`; // end left column
+
+                    // right column - summary (same style as displayCart)
+                    html += `
+                    <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
+                        <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                        <p class="mb-2">Subtotal: $${subtotal.toFixed(2)}</p>
+                        <p class="mb-2">Tax: $${tax.toFixed(2)}</p>
+                        <p class="mb-4 font-bold">Total: $${total.toFixed(2)}</p>
+                    </div>`;
+
+                    html += `</div>`; // end order grid
+                });
+
+                tab.innerHTML = html;
+            })
+            .catch(err => {
+                console.error('Error retrieving placed orders:', err);
+                const tab = document.getElementById("tab-placed");
+                tab.innerHTML = `<p class="p-4">Error loading placed orders.</p>`;
+            });
+        }
+
+
+
 
     function displayCart() {
         const cartItemsUrl = "{% url 'cart_items' %}";
@@ -283,8 +403,9 @@
                     return;
                 }
 
-                let html = `<div class="grid grid-cols-2 h-screen gap-4 p-4">
-                                <div class="col-span-1 bg-white">`;
+                let html = `
+                <div class="col-span-1 bg-white">
+                `;
 
                 data.items.forEach(item => {
                     html += `
@@ -297,7 +418,7 @@
                                     <input type="number" name="item_amount" value="${item.quantity}" min="1"
                                         class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
                                     <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
-                                            onclick="handleItemClick(this, ${item.id}, this.previousElementSibling.value)">
+                                            onclick="updateItemNum(this, ${item.id}, this.previousElementSibling.value)">
                                         Update
                                     </button>
                                 </div>
@@ -305,30 +426,79 @@
                                 <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
                             </div>
                             <button class="ml-auto self-center">
-                                <a href="" class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md">Remove item</a>
+                                <a href="#" class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
+                                onclick="removeItem(${item.id}); return false;">
+                                Remove item
+                                </a>
                             </button>
                         </div>
                     </div>`;
                 });
 
-                html += `</div>
-                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
-                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                            <p class="mb-2">Subtotal: $${data.order.subtotal}</p>
-                            <p class="mb-2">Tax: $${data.order.tax}</p>
-                            <p class="mb-4 font-bold">Total: $${data.order.total}</p>
-                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-                                    onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
-                                Proceed to Checkout
-                            </button>
-                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                html += `
+                </div>
+                <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
+                    <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
+                    <p class="mb-2">Subtotal: $${data.order.subtotal}</p>
+                    <p class="mb-2">Tax: $${data.order.tax}</p>
+                    <p class="mb-4 font-bold">Total: $${data.order.total}</p>
+                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                            onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
+                        Proceed to Checkout
+                    </button>
+                    <input type="text" id="group_password" name="group_password" placeholder="Enter group password"
+                            class="w-full p-2 border border-gray-300 rounded-lg bg-white text-black mt-4 mb-4">
+                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
                             onclick="createGroup({{ id|default:'null' }})">
-                                Create Group For my Cart
-                            </button>
-                        </div>
-                        </div>`;
+                        Create Group For my Cart
+                    </button>
+                    <p class="pt-4 text-2xl font-bold mb-4">Join an existing group by clicking the button</p>
+                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
+                            onclick="openPopup()">
+                        Join Group Order
+                    </button>
+                </div>
+
+                <!-- Popup Modal -->
+                <div id="popupModal"
+                    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+                    <div class="bg-white p-6 rounded-2xl shadow-lg w-96">
+                        <h2 class="text-2xl font-bold mb-4">Enter Details</h2>
+                        <form id="popupForm" onsubmit="submitPopup(event, 'cart')">
+                            <div class="mb-3">
+                                <label class="block font-semibold mb-1">Group Id</label>
+                                <input type="text" id="GroupId" name="GroupId"
+                                    class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
+                                    required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="block font-semibold mb-1">Password</label>
+                                <input type="text" id="Password" name="Password"
+                                    class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
+                                    required>
+                            </div>
+                            <div class="flex justify-end space-x-2 mt-4">
+                                <button type="button"
+                                        class="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400"
+                                        onclick="closePopup()">
+                                    Cancel
+                                </button>
+                                <button type="submit"
+                                        class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+                                    Submit
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+
+
+    </div>
+                `;
 
                 tab.innerHTML = html;
+
             });
     }
 
@@ -360,30 +530,111 @@
             alert('An error occurred while updating the order status.');
         });
     }
-
+    
     function createGroup(orderId) {
+        const raw_password = document.getElementById("group_password").value;
+        if (!raw_password) {
+            alert("Please enter a password for the group.");
+            return;
+        }
         const url = `/shoppingcart/${orderId}/`;
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
         fetch(url, {
             method: 'POST',
             headers: {
+                'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
+            body: JSON.stringify({ password: raw_password })
         })
-        .then(response => {
-            if (response.redirected) {
-                window.location.href = response.url;
-            } else if (response.ok) {
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`Group created! Please remember your Group ID.  
+                Group ID: ${data.group_id}`);
                 window.location.reload();
             } else {
-                console.error("Error when creating a group", response.status);
+                console.error("Server error:", data.error);
             }
         })
         .catch(error => {
             console.error('Error:', error);
         })
     }
+
+    function openPopup() {
+        document.getElementById('popupModal').classList.remove('hidden');
+    }
+
+    function closePopup() {
+        document.getElementById('popupModal').classList.add('hidden');
+    }
+
+    function submitPopup(event, tabName) {
+        event.preventDefault(); // prevent page reload
+
+        const groupId = document.getElementById('GroupId').value;
+        const Password = document.getElementById('Password').value;
+
+        console.log("Field 1:", groupId);
+        console.log("Field 2:", Password);
+
+        if (!groupId || !Password) {
+            alert('Please fill out both fields.');
+            return;
+        }
+
+        const url = tabName === 'cart' ? `/shoppingcart/add_user_to_group/${groupId}/` : `/shoppingcart/remove_user_from_group/${groupId}/`;
+        console.log("Submitting to URL:", url);
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ password: Password })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Success:', data);
+            closePopup();
+        })
+        .catch(error => console.error('Error:', error));
+
+    }
+
+    function remove_from_group() {
+        event.preventDefault(); // prevent page reload
+
+        const groupId = document.getElementById('groupId').value;
+        const Password = document.getElementById('Password').value;
+
+        console.log("Field 1:", groupId);
+        console.log("Field 2:", Password);
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ password: raw_password })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Success:', data);
+            closePopup();
+        })
+        .catch(error => console.error('Error:', error));
+
+    }
+
 
     function removeItem(itemId) {
         console.log("remove item?");
@@ -394,9 +645,16 @@
             method: 'POST',
             headers: {
                 'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+
             },
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 console.log("removed item");
@@ -407,6 +665,40 @@
         })
         .catch(err => {
             console.error('Error removing item', err)
+        });
+    }
+
+    function updateItemNum(button, itemId, newQuantity) {
+        console.log("update item num?");
+        console.log(itemId);
+        console.log(newQuantity);
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch(`/shoppingcart/updateItem/${itemId}/${newQuantity}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ quantity: newQuantity })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                console.log("updated item quantity");
+                display('cart')
+            } else {
+                console.error(data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Error updating item quantity', err)
         });
     }
     

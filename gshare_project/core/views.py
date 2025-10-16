@@ -211,6 +211,7 @@ def get_order_items(order: Orders):
 
      # Upsert into order_items (composite PK table) and recompute total
     with transaction.atomic(using='gsharedb'):
+        print("Fetching items for order:", order.id)
         with connections['gsharedb'].cursor() as cur:
             # Fetch items with their details
             cur.execute(
@@ -228,6 +229,29 @@ def get_order_items(order: Orders):
    # if not items.exists():
    #     return []
     return items
+
+def get_order_items_by_order_id(order_id: int):
+     # Upsert into order_items (composite PK table) and recompute total
+    with transaction.atomic(using='gsharedb'):
+        print("Fetching items for order:", order_id)
+        with connections['gsharedb'].cursor() as cur:
+            # Fetch items with their details
+            cur.execute(
+                """
+                SELECT oi.*, i.name, i.price, i.store_id
+                FROM order_items oi
+                JOIN items i ON oi.item_id = i.id
+                WHERE oi.order_id = %s
+                """,
+                [order_id]
+            )
+
+        items = cur.fetchall()
+   # items = OrderItems.objects.using('gsharedb').filter(order=order).select_related('item')
+   # if not items.exists():
+   #     return []
+    return items
+
 
 """
 Change the status of an order in the 'gsharedb' database.
@@ -315,6 +339,35 @@ def get_feedback_by_order(reviewee: Users, reviewer: Users):
 
 """ functions from here are for group orders """
 
+@login_required
+def create_group_order_json(request, order_id: int):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        raw_password = data.get('password')
+        
+        if not raw_password:
+            return JsonResponse({'error': 'Password is required'}, status=400)
+        
+        profile = get_user("email", request.user.email)
+        if not profile:
+            return JsonResponse({'error': 'Profile not found'}, status=404)
+        
+        try:
+            order = Orders.objects.using('gsharedb').get(id=order_id, user=profile)
+        except Orders.DoesNotExist:
+            return JsonResponse({'error': 'Order not found'}, status=404)
+        
+        print(f"Creating group order for user {profile.email} with order {order_id}")
+        try:
+            group = create_group_order(profile, [order_id], raw_password)
+            print("created group")
+            return JsonResponse({'success': True, 'group_id': group.group_id})
+        except Exception as e:
+            print(f"Error creating group order: {e}")
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
 """
 Create a new group order with a list of order IDs and a password.
 Args:
@@ -324,27 +377,99 @@ Args:
     GroupOrders: The created GroupOrders object.
 """
 def create_group_order(user: Users, order_ids: list[int], raw_password: str):
-
+    print(f"Creating group order for user {user.email} with orders {order_ids}")
     if not order_ids:
         raise ValueError("order_ids list cannot be empty")
 
     with transaction.atomic(using='gsharedb'):
         group = GroupOrders.objects.using('gsharedb').create(description="Group Order", password_hash="")
+        print(f"Created group order with ID: {group.group_id}")
         set_group_password(group, raw_password)
         for oid in order_ids:
+            print(f"Adding order {oid} to group {group.group_id}")
             try:
+                print(f"Adding order {oid} to group")
                 order = Orders.objects.using('gsharedb').get(id=oid, user=user)
+                print(f"Found order {oid} for user {user.email}")
                 GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
+                print("I'm lost")
             except Orders.DoesNotExist:
                 continue
+        print(f"Created group order {group.group_id} with password hash {group.password_hash}")
         return group
     
+def add_user_to_group_json(request, group: int):
+    print("add_user_to_group_json called with group:", group)
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        password = data.get('password')
+        
+        if not password:
+            return JsonResponse({'error': 'Password is required'}, status=400)
+        
+        profile = get_user("email", request.user.email)
+        if not profile:
+            return JsonResponse({'error': 'Profile not found'}, status=404)
+        
+        group_info = get_group_by_id(group)
+        print("group_info:", group_info)
+        if not group_info:
+            return JsonResponse({'error': 'Group not found'}, status=404)
+        
+        if not verify_group_password(group_info, password):
+            return JsonResponse({'error': 'Invalid password'}, status=403)
+        
+        print(f"Adding user {profile.email} to group {group_info.id}")
+        try:
+            success = add_user_to_group(group_info, profile)
+            if success:
+                return JsonResponse({'success': True})
+            else:
+                return JsonResponse({'error': 'User already in group'}, status=400)
+        except Exception as e:
+            print(f"Error adding user to group: {e}")
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
 def add_user_to_group(group: GroupOrders, user: Users, order: Orders = None):
     try:
         GroupMembers.objects.using('gsharedb').create(group=group, user=user, order=order)
         return True
     except IntegrityError:
         return False
+    
+def remove_user_from_group_json(request, group: GroupOrders):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        password = data.get('password')
+        
+        if not password:
+            return JsonResponse({'error': 'Password is required'}, status=400)
+        
+        profile = get_user("email", request.user.email)
+        if not profile:
+            return JsonResponse({'error': 'Profile not found'}, status=404)
+        
+        group = get_group_by_id(data.get('group_id'))
+        if not group:
+            return JsonResponse({'error': 'Group not found'}, status=404)
+        
+        if not verify_group_password(group, password):
+            return JsonResponse({'error': 'Invalid password'}, status=403)
+        
+        print(f"Removing user {profile.email} from group {group.id}")
+        try:
+            success = remove_user_from_group(group, profile)
+            if success:
+                return JsonResponse({'success': True})
+            else:
+                return JsonResponse({'error': 'User not in group'}, status=404)
+        except Exception as e:
+            print(f"Error removing user from group: {e}")
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
 
 def remove_user_from_group(group: GroupOrders, user: Users):
     try:
@@ -445,15 +570,17 @@ def verify_group_password(group, raw_password: str) -> bool:
         list: A list of dictionaries containing order details and user information.
 """
 def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500):
-    
+    print(f"orders_in_viewport: {min_lat}, {min_lng}, {max_lat}, {max_lng}, limit={limit}")
     # Get users within the viewport
-    users_in_viewport = _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit)
+    users_in_viewport = _users_in_viewport(min_lat, min_lng, max_lat, max_lng, limit)
+    print(f"Users in viewport: {len(users_in_viewport)}")
 
     if not users_in_viewport:
         return []  # No users found in the viewport
 
     # Extract user IDs from the users in the viewport
     user_ids = [user['id'] for user in users_in_viewport]
+    print(f"Found {len(user_ids)} users in viewport")
 
     # Fetch orders for the users in the viewport
     orders = Orders.objects.using('gsharedb').filter(user_id__in=user_ids, status="placed").select_related('user')
@@ -474,35 +601,32 @@ def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500):
 
     return orders_with_users
 
-def _users_in_viewport_spatial(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
+"""
+Return users whose (latitude, longitude) fall inside the map viewport.
+Works with your current schema: latitude, longitude DECIMAL(9,6).
+Handles antimeridian (min_lng > max_lng).
+"""
+
+def _users_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id=None):
+    qs = (Users.objects.using('gsharedb')        # ← use MySQL
+          .filter(latitude__isnull=False, longitude__isnull=False))
+
+    if exclude_id is not None:
+        qs = qs.exclude(id=exclude_id)
+
+    lat_q = Q(latitude__gte=min_lat, latitude__lte=max_lat)
     if min_lng <= max_lng:
-        rect_wkt = f"POLYGON(({min_lng} {min_lat},{min_lng} {max_lat},{max_lng} {max_lat},{max_lng} {min_lat},{min_lng} {min_lat}))"
-        sql = """
-          SELECT id, name, address, ST_X(location) AS lng, ST_Y(location) AS lat
-          FROM users
-          WHERE MBRIntersects(location, ST_SRID(ST_PolygonFromText(%s), 4326))
-          {exclude}
-          LIMIT %s
-        """
-        exclude_clause = "AND id <> %s" if exclude_id is not None else ""
-        params = [rect_wkt] + ([exclude_id] if exclude_id is not None else []) + [limit]
-        with connection.cursor() as cur:
-            cur.execute(sql.format(exclude=exclude_clause), params)
-            rows = cur.fetchall()
-        return [{"id": r[0], "name": r[1], "address": r[2],
-                 "longitude": float(r[3]), "latitude": float(r[4])} for r in rows]
+        lng_q = Q(longitude__gte=min_lng, longitude__lte=max_lng)
+        qs = qs.filter(lat_q & lng_q)
     else:
-        # Antimeridian split
-        left = _users_in_viewport_spatial(min_lat, min_lng, max_lat, 180.0, limit, exclude_id)
-        right = _users_in_viewport_spatial(min_lat, -180.0, max_lat, max_lng, limit, exclude_id)
-        seen, out = set(), []
-        for row in left + right:
-            if row["id"] in seen: 
-                continue
-            seen.add(row["id"]); out.append(row)
-            if len(out) >= limit: 
-                break
-        return out
+        qs = qs.filter(lat_q & (Q(longitude__gte=min_lng) | Q(longitude__lte=max_lng)))
+
+    rows = list(qs.values("id", "name", "address", "longitude", "latitude")[:limit])
+    for r in rows:
+        r["longitude"] = float(r["longitude"])
+        r["latitude"]  = float(r["latitude"])
+    return rows
+
 
 """Main functions"""
 
@@ -839,7 +963,7 @@ def add_to_cart(request, item_id, quantity=1):
     return redirect('cart')
 
 @login_required
-def remove_from_cart(request, item_id):
+def remove_from_cart(request, item_id, quantity=1):
     profile = get_user("email", request.user.email)
     if not profile:
         messages.error(request, "Profile not found.")
@@ -850,36 +974,49 @@ def remove_from_cart(request, item_id):
         messages.error(request, "No active cart.")
         return redirect('cart')
 
-    try:
-        order_item = OrderItems.objects.using('gsharedb').get(order=order, item_id=item_id)
-    except OrderItems.DoesNotExist:
-        messages.error(request, "Item not in cart.")
-        return redirect('cart')
-
     with transaction.atomic(using='gsharedb'):
-        order_item.delete()
 
         # RECALC TOTAL from line items
         with connections['gsharedb'].cursor() as cur:
-            cur.execute(
-                """
-                SELECT COALESCE(SUM(quantity * price), 0)
-                FROM order_items
-                WHERE order_id = %s
-                """,
-                [order.id]
-            )
-            total = cur.fetchone()[0] or 0
+            cur.execute("""
+                SELECT quantity FROM order_items
+                WHERE order_id=%s AND item_id=%s
+                LIMIT 1
+            """, [order.id, item_id])
+            line = cur.fetchone()
+            if not line:
+                messages.warning(request, "Item not found in cart.")
+                return redirect("cart_view")
+
+            if line[0] > quantity:
+                cur.execute("UPDATE order_items SET quantity=quantity-%s WHERE order_id=%s AND item_id=%s ", [quantity, order.id, item_id])
+            else:
+                cur.execute("DELETE FROM order_items WHERE order_id=%s AND item_id=%s ", [order.id, item_id])
+
+            # 3) Recompute order total
+            cur.execute("""
+                UPDATE orders o
+                JOIN (
+                    SELECT order_id, COALESCE(SUM(price * quantity),0) AS total
+                    FROM order_items
+                    WHERE order_id=%s
+                ) t ON t.order_id = o.id
+                SET o.total_amount = t.total
+                WHERE o.id=%s
+            """, [order.id, order.id])
+            total = cur.fetchone() or 0
 
         order.total_amount = total
         order.save(using='gsharedb')
 
+        item = Items.objects.using('gsharedb').filter(id=item_id).first()
+
     # Always return JSON for AJAX
     if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == "application/json":
-        return JsonResponse({"success": True, "message": f"removed {order_item.item.name} frpm your cart."})
+        return JsonResponse({"success": True, "message": f"removed {item.name} frpm your cart."})
 
-    messages.success(request, f"Removed {order_item.item.name} from your cart.")
-    return redirect('cart')
+    messages.success(request, f"Removed {item.name} from your cart.")
+    return redirect('shoppingcart')
 
 
 @login_required
@@ -1120,14 +1257,15 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
     orders = get_orders_by_status('placed')
     print("maps data")
     info = {}
-    for order in orders_in_viewport(min_lat, min_lng, max_lat, max_lng):
-        if order.delivery_address:
-            user = get_user("id", order.user.id)
-                 
-                
+    oiv = orders_in_viewport(min_lat, min_lng, max_lat, max_lng)
+    print("orders in viewport:", len(oiv))
+    for order in oiv:
+        if order['delivery_address']:
+            user = get_user("id", order['user']['id'])
+
             
-            # print(user.name)
-        items = get_order_items(order)
+        print(order['order_id'])
+        items = get_order_items_by_order_id(order['order_id'])
                 
         subtotal = 0
         items_with_totals = []
@@ -1141,10 +1279,10 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
                 'total': total,
             })
         order_data = {
-            'address': order.delivery_address,
+            'address': order['delivery_address'],
             'items': items_with_totals,
             'subtotal': subtotal,
-            'order_id': order.id,
+            'order_id': order['order_id'],
         }
 
         # Group by user name (or user.id if you prefer)
@@ -1217,7 +1355,7 @@ def placed_data(request):
             'summary': order_summary,
             'items': items_with_totals,
         })
-
+    print(order_list)
     return JsonResponse({
         'orders': order_list
     })
@@ -1230,37 +1368,51 @@ def group_data(request):
     if not profile:
         print("no user")
         return JsonResponse({'error': 'Profile not found'}, status=404)
-
-    order = get_orders_in_group(profile, 'cart')
-    if not order:
+    groups = get_groups_for_user(profile)
+    if not groups:
         return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+    
+    orders = []
+    for group in groups:
+        order = get_cart_in_group(profile, group.group_id)
+        print("order in group:", order)
+        if order:
+            orders.append(order)
+    # order = get_orders_in_group(profile, 'cart')
+    print("orders:", orders)
+    if not orders:
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+    order_info = []
+    for order in orders:
+        items = get_order_items(order) if order else []
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+            
+        tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+        grand_total = round(subtotal + tax, 2)
 
-    items = get_order_items(order[0]) if order[0] else []
-    subtotal = 0
-    items_with_totals = []
-    for item in items:
-        total = item[2] * item[5]  # quantity * price
-        subtotal += total
-        items_with_totals.append({
-            'name': item[4],  # item name
-            'quantity': item[2],
-            'price': item[5],  # item price
-            'total': total,
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+        order_info.append({
+            'id': order.id,
+            'summary': order_summary,
+            'items': items_with_totals,
         })
-        
-    tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
-    grand_total = round(subtotal + tax, 2)
-
-    order_summary = {
-        'subtotal': subtotal,
-        'tax': tax,
-        'total': grand_total,
-    }
 
     return JsonResponse({
-        'items': items_with_totals,
-        'order': order_summary,
-        'id': order[0].id if order else None,
+        'orders': order_info
     })
     
     
@@ -1287,6 +1439,7 @@ def cart_data(request):
             'quantity': item[2],
             'price': item[5],  # item price
             'total': total,
+            'id': item[1],  # item id
         })
         
     tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
@@ -1297,7 +1450,6 @@ def cart_data(request):
         'tax': tax,
         'total': grand_total,
     }
-
     return JsonResponse({
         'items': items_with_totals,
         'order': order_summary,
@@ -1354,8 +1506,6 @@ def shoppingcart(request):
 
     user = request.user
     profile = get_user("email", user.email)
-    print("User profile:", profile.name)
-    print(profile.id)
     order = get_orders(profile, 'cart')
     if not order:
         order = []
