@@ -526,8 +526,11 @@ def get_group_by_user_and_order(user: Users, order: Orders):
         membership = GroupMembers.objects.using('gsharedb').filter(user=user, order=order).first()
         print(membership)
         if membership is not None:
+            if membership is not None:
             return membership.group
         
+        return None
+
         return None
     except GroupMembers.DoesNotExist:
         return None
@@ -1392,6 +1395,54 @@ def placed_data(request):
         'orders': order_list
     })
     
+def inprogress_data(request):
+    print("inprogress data")
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    profile = get_user("email", request.user.email)
+    if not profile:
+        print("no user")
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    orders = get_orders(profile, 'inprogress')
+    print(orders)
+    if not orders:
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+
+    order_list = []
+    
+    for order in orders:
+        items = get_order_items(order) if order else []
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+        
+        tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+        grand_total = round(subtotal + tax, 2)
+
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+        order_list.append({
+            'id': order.id,
+            'summary': order_summary,
+            'items': items_with_totals,
+        })
+    print(order_list)
+    return JsonResponse({
+        'orders': order_list
+    })
+    
     
 def group_data(request):
     if not request.user.is_authenticated:
@@ -1668,6 +1719,8 @@ def getUserProfile(request, userID):
 def payments(request):
     user = get_user("email", request.user.email)
     order = get_orders(user, "cart").first()
+    orders = []
+    members = []
 
     group = get_group_by_user_and_order(user, order)
     print(group)
@@ -1678,7 +1731,6 @@ def payments(request):
     if group is not None:
         orders = get_orders_in_group(group.group_id)
         members = get_group_members(group)
-        
         # carts data
         for ord in orders:
             items = get_order_items(ord)
@@ -1708,6 +1760,37 @@ def payments(request):
                 'delivery_pref': delivery_pref,
                 'payment_status': payment_status,
             })
+    else:
+        orders.append(order)
+        members.append(user)
+
+        for ord in orders:
+            items = get_order_items(ord)
+            subtotal = sum(item[2] * item[5] for item in items)  # quantity * price
+            tax = round(subtotal * Decimal(0.07), 2)
+            total = round(subtotal + tax, 2)
+            user_name = ord.user.name
+            carts_in_group.append({
+                'user_name': user_name,
+                'total': total,
+            })
+        delivery_pref = f"Delivered to {user.address}" 
+        payment_status = "⏳" 
+        if order:
+            if order.status == 'cart':
+                payment_status = "🛒"
+            elif order.status == 'placed':
+                payment_status = "✅"
+            elif order.status == 'pending':
+                payment_status = "⏳"
+            else:
+                payment_status = "🔄"  # For other statuses like 'inprogress'
+        members_payments.append({
+            'user_name': user.name,
+            'delivery_pref': delivery_pref,
+            'payment_status': payment_status,
+        })
+        
     print(order)
 
     context = {
