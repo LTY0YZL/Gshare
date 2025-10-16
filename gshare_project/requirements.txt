@@ -1,4 +1,4 @@
-django
+Django>=5.1,<5.2
 pymysql
 python-decouple
 django-browser-reload
@@ -6,3 +6,7 @@ daphne
 channels
 django_tailwind_cli
 requests
+django-q2
+honcho
+stripe
+argon2-cffi

@@ -1,0 +1,65 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheduled Orders</title>
+    <link rel="stylesheet" href="{% static 'css/scheduled_orders.css' %}">
+</head>
+<body>
+    {% include 'navbar.html' %}
+    
+    <div class="main-container">
+        <h1 class="page-title">Scheduled Orders</h1>
+        
+        <div class="form-container">
+            <form method="post" action="{% url 'order_history' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-primary">Make a past order recurring</button>
+            </form>
+        </div>
+        
+        {% for cart in carts %}
+        <div class="cart-card">
+            <div class="cart-header">
+                <h4>Recurring Cart of Order #{{ cart.id }} - {{ cart.status|title }}</h4>
+                <div>
+                    <form method="post" action="{% url 'toggle_cart_status' cart.id %}" class="form-inline">
+                        {% csrf_token %}
+                        <button name="cartStatus" value="{{cart.status}}" type="submit" class="btn-toggle {% if cart.status == 'enabled' %}enabled{% else %}disabled{% endif %}">
+                            {% if cart.status == 'enabled' %}Pause{% else %}Enable{% endif %}
+                        </button>
+                    </form>
+                    <form method="post" action="{% url 'delete_cart' cart.id %}" class="form-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-delete">Delete</button>
+                    </form>
+                </div>
+            </div>
+            
+            <form method="post" action="{% url 'updateScheduledOrders' cart.id %}" class="update-form">
+                {% csrf_token %}
+                <label class="label-date">This Order is Scheduled For: </label><input class="auto-order-date" type="date" name="next_order_date" value="{{ cart.next_order_date|date:'Y-m-d' }}" />
+                <div class="items-container">
+                    {% for item in cart.items.all %}
+                        <div class="item-row">
+                            <span class="item-name">{{ item.item.name }}</span>
+                            <span class="item-price">${{ item.item.price }} each</span>
+                            <label>Qty: </label><input type="number" name="quantity_{{ item.id }}" value="{{ item.quantity }}" class="qty-input" />
+                        </div>
+                    {% empty %}
+                        <p>No items in this cart.</p>
+                    {% endfor %}
+                </div>
+                <div class="save-container">
+                    <button type="submit" class="btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+        {% empty %}
+        <p>No recurring carts yet. Create one to get started!</p>
+        {% endfor %}
+    </div>
+</body>
+</html>

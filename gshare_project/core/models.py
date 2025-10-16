@@ -11,6 +11,7 @@ class Users(models.Model):
     description = models.TextField(null=True, blank=True) 
     latitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
     longitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
+    #area_code = models.IntegerField(db_column = 'addressCode',max_length=10, null=True, blank=True)
 
     class Meta:
         managed = False
@@ -50,17 +51,23 @@ class Orders(models.Model):
         db_table = 'orders'
 
 class Feedback(models.Model):
-    reviewee = models.ForeignKey('Users', on_delete=models.CASCADE, null=True, blank=True)
-    reviewer = models.ForeignKey('Users', on_delete=models.CASCADE, related_name='feedback_reviewer_set', null=True, blank=True)
-    feedback = models.CharField(max_length=255, null=True, blank=True)
-    order = models.OneToOneField('Orders', on_delete=models.CASCADE, primary_key=True)
-    rating = models.PositiveSmallIntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    feedback_id = models.AutoField(primary_key=True)  # new primary key
+    reviewee = models.ForeignKey('Users', on_delete=models.CASCADE, db_column='reviewee_id', related_name='received_feedbacks')
+    reviewer = models.ForeignKey('Users', on_delete=models.CASCADE, db_column='reviewer_id', related_name='given_feedbacks')
+    feedback = models.CharField(max_length=255, db_column='Feedback', null=True, blank=True)
+    rating = models.PositiveSmallIntegerField(null=True, blank=True)
     description_subject = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
-        managed = False
+        managed = False   # if the table already exists in MySQL
         db_table = 'FEEDBACK'
-        unique_together = (('reviewee', 'reviewer'),)
+        constraints = [
+            models.UniqueConstraint(fields=['reviewee', 'reviewer'], name='reviewee_id'),
+            models.CheckConstraint(check=models.Q(rating__gte=1, rating__lte=5), name='rating'),
+        ]
+
+    def __str__(self):
+        return f"Feedback #{self.feedback_id} from {self.reviewer_id} to {self.reviewee_id}"
 
 class OrderItems(models.Model):
     order = models.ForeignKey('Orders', on_delete=models.CASCADE, db_column='order_id')  # Map to order_id
@@ -74,8 +81,8 @@ class OrderItems(models.Model):
         unique_together = (('order', 'item'),)  # Enforce uniqueness on order_id and item_id
 
     # Explicitly define the composite primary key
-    def save(self, *args, **kwargs):
-        raise NotImplementedError("This model is read-only.")
+    # def save(self, *args, **kwargs):
+    #     raise NotImplementedError("This model is read-only.")
 
 class Deliveries(models.Model):
     id = models.AutoField(primary_key=True)
@@ -113,3 +120,39 @@ class GroupMembers(models.Model):
     class Meta:
         managed = False
         db_table = 'group_members'
+class RecurringCart(models.Model):
+    STATUS_CHOICES = [
+        ('enabled', 'Enabled'),
+        ('paused', 'Paused'),
+    ]
+    FREQUENCY_CHOICES = [
+        ('weekly', 'Weekly'),
+        ('biweekly', 'Bi-Weekly'),
+        ('monthly', 'Monthly'),
+    ]
+
+    user = models.ForeignKey(Users, on_delete=models.CASCADE, related_name='recurring_carts')
+    name = models.CharField(max_length=100)
+    frequency = models.CharField(max_length=10, choices=FREQUENCY_CHOICES, default='weekly')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='enabled')
+    next_order_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        managed = False
+        db_table = 'core_recurringcart'
+
+    def __str__(self):
+        return f"{self.name} for {self.user.name}"
+
+class RecurringCartItem(models.Model):
+    recurring_cart = models.ForeignKey(RecurringCart, on_delete=models.CASCADE, related_name='items')
+    item = models.ForeignKey(Items, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        managed = False
+        db_table = 'core_recurringcartitem'
+        
+    def __str__(self):
+        return f"{self.quantity} x {self.item.name}"

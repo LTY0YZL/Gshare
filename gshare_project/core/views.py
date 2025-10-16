@@ -26,12 +26,16 @@ import requests
 from core.utils.geo import geoLoc
 from urllib.parse import urlencode
 from . import kroger_api
+import stripe
+from datetime import timedelta
+
 
 from core.models import (
     Users,
     Stores, Items,
     Orders, OrderItems,
-    Deliveries, Feedback, GroupOrders, GroupMembers
+    Deliveries, Feedback, GroupOrders, GroupMembers,
+    RecurringCart, RecurringCartItem
 )
 
 """helper functions"""
@@ -54,6 +58,12 @@ def get_user_ratings(user_id: int):
     avg_rating = feedbacks.aggregate(Avg('rating'))['rating__avg']
     return feedbacks, avg_rating
 
+def get_most_recent_order(user: Users, delivery_person: Users, status: str):
+    try:
+        order = Deliveries.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status).latest('order_date')
+        return order
+    except Orders.DoesNotExist:
+        return None
 
 """
 Retrieve a user from the 'gsharedb' database based on a specific field and value.
@@ -177,6 +187,17 @@ def get_orders_by_status(order_status: str):
         return []
     return orders
 
+def get_most_recent_order(user: Users, delivery_person: Users, status: str):
+    try:
+        Delivery = Deliveries.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status)
+
+        for d in Delivery:
+            order = Orders.objects.using('gsharedb').get(id=d.order.id, user=user)
+        return order
+
+    except Orders.DoesNotExist:
+        return None
+
 """
 Retrieve all items in a specific order from the 'gsharedb' database.
 
@@ -274,12 +295,11 @@ def get_my_deliveries(user: Users, delivery_status: str):
 
 """ functions for feedback """
 
-def add_feedback(reviewee: Users, reviewer: Users, order: Orders, feedback_text: str, rating: int):
+def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, rating: int):
     try:
         feedback = Feedback.objects.using('gsharedb').create(
             reviewee=reviewee,
             reviewer=reviewer,
-            order=order,
             feedback=feedback_text,
             rating=rating,
             description_subject=feedback_text[:50] if feedback_text else None
@@ -288,19 +308,33 @@ def add_feedback(reviewee: Users, reviewer: Users, order: Orders, feedback_text:
     except IntegrityError as e:
         print(f"Error adding feedback: {e}")
         return None
-    
+
+def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, subject: str, rating: int):
+    try:
+        feedback = Feedback.objects.using('gsharedb').create(
+            reviewee=reviewee,
+            reviewer=reviewer,
+            feedback=feedback_text,
+            rating=rating,
+            description_subject= subject
+        )
+        return feedback
+    except IntegrityError as e:
+        print(f"Error adding feedback: {e}")
+        return None
 def get_feedback_for_user(user: Users):
     feedbacks = Feedback.objects.using('gsharedb').filter(reviewee=user)
     if not feedbacks.exists():
         return []
     return feedbacks
 
-def get_feedback_by_order(order: Orders):
+def get_feedback_by_order(reviewee: Users, reviewer: Users):
     try:
-        feedback = Feedback.objects.using('gsharedb').get(order=order)
+        feedback = Feedback.objects.using('gsharedb').get(reviewee=reviewee, reviewer=reviewer)
         return feedback
     except Feedback.DoesNotExist:
         return None
+
     
 
 """ functions from here are for group orders """
@@ -455,18 +489,17 @@ def get_group_members(group: GroupOrders):
     return GroupMembers.objects.using('gsharedb').filter(group=group).select_related('user', 'order')
 
 def get_groups_for_user(user: Users):
-    return GroupMembers.objects.using('gsharedb').filter(user=user).distinct()
+    return GroupMembers.objects.using('gsharedb').filter(users=user).distinct()
 
 def get_cart_in_group(user: Users, group: GroupOrders):
-    print(user, group)
     try:
-        membership = GroupMembers.objects.using('gsharedb').get(user=user, group=group)
-        print(membership.order)
+        membership = GroupMembers.objects.using('gsharedb').filter(user=user, group=group)
         if membership.order and membership.order.status == 'cart':
             return membership.order
         return None
     except GroupMembers.DoesNotExist:
         return None
+    
 
 def get_orders_in_group(group_id: int):
     order_ids = (
@@ -490,7 +523,8 @@ def remove_group(group: GroupOrders):
     
 def get_group_by_user_and_order(user: Users, order: Orders):
     try:
-        membership = GroupMembers.objects.using('gsharedb').get(user=user, order=order)
+        membership = GroupMembers.objects.using('gsharedb').filter(user=user, order=order).first()
+        print(membership)
         return membership.group
     except GroupMembers.DoesNotExist:
         return None
@@ -661,7 +695,7 @@ def signup_view(request):
             # roll back auth user if business insert fails
             auth_user.delete()
             messages.error(request, f"Could not create profile: {ex}")
-            return redirect('home')
+            return redirect('signup')
 
 
         # Login and redirect
@@ -1564,8 +1598,143 @@ def myorders(request):
     return render(request, 'ordershistory.html', {'orders_with_items': orders_with_items})
 
 @login_required
+def getUserProfile(request, userID):
+    authUser = get_user("email", request.user.email)
+    reviewee = get_user("id", userID)
+    userReviews = get_user_ratings(userID)
+    #latestOrder = get_most_recent_order(authUser, reviewee, "done")
+    
+    context = {
+        'user': reviewee,
+        'userReviews': userReviews[0],
+        #'latestOrder': latestOrder,
+    }
+
+    if request.method == 'POST':
+        reviewText = (request.POST.get('review') or '').strip()
+        try:
+            reviewRating = int(request.POST.get('rating') or 1)
+        except (TypeError, ValueError):
+            reviewRating = 1
+        
+        subject = "Bad Delivery"
+        print(authUser)
+        print(reviewee)
+
+        #if latestOrder is None:
+        #    messages.error(request, "You can only leave a review if you have a completed order with this user.")
+        #    return render(request, 'aboutUserPage.html', context=context)
+
+        add_feedback(reviewee, authUser, reviewText, subject, reviewRating)
+        messages.success(request, "Review posted.")
+        context['userReviews'] = get_user_ratings(userID)[0]
+        return render(request, 'aboutUserPage.html', context=context)
+
+    return render(request, 'aboutUserPage.html', context=context)
+
+@login_required
 def payments(request):
-    return render(request, "paymentsPage.html")
+    user = get_user("email", request.user.email)
+    order = get_orders(user, "cart").first()
+
+    group = get_group_by_user_and_order(user, order)
+    print(group)
+
+    carts_in_group = []
+    members_payments = []
+
+    if group is not None:
+        orders = get_orders_in_group(group.group_id)
+        members = get_group_members(group)
+        
+        # carts data
+        for ord in orders:
+            items = get_order_items(ord)
+            subtotal = sum(item[2] * item[5] for item in items)  # quantity * price
+            tax = round(subtotal * Decimal(0.07), 2)
+            total = round(subtotal + tax, 2)
+            user_name = ord.user.name
+            carts_in_group.append({
+                'user_name': user_name,
+                'total': total,
+            })
+        
+        for member in members:
+            delivery_pref = f"Delivered to {member.user.address}" 
+            payment_status = "⏳" 
+            if member.order:
+                if member.order.status == 'cart':
+                    payment_status = "🛒"
+                elif member.order.status == 'placed':
+                    payment_status = "✅"
+                elif member.order.status == 'pending':
+                    payment_status = "⏳"
+                else:
+                    payment_status = "🔄"  # For other statuses like 'inprogress'
+            members_payments.append({
+                'user_name': member.user.name,
+                'delivery_pref': delivery_pref,
+                'payment_status': payment_status,
+            })
+    print(order)
+
+    context = {
+        'carts_in_group': carts_in_group,
+        'members_payments': members_payments,
+    }
+    return render(request, "paymentsPage.html", context)
+
+@login_required
+def paymentsCheckout(request):
+
+    # change order status to placed upon successful payment
+    try:
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        profile = get_user("email", request.user.email)
+        try:
+            orders = get_orders(profile, "cart")
+            if not orders:
+                messages.error(request, "No items in the cart to checkout.")
+                return redirect('cart')
+            order = orders[0]
+            orderItems = get_order_items(order)
+        except Exception:
+            messages.error(request, "No items in the cart to checkout.")
+            return redirect('cart')
+        
+        if not orderItems:
+            messages.error(request, "Cart is empty.")
+            return redirect('cart')
+        
+        itemObjects = []
+        for oi in orderItems:
+            # oi is a tuple: (order_id, item_id, quantity, price, name, price, store_id)
+            itemObjects.append({
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': oi[4],
+                    },
+                    'unit_amount': int(oi[3] * 100),  # price in cents
+                },
+                'quantity': oi[2],
+            })
+
+        checkoutSession = stripe.checkout.Session.create(
+            line_items=itemObjects,
+            mode='payment',
+            success_url="http://127.0.0.1:8000/",
+            cancel_url="http://127.0.0.1:8000/cart/payments",
+        )
+        return redirect(checkoutSession.url)
+    except stripe.error.StripeError as e:
+        messages.error(request, f"Payment error: {e.user_message}")
+        return redirect('payments')
+    except Exception as e:
+        print(f"A serious error occurred: {e}. We have been notified.")
+        messages.error(request, "An unexpected error occurred. Please try again.")
+        return redirect('payments')  # Added return
+
 
 def createGroupForShoppingCart(request, order_id):
     user = get_user("email", request.user.email)
@@ -1598,3 +1767,167 @@ def pickup_price(user_location, drop_off_location, num_items, store_address, api
         'time_cost': time_cost,
         'total_cost': total_cost,
     }
+
+@login_required
+def getUserProfile(request, userID):
+    authUser = get_user("email", request.user.email)
+    reviewee = get_user("id", userID)
+    userReviews = get_user_ratings(userID)
+    latestOrder = get_most_recent_order(authUser, reviewee, "done")
+    
+    context = {
+        'user': reviewee,
+        'userReviews': userReviews[0],
+        'latestOrder': latestOrder,
+    }
+
+    if request.method == 'POST':
+        reviewText = (request.POST.get('review') or '').strip()
+        try:
+            reviewRating = int(request.POST.get('rating') or 0)
+        except (TypeError, ValueError):
+            reviewRating = 0
+
+        if latestOrder is None:
+            messages.error(request, "You can only leave a review if you have a completed order with this user.")
+            return render(request, 'aboutUserPage.html', context=context)
+
+        add_feedback(reviewee, authUser, reviewText, reviewRating)
+        messages.success(request, "Review posted.")
+        context['userReviews'] = get_user_ratings(userID)[0]
+        return render(request, 'aboutUserPage.html', context=context)
+
+    return render(request, 'aboutUserPage.html', context=context)
+
+
+@login_required
+def create_recurring_cart(request):
+    messages.info(request, " ")
+    return redirect('recurring_carts')
+
+@login_required
+def manage_recurring_carts(request):
+    profile = get_object_or_404(Users.objects.using('gsharedb'), email=request.user.email)
+    carts = RecurringCart.objects.using('gsharedb').filter(user=profile).prefetch_related('items__item')
+    context = {'carts': carts}
+    return render(request, 'scheduled_orders.html', context)
+
+@login_required
+def create_recurring_from_order(request, order_id):
+    profile = get_object_or_404(Users.objects.using('gsharedb'), email=request.user.email)
+    original_order = get_object_or_404(Orders.objects.using('gsharedb'), pk=order_id, user=profile)
+
+    new_recurring_cart = RecurringCart.objects.using('gsharedb').create(
+        user=profile,
+        name=f"Recurring from Order #{original_order.id}",
+        frequency='weekly',
+        status='enabled',
+        next_order_date=timezone.now().date() + timedelta(days=7)
+    )
+
+    items_to_copy = []
+    with connections['gsharedb'].cursor() as cursor:
+        cursor.execute("SELECT item_id, quantity FROM order_items WHERE order_id = %s", [original_order.id])
+        items_to_copy = cursor.fetchall()
+
+    for item_id, quantity in items_to_copy:
+        RecurringCartItem.objects.using('gsharedb').create(
+            recurring_cart=new_recurring_cart,
+            item_id=item_id,  
+            quantity=quantity
+        )
+    
+    messages.success(request, f"Successfully created a new recurring list from Order #{original_order.id}.")
+    return redirect('manage_recurring_carts')
+
+@login_required
+def toggle_recurring_cart_status(request, cart_id):
+    cart = get_object_or_404(RecurringCart.objects.using('gsharedb'), pk=cart_id, user__email=request.user.email)
+    if cart.status == 'enabled':
+        cart.status = 'paused'
+    else:
+        cart.status = 'enabled'
+    cart.save(using='gsharedb')
+    return redirect('manage_recurring_carts')
+
+@login_required
+def delete_recurring_cart(request, cart_id):
+    cart = get_object_or_404(RecurringCart.objects.using('gsharedb'), pk=cart_id, user__email=request.user.email)
+    cart_name = cart.name
+    cart.delete()
+    messages.success(request, f"Successfully deleted the recurring list: '{cart_name}'.")
+    return redirect('manage_recurring_carts')
+
+@login_required
+def scheduled_orders(request):
+    profile = get_object_or_404(Users.objects.using('gsharedb'), email=request.user.email)
+    carts = RecurringCart.objects.using('gsharedb').filter(user=profile).prefetch_related('items__item')
+    context = {'carts': carts}
+    return render(request, "scheduled_orders.html", context)
+
+@login_required
+def updateScheduledOrders(request, cart_id):
+    user = get_user("email", request.user.email)
+    if request.method == 'POST':
+        try:
+            cart = RecurringCart.objects.using('gsharedb').get(id=cart_id, user=user)
+        except RecurringCart.DoesNotExist:
+            messages.error(request, "Recurring cart not found.")
+            return redirect('scheduled_orders')
+
+        # Update next date of order
+        nextDate = request.POST.get('next_order_date')
+        if nextDate:
+            try:
+                cart.next_order_date = timezone.datetime.fromisoformat(nextDate).date()
+            except ValueError:
+                messages.error(request, "Invalid date format.")
+                return redirect('scheduled_orders')
+
+        # Update item quantities
+        for item in cart.items.all():
+            quantity_key = f'quantity_{item.id}'
+            quantity_str = request.POST.get(quantity_key)
+            if quantity_str:
+                try:
+                    quantity = int(quantity_str)
+                    if quantity > 0:
+                        item.quantity = quantity
+                        item.save(using='gsharedb')
+                    else:
+                        messages.warning(request, f"Quantity for {item.item.name} must be greater than 0.")
+                except ValueError:
+                    messages.error(request, f"Invalid quantity for {item.item.name}.")
+                    return redirect('scheduled_orders')
+
+        cart.save(using='gsharedb')
+        messages.success(request, "Recurring cart updated successfully.")
+        return redirect('scheduled_orders')  
+
+    return redirect('scheduled_orders')
+
+@login_required
+def create_recurring_cart(request):
+    return redirect('scheduled_orders')
+
+@login_required
+def toggle_cart_status(request, cart_id):
+    user = get_user("email", request.user.email)
+    if request.method == "POST":
+        recurringCart = RecurringCart.objects.using('gsharedb').get(id=cart_id, user=user)
+        cartStatus = request.POST.get("cartStatus")
+        if cartStatus == "enabled":
+            recurringCart.status = "disabled"
+        else:
+            recurringCart.status = "enabled"
+        recurringCart.save(using='gsharedb')
+        return redirect('scheduled_orders')
+    return redirect('scheduled_orders')
+
+@login_required
+def delete_cart(request, cart_id):
+    user = get_user("email", request.user.email)
+    if request.method == "POST":
+        recurringCart = RecurringCart.objects.using('gsharedb').get(id=cart_id, user=user)
+        recurringCart.delete(using='gsharedb')
+    return redirect('scheduled_orders')

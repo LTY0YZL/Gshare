@@ -25,6 +25,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('about/', views.aboutus, name='aboutus'),
     path('profile/', views.userprofile, name='profile'),
+    path('profile/<int:userID>/', views.getUserProfile, name="getUserProfile"),
     path('menu/', views.menu, name='menu'),
     path('groups/', include('chat.urls')),
     path('maps/', views.maps, name="maps"),
@@ -53,12 +54,28 @@ urlpatterns = [
 
     path('myorders/', views.myorders, name='order_history'),
     path('cart/payments/', views.payments, name='payments'),
+    path('cart/payments/checkout/', views.paymentsCheckout, name='paymentscheckout'),
     # path('chat/', include('chat.urls')),
     path("__reload__/", include("django_browser_reload.urls")),
     
+    # kroger api
     path('cart/kroger/add/',   views.add_kroger_item_to_cart, name='add_kroger_item_to_cart'),
     path('cart/kroger/save/',  views.save_kroger_results,     name='save_kroger_results'),
     path('cart/kroger/clear/', views.clear_kroger_items,      name='clear_kroger_items'),   
+    
+    # recurring Carts
+    path('recurring/', views.manage_recurring_carts, name='manage_recurring_carts'),
+    path('recurring/create/', views.create_recurring_cart, name='create_recurring_cart'),
+    path('recurring/toggle/<int:cart_id>/', views.toggle_recurring_cart_status, name='toggle_recurring_cart_status'),
+    path('recurring/create-from-order/<int:order_id>/', views.create_recurring_from_order, name='create_recurring_from_order'),
+    path('recurring/delete/<int:cart_id>/', views.delete_recurring_cart, name='delete_recurring_cart'),
+    path('recurring/update/<int:cart_id>/', views.updateScheduledOrders, name='updateScheduledOrders'),
+
+    path('cart/kroger/clear/', views.clear_kroger_items,      name='clear_kroger_items'), 
+    path('myorders/recurring', views.scheduled_orders, name='scheduled_orders'),
+    path('myorders/create_recurring_cart/', views.create_recurring_cart, name='create_recurring_cart'),
+    path('myorders/toggle_cart_status/<int:cart_id>/', views.toggle_cart_status, name='toggle_cart_status'),
+    path('myorders/delete_cart/<int:cart_id>/', views.delete_cart, name='delete_cart'),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
