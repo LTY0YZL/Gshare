@@ -1360,6 +1360,54 @@ def placed_data(request):
         'orders': order_list
     })
     
+def inprogress_data(request):
+    print("inprogress data")
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    profile = get_user("email", request.user.email)
+    if not profile:
+        print("no user")
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    orders = get_orders(profile, 'inprogress')
+    print(orders)
+    if not orders:
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+
+    order_list = []
+    
+    for order in orders:
+        items = get_order_items(order) if order else []
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+        
+        tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+        grand_total = round(subtotal + tax, 2)
+
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+        order_list.append({
+            'id': order.id,
+            'summary': order_summary,
+            'items': items_with_totals,
+        })
+    print(order_list)
+    return JsonResponse({
+        'orders': order_list
+    })
+    
     
 def group_data(request):
     if not request.user.is_authenticated:
