@@ -536,15 +536,17 @@ def verify_group_password(group, raw_password: str) -> bool:
         list: A list of dictionaries containing order details and user information.
 """
 def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500):
-    
+    print(f"orders_in_viewport: {min_lat}, {min_lng}, {max_lat}, {max_lng}, limit={limit}")
     # Get users within the viewport
     users_in_viewport = _users_in_viewport(min_lat, min_lng, max_lat, max_lng, limit)
+    print(f"Users in viewport: {len(users_in_viewport)}")
 
     if not users_in_viewport:
         return []  # No users found in the viewport
 
     # Extract user IDs from the users in the viewport
     user_ids = [user['id'] for user in users_in_viewport]
+    print(f"Found {len(user_ids)} users in viewport")
 
     # Fetch orders for the users in the viewport
     orders = Orders.objects.using('gsharedb').filter(user_id__in=user_ids, status="placed").select_related('user')
@@ -1222,6 +1224,7 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
     print("maps data")
     info = {}
     oiv = orders_in_viewport(min_lat, min_lng, max_lat, max_lng)
+    print("orders in viewport:", len(oiv))
     for order in oiv:
         if order['delivery_address']:
             user = get_user("id", order['user']['id'])

@@ -133,6 +133,7 @@
             const maxLng = ne.lng();
             const minLat = sw.lat();
             const minLng = sw.lng();
+            console.log(`Map bounds: NE(${maxLat}, ${maxLng}), SW(${minLat}, ${minLng})`);
 
             // Fetch maps data asynchronously after map loads
             const url = `/maps/maps-data/${minLat}/${minLng}/${maxLat}/${maxLng}/`;
