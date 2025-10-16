@@ -525,7 +525,10 @@ def get_group_by_user_and_order(user: Users, order: Orders):
     try:
         membership = GroupMembers.objects.using('gsharedb').filter(user=user, order=order).first()
         print(membership)
-        return membership.group
+        if membership is not None:
+            return membership.group
+        
+        return None
     except GroupMembers.DoesNotExist:
         return None
     
@@ -737,8 +740,21 @@ def updateProfile(profile, data, files):
         profile.phone = data['phone']
     
     if 'address' in data:
-        profile.address = data['address']
-    
+        address = data['address']
+
+        lat, lng = geoLoc(address)
+        print(f"Geocoded {address} to lat={lat}, lng={lng}")
+
+        profile.address = address
+        print(f"Updated profile address to {address}")
+
+        profile.latitude = lat
+        profile.longitude = lng
+
+        print(f"Geocoded {address} to lat={lat}, lng={lng}")
+        print(f"Updated profile address to {address}, lat={profile.latitude}, lng={profile.longitude}")
+
+
     if 'about_me' in data:
         profile.about_me = data['about_me']
     
@@ -795,7 +811,23 @@ def userprofile(request):
                     profile.phone = request.POST['phone']
                 
                 if 'address' in request.POST:
-                    profile.address = request.POST['address']
+                    address = request.POST['address']
+
+                    profile.address = address
+                    print(f"Updated profile address to {address}")
+
+                    lat, lng = geoLoc(address)
+                    print(f"Geocoded {address} to lat={lat}, lng={lng}")
+
+                    profile.address = address
+                    print(f"Updated profile address to {address}")
+
+                    profile.latitude = lat
+                    profile.longitude = lng
+
+                    print(f"Updated profile address to {address}, lat={profile.latitude}, lng={profile.longitude}")
+                                
+
 
                 if 'profile_picture' in request.FILES:
                     profile_picture = request.FILES.get('profile_picture')
