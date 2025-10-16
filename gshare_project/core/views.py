@@ -527,7 +527,7 @@ def get_group_by_user_and_order(user: Users, order: Orders):
         print(membership)
         if membership is not None:
             if membership is not None:
-            return membership.group
+                return membership.group
         
         return None
 
@@ -1883,36 +1883,36 @@ def pickup_price(user_location, drop_off_location, num_items, store_address, api
         'total_cost': total_cost,
     }
 
-@login_required
-def getUserProfile(request, userID):
-    authUser = get_user("email", request.user.email)
-    reviewee = get_user("id", userID)
-    userReviews = get_user_ratings(userID)
-    latestOrder = get_most_recent_order(authUser, reviewee, "done")
+# @login_required
+# def getUserProfile(request, userID):
+#     authUser = get_user("email", request.user.email)
+#     reviewee = get_user("id", userID)
+#     userReviews = get_user_ratings(userID)
+#     latestOrder = get_most_recent_order(authUser, reviewee, "done")
     
-    context = {
-        'user': reviewee,
-        'userReviews': userReviews[0],
-        'latestOrder': latestOrder,
-    }
+#     context = {
+#         'user': reviewee,
+#         'userReviews': userReviews[0],
+#         'latestOrder': latestOrder,
+#     }
 
-    if request.method == 'POST':
-        reviewText = (request.POST.get('review') or '').strip()
-        try:
-            reviewRating = int(request.POST.get('rating') or 0)
-        except (TypeError, ValueError):
-            reviewRating = 0
+#     if request.method == 'POST':
+#         reviewText = (request.POST.get('review') or '').strip()
+#         try:
+#             reviewRating = int(request.POST.get('rating') or 0)
+#         except (TypeError, ValueError):
+#             reviewRating = 0
 
-        if latestOrder is None:
-            messages.error(request, "You can only leave a review if you have a completed order with this user.")
-            return render(request, 'aboutUserPage.html', context=context)
+#         if latestOrder is None:
+#             messages.error(request, "You can only leave a review if you have a completed order with this user.")
+#             return render(request, 'aboutUserPage.html', context=context)
 
-        add_feedback(reviewee, authUser, reviewText, reviewRating)
-        messages.success(request, "Review posted.")
-        context['userReviews'] = get_user_ratings(userID)[0]
-        return render(request, 'aboutUserPage.html', context=context)
+#         add_feedback(reviewee, authUser, reviewText, reviewRating)
+#         messages.success(request, "Review posted.")
+#         context['userReviews'] = get_user_ratings(userID)[0]
+#         return render(request, 'aboutUserPage.html', context=context)
 
-    return render(request, 'aboutUserPage.html', context=context)
+#     return render(request, 'aboutUserPage.html', context=context)
 
 
 @login_required
