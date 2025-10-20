@@ -489,16 +489,13 @@ def get_group_members(group: GroupOrders):
     return GroupMembers.objects.using('gsharedb').filter(group=group).select_related('user', 'order')
 
 def get_groups_for_user(user: Users):
-    return GroupMembers.objects.using('gsharedb').filter(users=user).distinct()
+    return GroupMembers.objects.using('gsharedb').filter(user=user).distinct()
 
 def get_cart_in_group(user: Users, group: GroupOrders):
-    try:
-        membership = GroupMembers.objects.using('gsharedb').filter(user=user, group=group)
-        if membership.order and membership.order.status == 'cart':
-            return membership.order
-        return None
-    except GroupMembers.DoesNotExist:
-        return None
+    membership = GroupMembers.objects.using('gsharedb').filter(user=user, group=group).first()
+    if membership and membership.order and membership.order.status == 'cart':
+        return membership.order
+    return None
     
 
 def get_orders_in_group(group_id: int):
@@ -528,10 +525,10 @@ def get_group_by_user_and_order(user: Users, order: Orders):
         if membership is not None:
             if membership is not None:
                 return membership.group
+                return membership.group
         
         return None
 
-        return None
     except GroupMembers.DoesNotExist:
         return None
     
@@ -1915,7 +1912,7 @@ def getUserProfile(request, userID):
         context['userReviews'] = get_user_ratings(userID)[0]
         return render(request, 'aboutUserPage.html', context=context)
 
-    return render(request, 'aboutUserPage.html', context=context)
+#     return render(request, 'aboutUserPage.html', context=context)
 
 
 @login_required
