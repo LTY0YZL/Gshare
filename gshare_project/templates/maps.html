@@ -90,7 +90,7 @@
 
         let map;
         let geocoder;
-        let markers = [];
+        let markers = {};
         {% comment %} const addresses_with_info = JSON.parse('{{ delivery_addresses_with_info_json|escapejs }}'); {% endcomment %}
         const user_address = '{{ user_address|escapejs }}';
         let fetchTimeout = null; // for debouncing
@@ -146,34 +146,56 @@
                 .catch(err => console.error("Error fetching delivery data:", err));
         }
 
-        function addMarkers(addresses_with_info) {
-            // Add a marker for each address
-            addresses_with_info.forEach(userData => {
 
-                // first order for location
-                const firstOrder = userData.orders[0];
-                const address = firstOrder?.address;
+        function addMarkers(addressGroups) {
+
+            // ensure we have bounds on the map
+            const bounds = map.getBounds();
+
+            if (!bounds) {
+                console.warn("Map bounds not available yet.");
+                return;
+            }
+
+            // Remove markers that are out of bounds
+            for (const [address, marker] of Object.entries(markers)) {
+                if (!bounds.contains(marker.getPosition())) {
+                    marker.setMap(null);
+                    delete markers[address];
+                }
+            }
+            // Add a marker for each address
+            addressGroups.forEach(group => {
+                const address = group.address;
 
                 // Skip missing or invalid addresses
                 if (!address || address.trim().length < 5) {
                     console.warn("Skipping invalid address:", address);
                     return;
                 }
-                console.log("Geocoding address:", firstOrder.address);
-                geocoder.geocode({ 'address': firstOrder.address }, (results, status) => {
+
+                // Skip if marker already exists
+                if (markers[address]) return;
+
+                // Geocode the address to get its location and add marker
+                geocoder.geocode({ 'address': address }, (results, status) => {
                     if (status === 'OK') {
                         const location = results[0].geometry.location;
+
                         const marker = new google.maps.Marker({
                             map: map,
                             position: location
+                            title: `Orders at ${address}`
+
                         });
-                        markers.push({ marker, user: userData.user });
 
                         marker.addListener('click', () => {
                             // Display user info in your popup
-                            console.log("marker clicked:", userData.user);
-                            showPopup(userData);
+                            showPopup(group);
                         });
+
+                        // store the user marker
+                        markers[address] = marker;
                     } else {
                         console.error("Geocode failed:", status);
                     }
@@ -183,12 +205,11 @@
         let popupJustOpened = false;
 
 
-        function showPopup(userData) {
+        function showPopup(group) {
             console.log("popup");
-            console.log(userData.orders[0].items);
-            let ordersHTML = userData.orders.map(order => `
+            let ordersHTML = group.orders.map(order => `
                 <div class="border-t border-gray-300 mt-4 pt-4">
-                    <p class="text-gray-700 text-xl"><b>Address:</b> ${order.address}</p>
+                    <p class="text-gray-700 text-xl"><b>Address:</b> ${group.address}</p>
                     <ul class="list-disc pl-6">
                         ${order.items.map(item => `
                             <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
@@ -215,7 +236,9 @@
             // Inject into popup
             document.getElementById('popup-content').innerHTML = `
                 <div class="space-y-4">
-                    <h2 class="text-4xl font-bold mb-2 text-center">${userData.user}</h2>
+                    <a href="{% url 'getUserProfile' userData.id %}">
+                    <h2 class="text-4xl font-bold mb-2 text-center">{{ userData.user }}</h2>
+                    </a>
                     ${ordersHTML}
                 </div>
             `;
@@ -260,58 +283,6 @@
             // Otherwise, close popup
             popup.classList.add("translate-x-full");
         });
-                            {% comment %} let ordersHTML = '';
-
-                            // loop through each order
-                            userData.orders.forEach(order => {
-                                ordersHTML += `
-                                    <div class="border-t border-gray-300 mt-4 pt-4">
-                                        <p class="text-gray-700 text-xl"><b>Address:</b> ${order.address}</p>
-                                        <ul class="list-disc pl-6">
-                                            ${order.items.map(item => `
-                                                <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
-                                                    <span class="font-semibold">${item.name}</span>:
-                                                    <span class="font-semibold">${item.quantity} × $${item.price} =</span>
-                                                    <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
-                                                </li>
-                                            `).join('')}
-                                        </ul>
-                                        <p class="text-right text-lg font-bold mt-2">Subtotal: $${order.subtotal.toFixed(2)}</p>
-                                        <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
-                                            onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
-                                            Accept Request
-                                        </button>
-                                    </div>`;
-                            });
-                    
-                            // Inject into popup
-                            document.getElementById('popup-content').innerHTML = `
-                                <div class="space-y-4">
-                                    <h2 class="text-4xl font-bold mb-2 text-center">${userData.user}</h2>
-                                    ${ordersHTML}
-                                </div>
-                            `;
-                            document.getElementById('popup').classList.remove('translate-x-full');
-                        });
-                    } else {
-                        console.error('Geocode failed: ' + status);
-                    }
-                });
-            });
-        } {% endcomment %}
-
-            {% comment %} marker = new google.maps.Marker({ map: map, position: location }); {% endcomment %}
-
-            {% comment %} marker.addListener('click', () => {
-                const popup = document.getElementById('popup');
-                const map_popup = document.getElementById('map_popup');
-                map_popup.classList.add('-translate-x-50');
-                popup.classList.remove('translate-x-full'); {% endcomment %}
-            {% comment %} }); {% endcomment %}
-
-            
-    
-        {% comment %} } {% endcomment %}
 
         function geocodeAddress() {
             const address = document.getElementById('input_location').value;

@@ -1282,20 +1282,20 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
     max_lat = float(max_lat)
     max_lng = float(max_lng)
     
-    stores = Stores.objects.all()
-    user = get_user("email", request.user.email)
-    user_address = user.address
-    orders = get_orders_by_status('placed')
-    print("maps data")
+    # stores = Stores.objects.all()
+    # user_address = user.address
+    
     info = {}
+    
     oiv = orders_in_viewport(min_lat, min_lng, max_lat, max_lng)
-    print("orders in viewport:", len(oiv))
+    
     for order in oiv:
-        if order['delivery_address']:
-            user = get_user("id", order['user']['id'])
+        address = order['delivery_address']
+        if not address:
+            continue
+        
+        user = get_user("id", order['user']['id'])
 
-            
-        print(order['order_id'])
         items = get_order_items_by_order_id(order['order_id'])
                 
         subtotal = 0
@@ -1314,17 +1314,19 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
             'items': items_with_totals,
             'subtotal': subtotal,
             'order_id': order['order_id'],
+            'user': user.name,
+            'user_id': user.id,
         }
 
         # Group by user name (or user.id if you prefer)
-        if user.name not in info:
-            info[user.name] = []
-        info[user.name].append(order_data)
+        if address not in info:
+            info[address] = []
+        info[address].append(order_data)
 
     # Convert to grouped list format for easy JSON use
     grouped_info = [
-        {'user': user_name, 'orders': orders}
-        for user_name, orders in info.items()
+        {'address': addr, 'orders': orders}
+        for addr, orders in info.items()
     ]
     
     return JsonResponse(grouped_info, safe=False)
