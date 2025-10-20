@@ -527,7 +527,7 @@ def get_group_by_user_and_order(user: Users, order: Orders):
         print(membership)
         if membership is not None:
             if membership is not None:
-            return membership.group
+                return membership.group
         
         return None
 
@@ -1718,7 +1718,7 @@ def getUserProfile(request, userID):
 @login_required
 def payments(request):
     user = get_user("email", request.user.email)
-    order = get_orders(user, "cart").first()
+    order = get_orders(user, "inprogress").first()
     orders = []
     members = []
 
@@ -1807,7 +1807,7 @@ def paymentsCheckout(request):
         stripe.api_key = settings.STRIPE_SECRET_KEY
         profile = get_user("email", request.user.email)
         try:
-            orders = get_orders(profile, "cart")
+            orders = get_orders(profile, "inprogress")
             if not orders:
                 messages.error(request, "No items in the cart to checkout.")
                 return redirect('cart')
@@ -1834,6 +1834,8 @@ def paymentsCheckout(request):
                 },
                 'quantity': oi[2],
             })
+
+        change_order_status(order.id, "delivered")
 
         checkoutSession = stripe.checkout.Session.create(
             line_items=itemObjects,
@@ -1888,12 +1890,11 @@ def getUserProfile(request, userID):
     authUser = get_user("email", request.user.email)
     reviewee = get_user("id", userID)
     userReviews = get_user_ratings(userID)
-    latestOrder = get_most_recent_order(authUser, reviewee, "done")
+    #latestOrder = get_most_recent_order(authUser, reviewee, "done")
     
     context = {
         'user': reviewee,
         'userReviews': userReviews[0],
-        'latestOrder': latestOrder,
     }
 
     if request.method == 'POST':
@@ -1902,12 +1903,14 @@ def getUserProfile(request, userID):
             reviewRating = int(request.POST.get('rating') or 0)
         except (TypeError, ValueError):
             reviewRating = 0
+        
+        subject = ""
 
-        if latestOrder is None:
-            messages.error(request, "You can only leave a review if you have a completed order with this user.")
-            return render(request, 'aboutUserPage.html', context=context)
+        # if latestOrder is None:
+        #     messages.error(request, "You can only leave a review if you have a completed order with this user.")
+        #     return render(request, 'aboutUserPage.html', context=context)
 
-        add_feedback(reviewee, authUser, reviewText, reviewRating)
+        add_feedback(reviewee, authUser, reviewText, subject, reviewRating)
         messages.success(request, "Review posted.")
         context['userReviews'] = get_user_ratings(userID)[0]
         return render(request, 'aboutUserPage.html', context=context)
