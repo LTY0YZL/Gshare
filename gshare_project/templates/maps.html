@@ -184,7 +184,7 @@
 
                         const marker = new google.maps.Marker({
                             map: map,
-                            position: location
+                            position: location,
                             title: `Orders at ${address}`
 
                         });
@@ -231,13 +231,16 @@
             console.log("popup element found?", popup);
             console.log("popup classes before:", popup?.classList.value);
 
+            const userName = group.orders[0].user;
+            const userId = group.orders[0].user_id;
+
             popup.classList.remove('translate-x-full');
             console.log("popup classes after:", popup.classList.value);
             // Inject into popup
             document.getElementById('popup-content').innerHTML = `
                 <div class="space-y-4">
-                    <a href="{% url 'getUserProfile' userData.id %}">
-                    <h2 class="text-4xl font-bold mb-2 text-center">{{ userData.user }}</h2>
+                    <a href="/profile/${userId}/" class="no-underline hover:underline">
+                        <h2 class="text-4xl font-bold mb-2 text-center">${userName}</h2>
                     </a>
                     ${ordersHTML}
                 </div>
