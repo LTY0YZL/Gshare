@@ -35,8 +35,8 @@
             <button id="person" class="bg-white w-1/2 h-1/12 text-lg font-bold hover:bg-[#B299EA]">People</button>
         </div>
 
-        <div id="popup-content" class="p-6"></div>
         <div id="shoppingcart">
+            <div id="popup-content" class="p-6"></div>
 
         </div>
 
@@ -86,6 +86,8 @@
             person.classList.remove('hover:bg-[#B299EA]');
             shop.classList.add('hover:bg-[#B299EA]');
 
+            loadPeopleData();
+
         });
 
         let map;
@@ -118,6 +120,7 @@
             });
 
         }
+        let user = "";
 
         function fetchMapData() {
 
@@ -138,10 +141,17 @@
             // Fetch maps data asynchronously after map loads
             const url = `/maps/maps-data/${minLat}/${minLng}/${maxLat}/${maxLng}/`;
             fetch(url)
-                .then(res => res.json())
+                .then(res => {
+                    const userName = res.headers.get('X-User-Name');
+                    console.log("fetched username from header:", userName);
+                    user = userName;
+                    return res.json();
+                })
                 .then(data => {
                     console.log("maps data received:", data);
                     addMarkers(data);
+
+                    loadPeopleData();
                 })
                 .catch(err => console.error("Error fetching delivery data:", err));
         }
@@ -192,6 +202,8 @@
                         marker.addListener('click', () => {
                             // Display user info in your popup
                             showPopup(group);
+
+                            setTimeout(() => shop.click(), 100);
                         });
 
                         // store the user marker
@@ -207,25 +219,33 @@
 
         function showPopup(group) {
             console.log("popup");
-            let ordersHTML = group.orders.map(order => `
-                <div class="border-t border-gray-300 mt-4 pt-4">
-                    <p class="text-gray-700 text-xl"><b>Address:</b> ${group.address}</p>
-                    <ul class="list-disc pl-6">
-                        ${order.items.map(item => `
-                            <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
-                                <span class="font-semibold">${item.name}</span>:
-                                <span class="font-semibold">${item.quantity} × $${item.price} =</span>
-                                <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
-                            </li>
-                        `).join('')}
-                    </ul>
-                    <p class="text-right text-lg font-bold mt-2">Subtotal: $${order.subtotal.toFixed(2)}</p>
-                    <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
-                            onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
-                        Accept Request
-                    </button>
-                </div>
-            `).join('');
+            let ordersHTML = group.orders.map(order => {
+                const orderUser = order.user;
+                console.log("order user:", orderUser);
+                console.log("current user:", user);
+                const isOwn = (orderUser === user);
+                console.log("is own order?", isOwn);
+
+                const buttonText = isOwn ? "Take own order" : "Accept Request";
+                return `
+                    <div class="border-t border-gray-300 mt-4 pt-4">
+                        <p class="text-gray-700 text-xl"><b>Address:</b> ${group.address}</p>
+                        <ul class="list-disc pl-6">
+                            ${order.items.map(item => `
+                                <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
+                                    <span class="font-semibold">${item.name}</span>:
+                                    <span class="font-semibold">${item.quantity} × $${item.price} =</span>
+                                    <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                        <p class="text-right text-lg font-bold mt-2">Subtotal: $${order.subtotal.toFixed(2)}</p>
+                        <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
+                                onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
+                            ${buttonText}
+                        </button>
+                    </div>
+                `}).join('');
 
             const popup = document.getElementById('popup');
             console.log("popup element found?", popup);
@@ -301,6 +321,57 @@
                 }
             });
         } 
+
+        function loadPeopleData() {
+
+            const bounds = map.getBounds();
+            if (!bounds) {
+                console.warn("Map bounds not available yet.");
+                return;
+            }
+
+            const ne = bounds.getNorthEast();
+            const sw = bounds.getSouthWest();
+            const maxLat = ne.lat();
+            const maxLng = ne.lng();
+            const minLat = sw.lat();
+            const minLng = sw.lng();
+            console.log(`Map bounds: NE(${maxLat}, ${maxLng}), SW(${minLat}, ${minLng})`);
+
+            // Fetch maps data asynchronously after map loads
+            const url = `/maps/people-data/${minLat}/${minLng}/${maxLat}/${maxLng}/`;
+            fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("People data received:", data);
+                    const peopleDiv = document.getElementById('people');
+
+                    // Example rendering of people data
+                    peopleDiv.innerHTML = `
+                        <div class="p-4 space-y-2">
+                            <h3 class="text-2xl font-bold mb-4">Nearby People</h3>
+                            ${data.people.map(person => `
+                                <div class="border p-3 rounded-lg bg-gray-100">
+                                    <a href="/profile/${person.user_id}/" class="no-underline hover:underline">
+                                        <p class="font-semibold">${person.name}</p>
+                                    </a>
+                                    <p class="text-sm text-gray-600">${person.address}</p>
+                                    <p class="text-sm text-gray-600">Rating: ${person.order_cost}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    console.error("Error loading people data:", error);
+                    document.getElementById('people').innerHTML = "<p class='text-red-500 p-4'>Failed to load people data.</p>";
+                });
+            }
 
         function changeOrderStatus(orderId, newStatus) {
             fetch(`/change_order_status/${orderId}/${newStatus}/`, {

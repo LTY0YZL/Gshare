@@ -51,6 +51,7 @@ urlpatterns = [
     path('shoppingcart/removeItem/<int:item_id>/', views.remove_from_cart, name="remove_item"),
     
     path("maps/maps-data/<str:min_lat>/<str:min_lng>/<str:max_lat>/<str:max_lng>/", views.maps_data, name="maps_data"),
+    path('maps/people-data/<str:min_lat>/<str:min_lng>/<str:max_lat>/<str:max_lng>/', views.people_data, name='people_data'),
 
 
     path('myorders/', views.myorders, name='order_history'),
