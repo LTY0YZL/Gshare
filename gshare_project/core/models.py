@@ -120,6 +120,7 @@ class GroupMembers(models.Model):
     class Meta:
         managed = False
         db_table = 'group_members'
+        
 class RecurringCart(models.Model):
     STATUS_CHOICES = [
         ('enabled', 'Enabled'),

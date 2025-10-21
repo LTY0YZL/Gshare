@@ -1,2 +1,1 @@
-web: python manage.py runserver
-worker: python manage.py qcluster
+web: daphne -b 0.0.0.0 -p 8000 configurations.asgi:application
