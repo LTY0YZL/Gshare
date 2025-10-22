@@ -78,6 +78,7 @@ urlpatterns = [
     path('myorders/create_recurring_cart/', views.create_recurring_cart, name='create_recurring_cart'),
     path('myorders/toggle_cart_status/<int:cart_id>/', views.toggle_cart_status, name='toggle_cart_status'),
     path('myorders/delete_cart/<int:cart_id>/', views.delete_cart, name='delete_cart'),
+    path('payment_success/<int:order_id>/', views.payment_success, name='payment_success'),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

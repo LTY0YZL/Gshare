@@ -5,13 +5,13 @@
 <header class=" {% if navbar_bg_color %}bg-[{{ navbar_bg_color }}] bg-white text-black  {% else %}bg-[#150931] text-white  {% endif %}">
     <nav class="nav flex-1 flex items-center justify-between space-x-4" >
         <div class="flex items-center xpace-x-6">
-            <a href="{% url 'cart' %}"><img src="{% static 'media/Three_lines_menu.png' %}" class="md:ml-2 mr-4 w-12 h-12" ></a>
+            <!-- <a href="{% url 'cart' %}"><img src="{% static 'media/Three_lines_menu.png' %}" class="md:ml-2 mr-4 w-12 h-12" ></a> -->
 
             <a href="/">
                 <img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo w-12 h-12 rounded-full md: mr-4">
             </a>
             <div class="flex items-center space-x-6 md:ml-10">
-                <a href="/">Home</a>
+                <!-- <a href="/">Home</a> -->
                 <a href="{% url 'cart' %}">Stores</a>
                 <a href="{% url 'shoppingcart' %}">Cart</a>
                 <a href="{% url 'maps' %}">Maps</a>
@@ -25,11 +25,7 @@
             {% if request.user.is_authenticated %}
                 <div class="flex items-center">
                     <a href="{% url 'profile' %}" class="hover:underline">
-                        {% if user and user.name %}
-                            {{ user.name }}
-                        {% else %}
-                            {{ request.user.get_full_name|default:request.user.username }}
-                        {% endif %}
+                        {{ request.user.name|default:request.user.get_full_name|default:request.user.username }}
                     </a>
                     <span style="padding: 0rem 1rem 0rem 1rem;" class="text-gray-400">|</span>
                     <a style="padding-right: 1rem;" href="{% url 'logout' %}" class="hover:underline">Log out</a>
