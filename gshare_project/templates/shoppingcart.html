@@ -218,6 +218,8 @@
 
                 html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
 
+                html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
+
                 // Left column — Items
                 html += `<div class="col-span-1 bg-white">`;
                 if (items.length === 0) {
@@ -243,6 +245,9 @@
                     });
                 }
                 html += `</div>`;
+
+                html += `</div>`; // end order container
+
 
                 // Right column — Summary + Popup trigger
                 html += `
@@ -332,10 +337,12 @@
                     const total = Number(summary.total) || 0;
                     const orderId = order.id || 'null';
 
+                    html += `<div class="bg-gray-100 shadow-md rounded-lg p-4 mb-6">`; // <-- light gray background + shadow + padding
+
                     html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
 
                     // left column - items (same style as displayCart)
-                    html += `<div class="col-span-1 bg-white">`;
+                    html += `<div class="col-span-1">`;
                     if (items.length === 0) {
                         html += `<p class="p-4">No items for this order.</p>`;
                     } else {
@@ -348,11 +355,11 @@
                                 <div class="flex flex-row">
                                     <div class="flex flex-col">
                                         <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                        <div flex flex-row>
+                                        {% comment %} <div flex flex-row> {% endcomment %}
                                             <p class="mb-1 pl-32">Quantity: ${itemQty}</p>
-                                            <input type="number" name="item_amount" value="${itemQty}" min="1"
-                                                class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
-                                        </div>
+                                            {% comment %} <input type="number" name="item_amount" value="${itemQty}" min="1"
+                                                class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black"> {% endcomment %}
+                                        {% comment %} </div> {% endcomment %}
                                         <p class="mb-1 pl-32">Price: $${itemPrice.toFixed(2)}</p>
                                         <p class="mb-1 pl-32"><b>Total: $${itemTotal.toFixed(2)}</b></p>
                                     </div>
@@ -372,6 +379,9 @@
                     </div>`;
 
                     html += `</div>`; // end order grid
+
+                    html += `</div>`; // end order container
+
                 });
 
                 tab.innerHTML = html;
@@ -414,6 +424,8 @@
 
                     html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
 
+                    html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
+
                     // left column - items (same style as displayCart)
                     html += `<div class="col-span-1 bg-white">`;
                     if (items.length === 0) {
@@ -451,12 +463,14 @@
                         <p class="mb-4 font-bold">Total: $${total.toFixed(2)}</p>
                         <form action="{% url 'payments' %}" method="get">
                             <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                                Go to New Page
+                                Payment Page
                             </button>
                         </form>
                     </div>`;
 
                     html += `</div>`; // end order grid
+
+                    html += `</div>`; // end order container
                 });
 
                 tab.innerHTML = html;

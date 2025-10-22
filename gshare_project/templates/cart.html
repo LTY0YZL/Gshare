@@ -15,7 +15,7 @@
     <div class="container py-8">
         <div class="flex justify-center mt-2">
             <form action="{% url 'cart' %}" method="get" class="mb-6 border border-gray-300 p-4 rounded-lg bg-white shadow-md w-1/2 flex flex-row flex-wrap gap-6 items-start ml-16">
-                <input type="hidden" name="store_filter" id="store_filter" value="{{ store_filter|default:'All' }}">
+                {% comment %} <input type="hidden" name="store_filter" id="store_filter" value="{{ store_filter|default:'All' }}"> {% endcomment %}
 
                 <div class="flex flex-col items-start">
                     <label class="font-bold mb-2" for="Price-Range">Price Range</label>
@@ -32,7 +32,7 @@
                 <div class="flex flex-col items-start">
                     <label class="flex flex-col">
                         <span class="font-bold mb-2">Store</span>
-                        <select id="StoresSelect" name="Stores" class="border border-gray-300 rounded-lg px-3 py-2">
+                        <select id="StoresSelect" name="Stores" class="border border-black rounded-lg px-3 py-2">
                             <option value="All" {% if store_filter == 'All' %}selected{% endif %}>All</option>
                             <option value="Walmart" {% if store_filter == 'Walmart' %}selected{% endif %}>Walmart</option>
                             <option value="Target" {% if store_filter == 'Target' %}selected{% endif %}>Target</option>
@@ -42,7 +42,13 @@
                     </label>
                 </div>
 
-                    <div id="krogerBox" class="basis-full mt-2 {% if store_filter == 'Kroger' %}block{% else %}hidden{% endif %}">                        <div class="border rounded-lg bg-white shadow-md p-3">
+                <div class="flex flex-col items-start">
+                    <label class="font-bold mb-2 invisible">Zip Code</label> <!-- placeholder for alignment -->
+                    <input type="text" name="zip_code" placeholder="Zip Code" value="{{ zip_code|default:'' }}" class="border border-black rounded-lg px-3 py-2 mb-2">
+                </div>
+
+                    {% comment %} <div id="krogerBox" class="basis-full mt-2 {% if store_filter == 'Kroger' %}block{% else %}hidden{% endif %}">
+                        <div class="border rounded-lg bg-white shadow-md p-3">
                             <div class="text-sm text-gray-600 mb-2">Search in Kroger</div>
                             <div class="flex flex-wrap gap-2 items-end">
                                 <label class="flex flex-col">
@@ -58,7 +64,7 @@
                                 <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Search Kroger</button>
                             </div>
                         </div>
-                    </div>
+                    </div> {% endcomment %}
                 </div>
             
                 <div class="flex items-center gap-4 mb-6">
@@ -94,12 +100,37 @@
                     </div>
                 </div>
             {% empty %}
-                {% if store_filter != 'Kroger' %}
+                {% comment %} {% if store_filter != 'Kroger' %} {% endcomment %}
                     <p class="text-center text-gray-500">No items match your criteria.</p>
-                {% endif %}
+                {% comment %} {% endif %} {% endcomment %}
             {% endfor %}
         </div>
-        {% if kroger_products %}
+
+        <div class="flex justify-center mt-6 mb-4">
+            {% if page_obj %}
+            <nav class="inline-flex items-center space-x-2" aria-label="Pagination">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}&Stores={{ store_filter|urlencode }}&Price-Range={{ price_filter|urlencode }}&Item_Search_Bar={{ search_query|urlencode }}&zip_code={{ zip_code|default:''|urlencode }}"
+                    class="px-3 py-1 border rounded bg-white hover:bg-gray-100">Previous</a>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <span class="px-3 py-1 bg-blue-600 text-white rounded">{{ num }}</span>
+                {% elif num >= page_obj.number|add:-2 and num <= page_obj.number|add:2 %}
+                    <a href="?page={{ num }}&Stores={{ store_filter|urlencode }}&Price-Range={{ price_filter|urlencode }}&Item_Search_Bar={{ search_query|urlencode }}&zip_code={{ zip_code|default:''|urlencode }}"
+                    class="px-3 py-1 border rounded bg-white hover:bg-gray-100">{{ num }}</a>
+                {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&Stores={{ store_filter|urlencode }}&Price-Range={{ price_filter|urlencode }}&Item_Search_Bar={{ search_query|urlencode }}&zip_code={{ zip_code|default:''|urlencode }}"
+                    class="px-3 py-1 border rounded bg-white hover:bg-gray-100">Next</a>
+                {% endif %}
+            </nav>
+            {% endif %}
+        </div>
+        {% comment %} {% if kroger_products %}
             <div class="mt-8 space-y-4">
                 <div class="flex items-center justify-between">
                     <h3 class="text-lg font-semibold">Kroger Results</h3>
@@ -157,7 +188,7 @@
             </div>
         </div>
     {% endif %}
-</div>
+</div> {% endcomment %}
 {% csrf_token %}
 </body>
 <style>
@@ -200,23 +231,29 @@
             console.error('Error:', error);
         });
     }
-    (function(){
-    const select = document.querySelectorAll('StoresSelect');
+    {% comment %} (function(){
+    const select = document.getElementById('StoresSelect');
     const hidden = document.getElementById('store_filter');
     const box = document.getElementById('krogerBox');
 
-    function toggleKrogerBox(){
+    if (!select || !hidden || !box) return; {% endcomment %}
+
+    {% comment %} function toggleKrogerBox(){
         const val = select.value;
         hidden.value = val;
-      if (val === 'Kroger') box.classList.remove('hidden');
-      else box.classList.add('hidden');
+      if (val === 'Kroger'){
+        box.classList.remove('hidden');
+      }
+      else {
+        box.classList.add('hidden');
     }
+    } {% endcomment %}
 
-    select.addEventListener('change', toggleKrogerBox);
+    {% comment %} select.addEventListener('change', toggleKrogerBox);
     toggleKrogerBox();
-  })();
+  })(); {% endcomment %}
   
-  function addKrogerItem(name, price){
+  {% comment %} function addKrogerItem(name, price){
     if (!name || !price) {
       alert('This item is missing a price and cannot be added.');
       return;
@@ -237,9 +274,9 @@
       console.error(err);
       alert('Failed to add item to cart.');
     });
-  }
+  } {% endcomment %}
 
-  function addKrogerCardClick(el, name, price){
+  {% comment %} function addKrogerCardClick(el, name, price){
     const qtyInput = el.querySelector('input[name="item_ammount"]');
     const qty = qtyInput ? parseInt(qtyInput.value || '1', 10) : 1;
 
@@ -253,7 +290,7 @@
     .then(r => (r.headers.get('content-type')||'').includes('application/json') ? r.json() : {})
     .then(data => { console.log('Added', name, qty); })
     .catch(err => { console.error(err); alert('Failed to add item to cart.'); });
-  }
+  } {% endcomment %}
 </script>
 
 <footer>

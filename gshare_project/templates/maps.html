@@ -35,8 +35,8 @@
             <button id="person" class="bg-white w-1/2 h-1/12 text-lg font-bold hover:bg-[#B299EA]">People</button>
         </div>
 
-        <div id="popup-content" class="p-6"></div>
         <div id="shoppingcart">
+            <div id="popup-content" class="p-6"></div>
 
         </div>
 
@@ -86,11 +86,13 @@
             person.classList.remove('hover:bg-[#B299EA]');
             shop.classList.add('hover:bg-[#B299EA]');
 
+            loadPeopleData();
+
         });
 
         let map;
         let geocoder;
-        let markers = [];
+        let markers = {};
         {% comment %} const addresses_with_info = JSON.parse('{{ delivery_addresses_with_info_json|escapejs }}'); {% endcomment %}
         const user_address = '{{ user_address|escapejs }}';
         let fetchTimeout = null; // for debouncing
@@ -118,6 +120,7 @@
             });
 
         }
+        let user = "";
 
         function fetchMapData() {
 
@@ -138,42 +141,73 @@
             // Fetch maps data asynchronously after map loads
             const url = `/maps/maps-data/${minLat}/${minLng}/${maxLat}/${maxLng}/`;
             fetch(url)
-                .then(res => res.json())
+                .then(res => {
+                    const userName = res.headers.get('X-User-Name');
+                    console.log("fetched username from header:", userName);
+                    user = userName;
+                    return res.json();
+                })
                 .then(data => {
                     console.log("maps data received:", data);
                     addMarkers(data);
+
+                    loadPeopleData();
                 })
                 .catch(err => console.error("Error fetching delivery data:", err));
         }
 
-        function addMarkers(addresses_with_info) {
-            // Add a marker for each address
-            addresses_with_info.forEach(userData => {
 
-                // first order for location
-                const firstOrder = userData.orders[0];
-                const address = firstOrder?.address;
+        function addMarkers(addressGroups) {
+
+            // ensure we have bounds on the map
+            const bounds = map.getBounds();
+
+            if (!bounds) {
+                console.warn("Map bounds not available yet.");
+                return;
+            }
+
+            // Remove markers that are out of bounds
+            for (const [address, marker] of Object.entries(markers)) {
+                if (!bounds.contains(marker.getPosition())) {
+                    marker.setMap(null);
+                    delete markers[address];
+                }
+            }
+            // Add a marker for each address
+            addressGroups.forEach(group => {
+                const address = group.address;
 
                 // Skip missing or invalid addresses
                 if (!address || address.trim().length < 5) {
                     console.warn("Skipping invalid address:", address);
                     return;
                 }
-                console.log("Geocoding address:", firstOrder.address);
-                geocoder.geocode({ 'address': firstOrder.address }, (results, status) => {
+
+                // Skip if marker already exists
+                if (markers[address]) return;
+
+                // Geocode the address to get its location and add marker
+                geocoder.geocode({ 'address': address }, (results, status) => {
                     if (status === 'OK') {
                         const location = results[0].geometry.location;
+
                         const marker = new google.maps.Marker({
                             map: map,
-                            position: location
+                            position: location,
+                            title: `Orders at ${address}`
+
                         });
-                        markers.push({ marker, user: userData.user });
 
                         marker.addListener('click', () => {
                             // Display user info in your popup
-                            console.log("marker clicked:", userData.user);
-                            showPopup(userData);
+                            showPopup(group);
+
+                            setTimeout(() => shop.click(), 100);
                         });
+
+                        // store the user marker
+                        markers[address] = marker;
                     } else {
                         console.error("Geocode failed:", status);
                     }
@@ -183,39 +217,51 @@
         let popupJustOpened = false;
 
 
-        function showPopup(userData) {
+        function showPopup(group) {
             console.log("popup");
-            console.log(userData.orders[0].items);
-            let ordersHTML = userData.orders.map(order => `
-                <div class="border-t border-gray-300 mt-4 pt-4">
-                    <p class="text-gray-700 text-xl"><b>Address:</b> ${order.address}</p>
-                    <ul class="list-disc pl-6">
-                        ${order.items.map(item => `
-                            <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
-                                <span class="font-semibold">${item.name}</span>:
-                                <span class="font-semibold">${item.quantity} × $${item.price} =</span>
-                                <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
-                            </li>
-                        `).join('')}
-                    </ul>
-                    <p class="text-right text-lg font-bold mt-2">Subtotal: $${order.subtotal.toFixed(2)}</p>
-                    <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
-                            onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
-                        Accept Request
-                    </button>
-                </div>
-            `).join('');
+            let ordersHTML = group.orders.map(order => {
+                const orderUser = order.user;
+                console.log("order user:", orderUser);
+                console.log("current user:", user);
+                const isOwn = (orderUser === user);
+                console.log("is own order?", isOwn);
+
+                const buttonText = isOwn ? "Take own order" : "Accept Request";
+                return `
+                    <div class="border-t border-gray-300 mt-4 pt-4">
+                        <p class="text-gray-700 text-xl"><b>Address:</b> ${group.address}</p>
+                        <ul class="list-disc pl-6">
+                            ${order.items.map(item => `
+                                <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
+                                    <span class="font-semibold">${item.name}</span>:
+                                    <span class="font-semibold">${item.quantity} × $${item.price} =</span>
+                                    <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                        <p class="text-right text-lg font-bold mt-2">Subtotal: $${order.subtotal.toFixed(2)}</p>
+                        <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
+                                onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
+                            ${buttonText}
+                        </button>
+                    </div>
+                `}).join('');
 
             const popup = document.getElementById('popup');
             console.log("popup element found?", popup);
             console.log("popup classes before:", popup?.classList.value);
+
+            const userName = group.orders[0].user;
+            const userId = group.orders[0].user_id;
 
             popup.classList.remove('translate-x-full');
             console.log("popup classes after:", popup.classList.value);
             // Inject into popup
             document.getElementById('popup-content').innerHTML = `
                 <div class="space-y-4">
-                    <h2 class="text-4xl font-bold mb-2 text-center">${userData.user}</h2>
+                    <a href="/profile/${userId}/" class="no-underline hover:underline">
+                        <h2 class="text-4xl font-bold mb-2 text-center">${userName}</h2>
+                    </a>
                     ${ordersHTML}
                 </div>
             `;
@@ -260,58 +306,6 @@
             // Otherwise, close popup
             popup.classList.add("translate-x-full");
         });
-                            {% comment %} let ordersHTML = '';
-
-                            // loop through each order
-                            userData.orders.forEach(order => {
-                                ordersHTML += `
-                                    <div class="border-t border-gray-300 mt-4 pt-4">
-                                        <p class="text-gray-700 text-xl"><b>Address:</b> ${order.address}</p>
-                                        <ul class="list-disc pl-6">
-                                            ${order.items.map(item => `
-                                                <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
-                                                    <span class="font-semibold">${item.name}</span>:
-                                                    <span class="font-semibold">${item.quantity} × $${item.price} =</span>
-                                                    <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
-                                                </li>
-                                            `).join('')}
-                                        </ul>
-                                        <p class="text-right text-lg font-bold mt-2">Subtotal: $${order.subtotal.toFixed(2)}</p>
-                                        <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
-                                            onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
-                                            Accept Request
-                                        </button>
-                                    </div>`;
-                            });
-                    
-                            // Inject into popup
-                            document.getElementById('popup-content').innerHTML = `
-                                <div class="space-y-4">
-                                    <h2 class="text-4xl font-bold mb-2 text-center">${userData.user}</h2>
-                                    ${ordersHTML}
-                                </div>
-                            `;
-                            document.getElementById('popup').classList.remove('translate-x-full');
-                        });
-                    } else {
-                        console.error('Geocode failed: ' + status);
-                    }
-                });
-            });
-        } {% endcomment %}
-
-            {% comment %} marker = new google.maps.Marker({ map: map, position: location }); {% endcomment %}
-
-            {% comment %} marker.addListener('click', () => {
-                const popup = document.getElementById('popup');
-                const map_popup = document.getElementById('map_popup');
-                map_popup.classList.add('-translate-x-50');
-                popup.classList.remove('translate-x-full'); {% endcomment %}
-            {% comment %} }); {% endcomment %}
-
-            
-    
-        {% comment %} } {% endcomment %}
 
         function geocodeAddress() {
             const address = document.getElementById('input_location').value;
@@ -327,6 +321,57 @@
                 }
             });
         } 
+
+        function loadPeopleData() {
+
+            const bounds = map.getBounds();
+            if (!bounds) {
+                console.warn("Map bounds not available yet.");
+                return;
+            }
+
+            const ne = bounds.getNorthEast();
+            const sw = bounds.getSouthWest();
+            const maxLat = ne.lat();
+            const maxLng = ne.lng();
+            const minLat = sw.lat();
+            const minLng = sw.lng();
+            console.log(`Map bounds: NE(${maxLat}, ${maxLng}), SW(${minLat}, ${minLng})`);
+
+            // Fetch maps data asynchronously after map loads
+            const url = `/maps/people-data/${minLat}/${minLng}/${maxLat}/${maxLng}/`;
+            fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("People data received:", data);
+                    const peopleDiv = document.getElementById('people');
+
+                    // Example rendering of people data
+                    peopleDiv.innerHTML = `
+                        <div class="p-4 space-y-2">
+                            <h3 class="text-2xl font-bold mb-4">Nearby People</h3>
+                            ${data.people.map(person => `
+                                <div class="border p-3 rounded-lg bg-gray-100">
+                                    <a href="/profile/${person.user_id}/" class="no-underline hover:underline">
+                                        <p class="font-semibold">${person.name}</p>
+                                    </a>
+                                    <p class="text-sm text-gray-600">${person.address}</p>
+                                    <p class="text-sm text-gray-600">Order Price: $${person.order_data.subtotal}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    console.error("Error loading people data:", error);
+                    document.getElementById('people').innerHTML = "<p class='text-red-500 p-4'>Failed to load people data.</p>";
+                });
+            }
 
         function changeOrderStatus(orderId, newStatus) {
             fetch(`/change_order_status/${orderId}/${newStatus}/`, {
