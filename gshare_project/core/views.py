@@ -1054,6 +1054,7 @@ def remove_from_cart(request, item_id, quantity=1):
 @login_required
 def cart(request):
     store_filter = request.GET.get('Stores', 'All')
+    print("Store filter:", store_filter)
     price_filter = request.GET.get('Price-Range', 'Any')
     search_query = request.GET.get('Item_Search_Bar', '')
     
@@ -1062,6 +1063,9 @@ def cart(request):
         store_filter = sf_override
 
     items = Items.objects.using('gsharedb').all()
+    
+    if store_filter == 'Kroger':
+        items = items.filter(store__name='Kroger')
 
     if store_filter and store_filter != 'All':
         items = items.filter(store__name=store_filter)
@@ -1073,35 +1077,44 @@ def cart(request):
             low, high = map(float, price_filter.split('-'))
             items = items.filter(price__gte=low, price__lte=high)
 
+    print("Initial items count:", items.count())
+
     if search_query:
         items = items.filter(name__icontains=search_query)
         
-    if store_filter == 'Kroger':
-        context = {
-            'store_filter': store_filter,
-            'price_filter': price_filter,
-            'search_query': search_query,
-        }
-        context['saved_kroger_items'] = Items.objects.using('gsharedb') \
-            .filter(store__name='Kroger').order_by('name')
-        zip_code = (request.GET.get('zip_code') or '').strip()
-        term = (request.GET.get('search_term') or '').strip()
-        context['zip_code'] = zip_code
-        context['search_term'] = term
-
-        if zip_code and term:
-            try:
-                locations = kroger_api.find_kroger_locations_by_zip(zip_code)
-                if locations:
-                    loc_id = locations[0]['locationId']
-                    context['kroger_products'] = kroger_api.search_kroger_products(loc_id, term)
-                else:
-                    messages.error(request, f"No stores found for {zip_code}.")
-            except Exception:
-                messages.error(request, "Kroger search failed.")
-        return render(request, "cart.html", context)
+    # if store_filter == 'Kroger':
+    #     context = {
+    #         'store_filter': store_filter,
+    #         'price_filter': price_filter,
+    #         'search_query': search_query,
+    #     }
         
-    paginator = Paginator(items, 10)  # Show 10 items per page
+    #     context['saved_kroger_items'] = Items.objects.using('gsharedb') \
+    #         .filter(store__name='Kroger').order_by('name')
+            
+    #     zip_code = (request.GET.get('zip_code') or '').strip()
+    #     term = (request.GET.get('search_term') or '').strip()
+    #     context['zip_code'] = zip_code
+    #     context['search_term'] = term
+
+    #     if zip_code and term:
+    #         try:
+    #             locations = kroger_api.find_kroger_locations_by_zip(zip_code)
+    #             if locations:
+    #                 loc_id = locations[0]['locationId']
+    #                 context['kroger_products'] = kroger_api.search_kroger_products(loc_id, term)
+    #             else:
+    #                 messages.error(request, f"No stores found for {zip_code}.")
+    #         except Exception:
+    #             messages.error(request, "Kroger search failed.")
+    #     else:
+    #         messages.info(request, "Enter a zip code and search term to find Kroger products.")
+            
+            
+    #     context['filtered_items'] = items
+    #     return render(request, "cart.html", context)
+        
+    paginator = Paginator(items, 15)  # Show 10 items per page
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -1283,20 +1296,20 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
     max_lat = float(max_lat)
     max_lng = float(max_lng)
     
-    stores = Stores.objects.all()
-    user = get_user("email", request.user.email)
-    user_address = user.address
-    orders = get_orders_by_status('placed')
-    print("maps data")
+    # stores = Stores.objects.all()
+    # user_address = user.address
+    
     info = {}
+    
     oiv = orders_in_viewport(min_lat, min_lng, max_lat, max_lng)
-    print("orders in viewport:", len(oiv))
+    
     for order in oiv:
-        if order['delivery_address']:
-            user = get_user("id", order['user']['id'])
+        address = order['delivery_address']
+        if not address:
+            continue
+        
+        user = get_user("id", order['user']['id'])
 
-            
-        print(order['order_id'])
         items = get_order_items_by_order_id(order['order_id'])
                 
         subtotal = 0
@@ -1315,20 +1328,86 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
             'items': items_with_totals,
             'subtotal': subtotal,
             'order_id': order['order_id'],
+            'user': user.name,
+            'user_id': user.id,
         }
 
         # Group by user name (or user.id if you prefer)
-        if user.name not in info:
-            info[user.name] = []
-        info[user.name].append(order_data)
+        if address not in info:
+            info[address] = []
+        info[address].append(order_data)
+
+    user_name = get_user("email", request.user.email).name
+
+    print("username:", user_name)
 
     # Convert to grouped list format for easy JSON use
     grouped_info = [
-        {'user': user_name, 'orders': orders}
-        for user_name, orders in info.items()
+        {'address': addr, 'orders': orders}
+        for addr, orders in info.items()
     ]
     
-    return JsonResponse(grouped_info, safe=False)
+    response = JsonResponse(grouped_info, safe=False)
+    response['X-User-Name'] = str(user_name)
+    return response
+
+
+def people_data(request, min_lat, min_lng, max_lat, max_lng):
+    min_lat = float(min_lat)
+    min_lng = float(min_lng)
+    max_lat = float(max_lat)
+    max_lng = float(max_lng)
+    
+    # users = _users_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500)
+        
+    orders = orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=20)
+    
+    people_info = []
+
+    for order in orders:
+        address = order.get('delivery_address')
+        if not address:
+            continue
+
+        user_info = order.get('user')
+        if not user_info:
+            continue
+
+        # Optional: load extra user data if needed
+        # user = get_user("id", user_info['id'])
+
+        items = get_order_items_by_order_id(order['order_id'])
+        
+        #  maybe find the distance between user and order owner here
+
+        subtotal = 0
+        total_items = 0
+        for item in items:
+            # assuming item format: (id, order_id, quantity, ..., price, ...)
+            quantity = float(item[2])
+            price = float(item[5])
+            subtotal += quantity * price
+            total_items += int(quantity)
+
+        # attach full order data to each person
+        order_data = {
+            'order_id': order['order_id'],
+            'item_total': total_items,
+            'subtotal': round(subtotal, 2),
+        }
+
+        person_entry = {
+            'id': user_info['id'],
+            'name': user_info['name'],
+            'address': address,
+            'latitude': user_info.get('latitude'),
+            'longitude': user_info.get('longitude'),
+            'order_data': order_data,
+        }
+
+        people_info.append(person_entry)
+
+    return JsonResponse({'people': people_info}, safe=False)
 
 @login_required
 def maps(request):
