@@ -1731,16 +1731,8 @@ def shoppingcart(request):
 def myorders(request):
     user = get_user("email", request.user.email)
     all_orders = []
-    orders_cart = get_orders(user, "cart")
-    orders_placed = get_orders(user, "placed")
-    orders_inprogress = get_orders(user, "inprogress")
-    orders_completed = get_orders(user, "completed")
     orders_delivered = get_orders(user, "delivered")
     
-    all_orders.extend(orders_cart)
-    all_orders.extend(orders_placed)
-    all_orders.extend(orders_inprogress)
-    all_orders.extend(orders_completed)
     all_orders.extend(orders_delivered)
 
     
@@ -2162,4 +2154,4 @@ def delete_cart(request, cart_id):
 
 def payment_success(request, order_id):
     change_order_status(order_id, "delivered") 
-    return render(request, 'payment_success.html', {'order_id': order_id})
+    return redirect("order_history")
