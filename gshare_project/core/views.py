@@ -1054,91 +1054,138 @@ def remove_from_cart(request, item_id, quantity=1):
 @login_required
 def cart(request):
     store_filter = request.GET.get('Stores', 'All')
-    print("Store filter:", store_filter)
     price_filter = request.GET.get('Price-Range', 'Any')
-    search_query = request.GET.get('Item_Search_Bar', '')
-    
-    sf_override = request.GET.get('store_filter')
-    if sf_override:
-        store_filter = sf_override
+    search_query = request.GET.get('Item_Search_Bar', '').strip()
+    zip_code = (request.GET.get('zip_code') or '').strip()
 
     items = Items.objects.using('gsharedb').all()
-    
-    if store_filter == 'Kroger':
-        items = items.filter(store__name='Kroger')
-
-    if store_filter and store_filter != 'All':
+    if store_filter and store_filter != 'All' and store_filter != 'Kroger':
         items = items.filter(store__name=store_filter)
-
     if price_filter and price_filter != 'Any':
         if price_filter == '100+':
             items = items.filter(price__gte=100)
         else:
-            low, high = map(float, price_filter.split('-'))
-            items = items.filter(price__gte=low, price__lte=high)
-
-    print("Initial items count:", items.count())
-
+            lo, hi = map(float, price_filter.split('-'))
+            items = items.filter(price__gte=lo, price__lte=hi)
     if search_query:
         items = items.filter(name__icontains=search_query)
-        
-    # if store_filter == 'Kroger':
-    #     context = {
-    #         'store_filter': store_filter,
-    #         'price_filter': price_filter,
-    #         'search_query': search_query,
-    #     }
-        
-    #     context['saved_kroger_items'] = Items.objects.using('gsharedb') \
-    #         .filter(store__name='Kroger').order_by('name')
-            
-    #     zip_code = (request.GET.get('zip_code') or '').strip()
-    #     term = (request.GET.get('search_term') or '').strip()
-    #     context['zip_code'] = zip_code
-    #     context['search_term'] = term
-
-    #     if zip_code and term:
-    #         try:
-    #             locations = kroger_api.find_kroger_locations_by_zip(zip_code)
-    #             if locations:
-    #                 loc_id = locations[0]['locationId']
-    #                 context['kroger_products'] = kroger_api.search_kroger_products(loc_id, term)
-    #             else:
-    #                 messages.error(request, f"No stores found for {zip_code}.")
-    #         except Exception:
-    #             messages.error(request, "Kroger search failed.")
-    #     else:
-    #         messages.info(request, "Enter a zip code and search term to find Kroger products.")
-            
-            
-    #     context['filtered_items'] = items
-    #     return render(request, "cart.html", context)
-        
-    paginator = Paginator(items, 15)  # Show 10 items per page
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
 
     context = {
-        'page_obj': page_obj,
         'store_filter': store_filter,
         'price_filter': price_filter,
         'search_query': search_query,
+        'zip_code': zip_code,
     }
-    
-    return render(request, "cart.html", context)
 
-    # profile = get_custom_user(request)
-    # try:
-    #     order = Order.objects.get(user=profile, status='cart')
-    #     items = order.order_items.select_related('item__store')
-    # except Order.DoesNotExist:
-    #     order = None
-    #     items = []
-    # return render(request, "cart.html", {
-    #     'active_cart': order,
-    #     'cart_items': items,
-    #     'custom_user': profile,
-    # })
+    paginator = Paginator(items, 15)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    context['page_obj'] = page_obj
+
+    if store_filter == 'Kroger':
+        context['using_kroger'] = True
+        if zip_code and search_query:
+            try:
+                locations = kroger_api.find_kroger_locations_by_zip(zip_code)
+                if locations:
+                    loc_id = locations[0]['locationId']
+                    context['kroger_products'] = kroger_api.search_kroger_products(
+                        loc_id, search_query
+                    )
+                else:
+                    messages.error(request, f"No Kroger-owned stores found near {zip_code}.")
+            except Exception:
+                messages.error(request, "Kroger search failed.")
+        else:
+            messages.info(request, "Enter a zip code and a search term for Kroger search.")
+
+    return render(request, "cart.html", context)
+    # store_filter = request.GET.get('Stores', 'All')
+    # print("Store filter:", store_filter)
+    # price_filter = request.GET.get('Price-Range', 'Any')
+    # search_query = request.GET.get('Item_Search_Bar', '')
+    
+    # sf_override = request.GET.get('store_filter')
+    # if sf_override:
+    #     store_filter = sf_override
+
+    # items = Items.objects.using('gsharedb').all()
+    
+    # if store_filter == 'Kroger':
+    #     items = items.filter(store__name='Kroger')
+
+    # if store_filter and store_filter != 'All':
+    #     items = items.filter(store__name=store_filter)
+
+    # if price_filter and price_filter != 'Any':
+    #     if price_filter == '100+':
+    #         items = items.filter(price__gte=100)
+    #     else:
+    #         low, high = map(float, price_filter.split('-'))
+    #         items = items.filter(price__gte=low, price__lte=high)
+
+    # print("Initial items count:", items.count())
+
+    # if search_query:
+    #     items = items.filter(name__icontains=search_query)
+        
+    # # if store_filter == 'Kroger':
+    # #     context = {
+    # #         'store_filter': store_filter,
+    # #         'price_filter': price_filter,
+    # #         'search_query': search_query,
+    # #     }
+        
+    # #     context['saved_kroger_items'] = Items.objects.using('gsharedb') \
+    # #         .filter(store__name='Kroger').order_by('name')
+            
+    # #     zip_code = (request.GET.get('zip_code') or '').strip()
+    # #     term = (request.GET.get('search_term') or '').strip()
+    # #     context['zip_code'] = zip_code
+    # #     context['search_term'] = term
+
+    # #     if zip_code and term:
+    # #         try:
+    # #             locations = kroger_api.find_kroger_locations_by_zip(zip_code)
+    # #             if locations:
+    # #                 loc_id = locations[0]['locationId']
+    # #                 context['kroger_products'] = kroger_api.search_kroger_products(loc_id, term)
+    # #             else:
+    # #                 messages.error(request, f"No stores found for {zip_code}.")
+    # #         except Exception:
+    # #             messages.error(request, "Kroger search failed.")
+    # #     else:
+    # #         messages.info(request, "Enter a zip code and search term to find Kroger products.")
+            
+            
+    # #     context['filtered_items'] = items
+    # #     return render(request, "cart.html", context)
+        
+    # paginator = Paginator(items, 15)  # Show 10 items per page
+    # page_number = request.GET.get('page')
+    # page_obj = paginator.get_page(page_number)
+
+    # context = {
+    #     'page_obj': page_obj,
+    #     'store_filter': store_filter,
+    #     'price_filter': price_filter,
+    #     'search_query': search_query,
+    # }
+    
+    # return render(request, "cart.html", context)
+
+    # # profile = get_custom_user(request)
+    # # try:
+    # #     order = Order.objects.get(user=profile, status='cart')
+    # #     items = order.order_items.select_related('item__store')
+    # # except Order.DoesNotExist:
+    # #     order = None
+    # #     items = []
+    # # return render(request, "cart.html", {
+    # #     'active_cart': order,
+    # #     'cart_items': items,
+    # #     'custom_user': profile,
+    # # })
     
 @login_required
 def add_kroger_item_to_cart(request):
