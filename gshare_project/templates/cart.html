@@ -130,65 +130,45 @@
             </nav>
             {% endif %}
         </div>
-        {% comment %} {% if kroger_products %}
-            <div class="mt-8 space-y-4">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-semibold">Kroger Results</h3>
-                    <form id="save-kroger-form" method="post" action="{% url 'save_kroger_results' %}" class="inline-flex">
-                        {% csrf_token %}
-                        {{ kroger_products|json_script:"kroger-data" }}
-                        <input type="hidden" name="products_json" id="products_json">
-                        <button type="submit" class="bg-emerald-600 text-white px-3 py-2 rounded">Save all</button>
-                    </form>
-                </div>
+        {% if using_kroger and kroger_products %}
+            <div class="mt-10 space-y-3">
+                <h3 class="text-lg font-semibold">Kroger Results</h3>
                 <div class="grid gap-4">
                     {% for p in kroger_products %}
                         {% with desc=p.description price=p.items.0.price.regular %}
-                            <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg active:scale-95 transition-all duration-150 active:bg-gray-300 cursor-pointer"
-                                onclick="addKrogerCardClick(this, '{{ desc|escapejs }}', '{{ price|default:'' }}')">
+                        <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg active:scale-95 transition-all duration-150 active:bg-gray-300 cursor-pointer"
+                            onclick="addKrogerCardClick(this, '{{ desc|escapejs }}', '{{ price|default:'' }}')">
                             <div class="text-lg font-bold truncate">{{ desc }}</div>
                             <div class="text-gray-700">Price: ${{ price|default:'—' }}</div>
                             <div class="text-gray-700">Store: Kroger</div>
-                            <div>
-                                <input type="number" name="item_ammount" value="1" min="1" class="w-16 px-2 py-1 border border-gray-300 rounded-lg">
-                            </div>
+                        <div>
+                            <input type="number" name="item_ammount" value="1" min="1"
+                                class="w-16 px-2 py-1 border border-gray-300 rounded-lg">
                         </div>
+                    </div>
                     {% endwith %}
                 {% endfor %}
             </div>
         </div>
-        <script>
-            (function(){
-                var data = JSON.parse(document.getElementById('kroger-data').textContent);
-                document.getElementById('products_json').value = JSON.stringify(data);
-            })();
-        </script>
-        {% endif %}
-        {% if saved_kroger_items %}
-            <div class="mt-10 space-y-3">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-semibold">Saved Kroger Items</h3>
-                    <form method="post" action="{% url 'clear_kroger_items' %}">
-                        {% csrf_token %}
-                        <button type="submit" class="bg-red-600 text-white px-3 py-2 rounded">Clear saved</button>
-                    </form>
-                </div>
-                <div class="grid gap-4">
-                    {% for item in saved_kroger_items %}
-                        <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg active:scale-95 transition-all duration-150 active:bg-gray-300 cursor-pointer"
-                            onclick="handleItemClick(this, {{ item.id }})">
-                        <div class="text-lg font-bold truncate">{{ item.name }}</div>
-                        <div class="text-gray-700">Price: ${{ item.price }}</div>
-                        <div class="text-gray-700">Store: Kroger</div>
-                        <div>
-                            <input type="number" name="item_ammount" value="1" min="1" class="w-16 px-2 py-1 border border-gray-300 rounded-lg">
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
     {% endif %}
-</div> {% endcomment %}
+    <script>
+        function addKrogerCardClick(el, name, price){
+            const qtyInput = el.querySelector('input[name="item_ammount"]');
+            const qty = qtyInput ? parseInt(qtyInput.value || '1', 10) : 1;
+
+            if (!price) { alert('This item has no price and cannot be added.'); return; }
+
+            fetch("{% url 'add_kroger_item_to_cart' %}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': "{{ csrf_token }}" },
+                body: JSON.stringify({ product_name: name, product_price: price, item_ammount: qty })
+            })
+            .then(r => (r.headers.get('content-type')||'').includes('application/json') ? r.json() : {})
+            .catch(() => alert('Failed to add item.'));
+        }
+    </script>
+
+
 {% csrf_token %}
 </body>
 <style>
