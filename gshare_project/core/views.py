@@ -40,6 +40,10 @@ from core.models import (
 
 """helper functions"""
 
+def calculate_tax(subtotal):
+    """Calculate tax as 7% of subtotal, in cents (int), rounded to nearest cent."""
+    return round(subtotal * Decimal('0.07') * 100)
+
 """
 Retrieve all feedback for a specific user and calculate their average rating.
 
@@ -107,7 +111,7 @@ Args:
 Returns:
     Users: The updated user object if the user exists, otherwise None.
 """
-def create_user_signin(name: str, email: str, address: str = "Not provided", phone: str | None = None, request=None):
+def create_user_signin(name: str, email: str, address: str = "Not provided", username: str = "Not provided", phone: str | None = None, request=None):
     lat, lng = 0, 0
 
     if address != "Not provided":
@@ -122,6 +126,7 @@ def create_user_signin(name: str, email: str, address: str = "Not provided", pho
                     name=name,
                     email=email,     # email is unique but nullable
                     phone=phone,     # optional
+                    username = username,
                     address=address,  # REQUIRED by your schema
                     latitude= lat,
                     longitude= lng
@@ -311,6 +316,8 @@ def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, rating: i
 
 def add_feedback(reviewee: Users, reviewer: Users, feedback_text: str, subject: str, rating: int):
     try:
+        # Ensure rating is within valid range (1-5)
+        rating = max(1, min(5, rating))
         feedback = Feedback.objects.using('gsharedb').create(
             reviewee=reviewee,
             reviewer=reviewer,
@@ -525,7 +532,6 @@ def get_group_by_user_and_order(user: Users, order: Orders):
         if membership is not None:
             if membership is not None:
                 return membership.group
-                return membership.group
         
         return None
 
@@ -693,7 +699,7 @@ def signup_view(request):
         # Create business profile in gsharedb
         full_name = " ".join(part for part in [f, l] if part) or u  # fallback to username
         try:
-            create_user_signin(full_name, e, address=addr, phone=phone,request=request)
+            create_user_signin(full_name, e, address=addr, username=u, phone=phone,request=request)
         except IntegrityError as ex:
             # roll back auth user if business insert fails
             auth_user.delete()
@@ -1500,7 +1506,7 @@ def placed_data(request):
                 'total': total,
             })
         
-        tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+        tax = Decimal(calculate_tax(subtotal)) / 100
         grand_total = round(subtotal + tax, 2)
 
         order_summary = {
@@ -1548,7 +1554,7 @@ def inprogress_data(request):
                 'total': total,
             })
         
-        tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+        tax = Decimal(calculate_tax(subtotal)) / 100
         grand_total = round(subtotal + tax, 2)
 
         order_summary = {
@@ -1603,7 +1609,7 @@ def group_data(request):
                 'total': total,
             })
             
-        tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+        tax = Decimal(calculate_tax(subtotal)) / 100
         grand_total = round(subtotal + tax, 2)
 
         order_summary = {
@@ -1648,7 +1654,7 @@ def cart_data(request):
             'id': item[1],  # item id
         })
         
-    tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+    tax = Decimal(calculate_tax(subtotal))  # Convert to dollars for display
     grand_total = round(subtotal + tax, 2)
 
     order_summary = {
@@ -1689,7 +1695,7 @@ def group_carts(request):
                 'total': total,
             })
             
-        tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+        tax = Decimal(calculate_tax(subtotal))  # Convert to dollars for display
         grand_total = round(subtotal + tax, 2)
 
         order_summary = {
@@ -1744,7 +1750,7 @@ def shoppingcart(request):
             'total': total,
         })
         
-    tax = round(subtotal * Decimal(0.07), 2)  # Example: 7% tax
+    tax = Decimal(calculate_tax(subtotal)) / 100  # Convert to dollars for display
     grand_total = round(subtotal + tax, 2)
 
     order_summary = {
@@ -1776,11 +1782,13 @@ def myorders(request):
     orders_placed = get_orders(user, "placed")
     orders_inprogress = get_orders(user, "inprogress")
     orders_completed = get_orders(user, "completed")
+    orders_delivered = get_orders(user, "delivered")
     
     all_orders.extend(orders_cart)
     all_orders.extend(orders_placed)
     all_orders.extend(orders_inprogress)
     all_orders.extend(orders_completed)
+    all_orders.extend(orders_delivered)
 
     
     # each tuple is (order, items)
@@ -1808,40 +1816,36 @@ def getUserProfile(request, userID):
     authUser = get_user("email", request.user.email)
     reviewee = get_user("id", userID)
     userReviews = get_user_ratings(userID)
-    #latestOrder = get_most_recent_order(authUser, reviewee, "done")
     
     context = {
         'user': reviewee,
         'userReviews': userReviews[0],
-        #'latestOrder': latestOrder,
     }
 
     if request.method == 'POST':
         reviewText = (request.POST.get('review') or '').strip()
         try:
+            # Ensure rating is within valid range (1-5)
             reviewRating = int(request.POST.get('rating') or 1)
+            reviewRating = max(1, min(5, reviewRating))
         except (TypeError, ValueError):
             reviewRating = 1
         
-        subject = "Bad Delivery"
-        print(authUser)
-        print(reviewee)
+        subjectText = (request.POST.get("title") or '').strip()
 
-        #if latestOrder is None:
-        #    messages.error(request, "You can only leave a review if you have a completed order with this user.")
-        #    return render(request, 'aboutUserPage.html', context=context)
-
-        add_feedback(reviewee, authUser, reviewText, subject, reviewRating)
+        add_feedback(reviewee, authUser, reviewText, subjectText, reviewRating)
         messages.success(request, "Review posted.")
         context['userReviews'] = get_user_ratings(userID)[0]
         return render(request, 'aboutUserPage.html', context=context)
 
     return render(request, 'aboutUserPage.html', context=context)
 
+
 @login_required
 def payments(request):
     user = get_user("email", request.user.email)
     order = get_orders(user, "inprogress").first()
+    print("order here: " + str(order))
     orders = []
     members = []
 
@@ -1858,7 +1862,7 @@ def payments(request):
         for ord in orders:
             items = get_order_items(ord)
             subtotal = sum(item[2] * item[5] for item in items)  # quantity * price
-            tax = round(subtotal * Decimal(0.07), 2)
+            tax = Decimal(calculate_tax(subtotal)) / 100  # Convert to dollars for display
             total = round(subtotal + tax, 2)
             user_name = ord.user.name
             carts_in_group.append({
@@ -1890,7 +1894,7 @@ def payments(request):
         for ord in orders:
             items = get_order_items(ord)
             subtotal = sum(item[2] * item[5] for item in items)  # quantity * price
-            tax = round(subtotal * Decimal(0.07), 2)
+            tax = Decimal(calculate_tax(subtotal)) / 100  # Convert to dollars for display
             total = round(subtotal + tax, 2)
             user_name = ord.user.name
             carts_in_group.append({
@@ -1924,7 +1928,6 @@ def payments(request):
 
 @login_required
 def paymentsCheckout(request):
-
     # change order status to placed upon successful payment
     try:
         stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -1946,26 +1949,47 @@ def paymentsCheckout(request):
         
         itemObjects = []
         for oi in orderItems:
-            # oi is a tuple: (order_id, item_id, quantity, price, name, price, store_id)
+            # oi: (order_id, item_id, quantity, price, name, item_price, store_id)
             itemObjects.append({
                 'price_data': {
                     'currency': 'usd',
-                    'product_data': {
-                        'name': oi[4],
-                    },
-                    'unit_amount': int(oi[3] * 100),  # price in cents
+                    'product_data': {'name': oi[4]},
+                    'unit_amount': int(oi[3] * 100),  # cents
                 },
                 'quantity': oi[2],
             })
 
-        change_order_status(order.id, "delivered")
+        # BELOW IS fallback for tax: add a manual 7% tax line (when not using Automatic Tax)
+        subtotal_cents = int(sum(oi[2] * oi[3] for oi in orderItems) * 100)
+        tax_cents = int(round(subtotal_cents * Decimal('0.07')))
+        if tax_cents > 0:
+            itemObjects.append({
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {'name': 'Sales Tax'},
+                    'unit_amount': tax_cents,
+                },
+                'quantity': 1,
+            })
 
+         # ABOVE IS fallback for tax: add a manual 7% tax line (when not using Automatic Tax)
+
+        # Replace the old Session.create(...) with Automatic Tax + address collection
         checkoutSession = stripe.checkout.Session.create(
             line_items=itemObjects,
             mode='payment',
-            success_url="http://127.0.0.1:8000/",
+
+            ## KEEP BELOW ONLY ONCE PAYMENTS ARE IN LIVE MODE, THIS WONT WORK IN TEST MODE
+            #automatic_tax={'enabled': True},  # Enable Stripe Automatic Tax
+            #billing_address_collection='required',  # collect billing address
+            #shipping_address_collection={'allowed_countries': ['US']},  # collect shipping address
+            ## KEEP ABOVE ONLY ONCE PAYMENTS ARE IN LIVE MODE, THIS WONT WORK IN TEST MODE
+            customer_email=request.user.email,  # helps with tax and receipts
+            
+            success_url=f"http://127.0.0.1:8000/payment_success/{order.id}/", # should do this if success: # consider moving this to webhook on payment success
             cancel_url="http://127.0.0.1:8000/cart/payments",
         )
+        print("Session URL: " + checkoutSession.url)
         return redirect(checkoutSession.url)
     except stripe.error.StripeError as e:
         messages.error(request, f"Payment error: {e.user_message}")
@@ -2013,32 +2037,42 @@ def getUserProfile(request, userID):
     authUser = get_user("email", request.user.email)
     reviewee = get_user("id", userID)
     userReviews = get_user_ratings(userID)
-    #latestOrder = get_most_recent_order(authUser, reviewee, "done")
     
     context = {
         'user': reviewee,
         'userReviews': userReviews[0],
     }
 
+    context['avg_rating'] = userReviews[1]
+    if userReviews[0] == None:
+        context['review_count'] = 0
+    else:
+        context['review_count'] = userReviews[0].count
+
     if request.method == 'POST':
         reviewText = (request.POST.get('review') or '').strip()
         try:
-            reviewRating = int(request.POST.get('rating') or 0)
+            # Ensure rating is within valid range (1-5)
+            reviewRating = int(request.POST.get('rating') or 1)
+            reviewRating = max(1, min(5, reviewRating))
         except (TypeError, ValueError):
-            reviewRating = 0
+            reviewRating = 1
         
-        subject = ""
+        subjectText = (request.POST.get("title") or '').strip()
 
-        # if latestOrder is None:
-        #     messages.error(request, "You can only leave a review if you have a completed order with this user.")
-        #     return render(request, 'aboutUserPage.html', context=context)
-
-        add_feedback(reviewee, authUser, reviewText, subject, reviewRating)
+        add_feedback(reviewee, authUser, reviewText, subjectText, reviewRating)
+        userReviews = get_user_ratings(userID)
         messages.success(request, "Review posted.")
-        context['userReviews'] = get_user_ratings(userID)[0]
+        context['userReviews'] = userReviews[0]
+        print(get_user_ratings(userID)[0])
+        context['avg_rating'] = userReviews[1]
+        if userReviews[0] == None:
+            context['review_count'] = 0
+        else:
+            context['review_count'] = userReviews[0].count
         return render(request, 'aboutUserPage.html', context=context)
 
-#     return render(request, 'aboutUserPage.html', context=context)
+    return render(request, 'aboutUserPage.html', context=context)
 
 
 @login_required
@@ -2172,3 +2206,7 @@ def delete_cart(request, cart_id):
         recurringCart = RecurringCart.objects.using('gsharedb').get(id=cart_id, user=user)
         recurringCart.delete(using='gsharedb')
     return redirect('scheduled_orders')
+
+def payment_success(request, order_id):
+    change_order_status(order_id, "delivered") 
+    return render(request, 'payment_success.html', {'order_id': order_id})

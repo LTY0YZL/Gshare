@@ -102,16 +102,6 @@
                         </div>
                     </div>
                     
-                    <!-- Payment Method -->
-                    <div style="display: flex; flex-direction: column;">
-                        <label for="payment_method" style="display: block; color: #374151; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem;">Payment Method</label>
-                        <select id="payment_method" name="payment_method" style="width: 100%; padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; outline: none;" onfocus="this.style.boxShadow='0 0 0 2px #3b82f6'; this.style.borderColor='transparent';" onblur="this.style.boxShadow='none'; this.style.borderColor='#d1d5db';">
-                            <option value="" {% if not user.payment_method %}selected{% endif %} disabled>Select payment method</option>
-                            <option value="Credit Card" {% if user.payment_method == 'Credit Card' %}selected{% endif %}>Credit Card</option>
-                            <option value="PayPal" {% if user.payment_method == 'PayPal' %}selected{% endif %}>PayPal</option>
-                        </select>
-                    </div>
-                    
                     <div style="padding-top: 1rem; margin-top: 1.5rem; border-top: 1px solid #e5e7eb;">
                         <h2 style="font-size: 1.25rem; font-weight: 600; color: #1f2937; margin-bottom: 1rem;">Security</h2>
                         

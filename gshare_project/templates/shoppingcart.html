@@ -57,7 +57,7 @@
             <p class="mb-2">Tax: ${{ order.tax }}</p>
             <p class="mb-4 font-bold">Total: ${{ order.total }}</p>
             <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-            onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Proceed to Checkout</button>
+            onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Publish Order</button>
             <input type="text" id="group_password" name="group_password" placeholder="Enter group password" class="w-full p-2 border border-gray-300 rounded-lg bg-white text-black mt-4 mb-4">
             <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
             onclick="createGroup({{ id|default:'null' }})">
@@ -463,7 +463,7 @@
                         <p class="mb-4 font-bold">Total: $${total.toFixed(2)}</p>
                         <form action="{% url 'payments' %}" method="get">
                             <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                                Payment Page
+                                Checkout
                             </button>
                         </form>
                     </div>`;
@@ -547,7 +547,7 @@
                     <p class="mb-4 font-bold">Total: $${data.order.total}</p>
                     <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
                             onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
-                        Proceed to Checkout
+                        Publish Order
                     </button>
                     <input type="text" id="group_password" name="group_password" placeholder="Enter group password"
                             class="w-full p-2 border border-gray-300 rounded-lg bg-white text-black mt-4 mb-4">
