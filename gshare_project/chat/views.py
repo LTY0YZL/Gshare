@@ -4,6 +4,9 @@ from django.contrib import messages
 from .models import ChatGroup, DirectMessageThread, Message
 from django.contrib.auth.models import User
 from django.utils.text import slugify
+from django.http import JsonResponse
+from django.contrib.auth.models import User
+from django.views.decorators.http import require_GET
 
 # Create your views here.
 @login_required
@@ -33,7 +36,7 @@ def groups_page(request):
 def chat_room(request, room_name):
     try:
         room = ChatGroup.objects.get(slug=room_name)
-        messages = room.messages.all().order_by('timestamp')
+        chat_messages = room.messages.all().order_by('timestamp')
         user_groups = ChatGroup.objects.filter(members=request.user)
         members = room.members.all()
         
@@ -47,7 +50,7 @@ def chat_room(request, room_name):
             for dm in DMs
         ]
         # show all the other users in the DM's then display all the DM's
-        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code, 'messages': messages, 'groups': user_groups, 'members': members, 'dm_list':dm_list, 'user': request.user})
+        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code, 'messages': chat_messages, 'groups': user_groups, 'members': members, 'dm_list':dm_list, 'user': request.user})
     except ChatGroup.DoesNotExist:
         messages.error(request, "Chat room does not exist.")
         return redirect('groups_page')
@@ -110,6 +113,14 @@ def direct_message(request, thread_id):
         ]
         return render(request, 'chat/chat_room.html', {'thread': thread, 'messages': messages_qs, 'other_user': other_user, 'groups': user_groups, 'dm_list': dm_list, 'user': request.user})
         
-        
+@require_GET
+def autocomplete_usernames(request):
+    query = request.GET.get("q", "")
+    results = []
+    if query:
+        # take only the top 10 results
+        users = User.objects.filter(username__icontains=query)[:10]
+        results = list(users.values_list("username", flat=True))
+    return JsonResponse(results, safe=False)
         
 

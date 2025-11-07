@@ -42,11 +42,88 @@
                 {% csrf_token %}
                 <div class="flex justify-center p-12 mt-8 mr-32">
                     <label for="username" class="px-2 text-3xl mt-1">Username:</label>
-                    <input type="text" id="username" class="border border-gray-500 rounded-xl h-10 px-4 mt-1 text-2xl w-88" name="username" required placeholder="Enter username">
-                    <button type="submit" class="border border-gray-500 bg-blue-500 rounded-xl p-1 ml-4 mt-1 h-10 text-2xl hover:shadow-lg hover:bg-blue-600">Create DM</button>
+
+                    <!-- relative container for the input and suggestions -->
+                    <div class="relative inline-block w-80">
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username"
+                            required
+                            placeholder="Enter username"
+                            autocomplete="off"
+                            class="border border-gray-500 rounded-xl h-10 px-4 mt-1 text-2xl"
+                        >
+
+                        <!-- suggestions box positioned directly below -->
+                        <div 
+                            id="username_suggestions" 
+                            class="absolute top-full left-0 bg-white border border-gray-300 rounded-lg shadow-lg hidden z-10"
+                        ></div>
+                    </div>
+
+                    <button 
+                        type="submit" 
+                        class="border border-gray-500 bg-blue-500 rounded-xl p-1 ml-4 mt-1 h-10 text-2xl hover:shadow-lg hover:bg-blue-600"
+                    >
+                        Create DM
+                    </button>
                 </div>
+
             </form>
 
         </div>
+
+    <script>
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const input = document.getElementById("username");
+            const suggestionsBox = document.getElementById("username_suggestions");
+
+            input.addEventListener("input", async () => {
+                const query = input.value.trim();
+                if (!query) {
+                    suggestionsBox.innerHTML = "";
+                    suggestionsBox.classList.add("hidden");
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`{% url 'autocomplete_usernames' %}?q=${encodeURIComponent(query)}`);
+                    if (!response.ok) {
+                        throw new Error('Network error');
+                    }
+                    const usernames = await response.json();
+
+
+                    if (usernames.length === 0) {
+                        suggestionsBox.innerHTML = "";
+                        suggestionsBox.classList.add("hidden");
+                    }
+
+                    suggestionsBox.innerHTML = usernames.map(username => `<div class="px-4 py-2 cursor-pointer hover:bg-gray-200">${username}</div>`
+                    ).join("");
+
+                    suggestionsBox.classList.remove("hidden");
+
+                    Array.from(suggestionsBox.children).forEach(item => {
+                        item.addEventListener("click", () => {
+                            input.value = item.textContent;
+                            suggestionsBox.classList.add("hidden");
+                        });
+                    });
+                } catch (err) {
+                    console.error(err);
+                }
+            });
+
+            document.addEventListener("click", (event) => {
+                if (!suggestionsBox.contains(event.target) && event.target !== input) {
+                    suggestionsBox.classList.add("hidden");
+                }
+            });
+        });
+
+    </script>
 </body>
 </html>
