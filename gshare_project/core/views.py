@@ -755,6 +755,149 @@ def get_image_url(request, image_id):
     )
 
 
+def upload_user_avatar(request, user_id: int):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if "file" not in request.FILES:
+        return HttpResponseBadRequest("Missing 'file' in form-data.")
+
+    file = request.FILES["file"]
+    original_name = get_valid_filename(file.name)
+    content_type = file.content_type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+    key = f"avatars/{user_id}/{uuid4().hex}_{original_name}"
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=file.read(),
+            ContentType=content_type,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"S3 upload failed: {e}"}, status=500)
+
+    # Save the key on the user in gsharedb
+    try:
+        Users.objects.using("gsharedb").filter(pk=user_id).update(image_key=key)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"DB update failed: {e}"}, status=500)
+
+    # Return a presigned URL to preview immediately
+    try:
+        presigned = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse({
+        "ok": True,
+        "user_id": user_id,
+        "image_key": key,
+        "preview_url": presigned,
+    }, status=201)
+
+
+def get_user_avatar_url(request, user_id: int):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+
+    try:
+        user = Users.objects.using("gsharedb").get(pk=user_id)
+    except Users.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "User not found"}, status=404)
+
+    if not user.image_key:
+        # Optional: return a default image (S3 key) or None
+        return JsonResponse({"ok": True, "user_id": user_id, "image_key": None, "url": None})
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    try:
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": user.image_key},
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse({"ok": True, "user_id": user_id, "image_key": user.image_key, "url": url})
+
+def upload_user_avatar_helper(user_id: int, uploaded_file) -> dict:
+    """
+    Upload a new avatar to S3 for the given user, store the S3 key on users.image_key (gsharedb),
+    and return {ok, key, url} where url is a presigned GET URL.
+    """
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    original_name = get_valid_filename(uploaded_file.name)
+    content_type = uploaded_file.content_type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+
+    # Build new key: avatars/<user_id>/<uuid>_<filename>
+    new_key = f"avatars/{user_id}/{uuid4().hex}_{original_name}"
+
+    # Read old key (if any) before updating
+    user = Users.objects.using("gsharedb").only("image_key").get(pk=user_id)
+    old_key = user.image_key
+
+    # Upload to S3
+    s3.put_object(
+        Bucket=bucket,
+        Key=new_key,
+        Body=uploaded_file.read(),
+        ContentType=content_type,
+    )
+
+    # Persist the new key
+    Users.objects.using("gsharedb").filter(pk=user_id).update(image_key=new_key)
+
+    # Optional: cleanup old object to avoid orphans
+    if old_key and old_key != new_key:
+        try:
+            s3.delete_object(Bucket=bucket, Key=old_key)
+        except Exception:
+            pass
+
+    # Build presigned URL
+    url = s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": new_key},
+        ExpiresIn=3600,
+    )
+
+    return {"ok": True, "key": new_key, "url": url}
+
+
+def get_user_avatar_url_helper(user_id: int) -> str | None:
+    """
+    Return a presigned GET URL for the user's current avatar, or None if not set.
+    """
+    try:
+        user = Users.objects.using("gsharedb").only("image_key").get(pk=user_id)
+    except Users.DoesNotExist:
+        return None
+
+    if not user.image_key:
+        return None
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+    return s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": user.image_key},
+        ExpiresIn=3600,
+    )
+
+
 """Main functions"""
 
 def home(request):
