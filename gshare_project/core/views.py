@@ -20,6 +20,7 @@ from django.db.models import Q
 from django.db.models import Avg, Count
 from django.http import JsonResponse
 from django.db import connection
+from django.core.files.storage import default_storage
 import json
 import re
 import requests
@@ -35,7 +36,7 @@ from core.models import (
     Stores, Items,
     Orders, OrderItems,
     Deliveries, Feedback, GroupOrders, GroupMembers,
-    RecurringCart, RecurringCartItem
+    RecurringCart, RecurringCartItem, ProductImage
 )
 
 """helper functions"""
@@ -188,6 +189,12 @@ Returns:
 """
 def get_orders_by_status(order_status: str):
     orders = Orders.objects.using('gsharedb').filter(status=order_status)
+    if not orders.exists():
+        return []
+    return orders
+
+def get_orders_by_delivery_person(delivery_person: Users, status: str):
+    orders = Orders.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status)
     if not orders.exists():
         return []
     return orders
@@ -801,61 +808,56 @@ def userprofile(request):
 
         if 'save_profile' in request.POST:
             try:
-                if 'name' in request.POST:
-                    profile.name = request.POST['name']
-                
-                if 'email' in request.POST and request.POST['email'] != profile.email:
-                    if Users.objects.using('gsharedb').filter(email=request.POST['email']).exists():
-                        errors.append({
-                            'message': 'This email is already in use',
-                            'is_success': False
-                        })
-                    else:
-                        profile.email = request.POST['email']
-                
-                if 'phone' in request.POST:
-                    profile.phone = request.POST['phone']
-                
-                if 'address' in request.POST:
-                    address = request.POST['address']
+                # Save everything (profile + image) atomically to gsharedb
+                with transaction.atomic(using='gsharedb'):
+                    if 'name' in request.POST:
+                        profile.name = request.POST['name']
 
-                    profile.address = address
-                    print(f"Updated profile address to {address}")
+                    if 'email' in request.POST and request.POST['email'] != profile.email:
+                        if Users.objects.using('gsharedb').filter(email=request.POST['email']).exists():
+                            errors.append({'message': 'This email is already in use', 'is_success': False})
+                            # bail early; render below will show the error
+                        else:
+                            profile.email = request.POST['email']
 
-                    lat, lng = geoLoc(address)
-                    print(f"Geocoded {address} to lat={lat}, lng={lng}")
+                    if 'phone' in request.POST:
+                        profile.phone = request.POST['phone']
 
-                    profile.address = address
-                    print(f"Updated profile address to {address}")
+                    if 'address' in request.POST:
+                        address = request.POST['address']
+                        profile.address = address
+                        lat, lng = geoLoc(address)
+                        profile.latitude = lat
+                        profile.longitude = lng
 
-                    profile.latitude = lat
-                    profile.longitude = lng
+                    # 1) save the profile first (so it has a valid PK in gsharedb)
+                    profile.save(using='gsharedb')
 
-                    print(f"Updated profile address to {address}, lat={profile.latitude}, lng={profile.longitude}")
-                                
+                    # 2) handle profile image via ProductImage (OneToOne to Users)
+                    uploaded = request.FILES.get('profile_picture')
+                    if uploaded:
+                        # upsert the related row in gsharedb
+                        img, created = ProductImage.objects.using('gsharedb').get_or_create(user=profile)
+                        # optional cleanup: delete the old object in S3 to avoid orphans
+                        if not created and img.image:
+                            try:
+                                default_storage.delete(img.image.name)
+                            except Exception:
+                                pass
+                        img.image = uploaded
+                        img.alt_text = f"{profile.name or 'user'} profile"
+                        img.save(using='gsharedb')
 
-
-                if 'profile_picture' in request.FILES:
-                    profile_picture = request.FILES.get('profile_picture')
-                    if profile_picture:
-                        profile.profile_picture = profile_picture
-                
-                # Save the profile
-                profile.save(using='gsharedb')
-                
-                # Update the auth user's email if it was changed
+                # sync Django auth user's email if changed
                 if 'email' in request.POST and request.user.email != request.POST['email']:
                     request.user.email = request.POST['email']
                     request.user.save()
-                
+
                 messages.success(request, 'Profile updated successfully!')
                 return redirect('profile')
-                
+
             except Exception as e:
-                errors.append({
-                    'message': f'Error updating profile: {str(e)}',
-                    'is_success': False
-                })
+                errors.append({'message': f'Error updating profile: {str(e)}', 'is_success': False})
         
         elif 'change_password' in request.POST:
             currentPassword = request.POST.get('current_password', '')
@@ -880,6 +882,16 @@ def userprofile(request):
     avg = float(avg_rating or 0)
     stars_full = max(0, min(5, int(round(avg))))  
     stars_text = '★' * stars_full + '☆' * (5 - stars_full)
+
+    try:
+        pi = getattr(profile, "profile_image", None)
+        if pi and pi.image:
+            print("PI key:", pi.image.name)
+            print("PI url:", pi.image.url)  # will fail here if signing can’t happen
+        else:
+            print("No profile_image attached")
+    except Exception as ex:
+        print("URL generation error:", ex)
         
     return render(request, "profile.html", {
         'user': profile,
