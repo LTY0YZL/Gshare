@@ -13,6 +13,7 @@ class Users(models.Model):
     latitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
     longitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
     username = models.CharField(max_length=50, db_column='usernames', unique=True)
+    image_key = models.CharField(max_length=512, null=True, blank=True)
     #area_code = models.IntegerField(db_column = 'addressCode',max_length=10, null=True, blank=True)
 
     class Meta:

@@ -29,6 +29,13 @@ from urllib.parse import urlencode
 from . import kroger_api
 import stripe
 from datetime import timedelta
+import io, os, mimetypes
+from uuid import uuid4
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseNotAllowed
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.text import get_valid_filename
+from .models import UploadedImage
+from core.utils.aws_s3 import get_s3_client, get_bucket_and_region
 
 
 from core.models import (
@@ -647,6 +654,105 @@ def _users_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id
         r["longitude"] = float(r["longitude"])
         r["latitude"]  = float(r["latitude"])
     return rows
+
+"""image functions"""
+@csrf_exempt  # if you're posting from a non-CSRF context; otherwise keep CSRF
+def upload_image(request):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if "file" not in request.FILES:
+        return HttpResponseBadRequest("Missing 'file' in form-data.")
+
+    file = request.FILES["file"]
+    original_name = get_valid_filename(file.name)
+    content_type = (
+        file.content_type
+        or mimetypes.guess_type(original_name)[0]
+        or "application/octet-stream"
+    )
+
+    # Build a unique S3 key
+    key = f"uploads/{uuid4().hex}_{original_name}"
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    try:
+        # Upload the file to S3
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=file.read(),
+            ContentType=content_type,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"S3 upload failed: {e}"}, status=500)
+
+    # Save record directly into gsharedb
+    img = UploadedImage.objects.using("gsharedb").create(
+        key=key,
+        content_type=content_type,
+        original_name=original_name,
+    )
+
+    # Canonical object URL (may require public ACL if used directly)
+    object_url = f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
+
+    try:
+        presigned_url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=3600,  # 1 hour
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "id": img.id,
+            "key": key,
+            "content_type": content_type,
+            "object_url": object_url,
+            "presigned_url": presigned_url,
+        },
+        status=201,
+    )
+
+
+def get_image_url(request, image_id):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+
+    try:
+        # Retrieve record directly from gsharedb
+        img = UploadedImage.objects.using("gsharedb").get(pk=image_id)
+    except UploadedImage.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "Not found"}, status=404)
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+    object_url = f"https://{bucket}.s3.{region}.amazonaws.com/{img.key}"
+
+    try:
+        presigned_url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": img.key},
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "id": img.id,
+            "key": img.key,
+            "object_url": object_url,
+            "presigned_url": presigned_url,
+        }
+    )
 
 
 """Main functions"""
