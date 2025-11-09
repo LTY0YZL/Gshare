@@ -194,10 +194,15 @@ def get_orders_by_status(order_status: str):
     return orders
 
 def get_orders_by_delivery_person(delivery_person: Users, status: str):
-    orders = Orders.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status)
-    if not orders.exists():
-        return []
-    return orders
+    try:
+        Delivery = Deliveries.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status)
+
+        for d in Delivery:
+            order = Orders.objects.using('gsharedb').get(id=d.order.id)
+        return order
+
+    except Orders.DoesNotExist:
+        return None
 
 def get_most_recent_order(user: Users, delivery_person: Users, status: str):
     try:
