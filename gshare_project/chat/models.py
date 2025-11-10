@@ -35,12 +35,14 @@ class DirectMessageThread(models.Model):
             thread = DirectMessageThread.objects.create()
             thread.participants.add(users[0], users[1])
         return thread, True
+    
 
 class Message(models.Model):
     group = models.ForeignKey(ChatGroup, on_delete=models.CASCADE, null=True, blank=True, related_name='messages')
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
     thread = models.ForeignKey(DirectMessageThread, on_delete=models.CASCADE, null=True, blank=True, related_name='messages')
     content = models.TextField()
+    # image = models.ImageField(upload_to='chat_images/', null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     
     class Meta:

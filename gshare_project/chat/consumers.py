@@ -52,24 +52,52 @@ class ChatConsumer(AsyncWebsocketConsumer):
     
     async def receive(self, text_data):
         data = json.loads(text_data)
-        # Extract the username from the received data
-        username = data['username']
-        # Extract the message from the received data
-        message = data['message']
-        # add the message to the database
-        await self.save_message(username, message)
-        # group = await self.get_group(self.room_name)
-        # user = await self.get_user(username)
-        # await self.create_message(group, user, message)
+        message_type = data.get('type', 'message')
         
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'chat_message',
-                'username': username,
-                'message': message
-            }
-        )
+        if message_type == 'message':
+            # Extract the username from the received data
+            username = data['username']
+            # Extract the message from the received data
+            message = data['message']
+            # add the message to the database
+            await self.save_message(username, message)
+            # group = await self.get_group(self.room_name)
+            # user = await self.get_user(username)
+            # await self.create_message(group, user, message)
+        
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'chat_message',
+                    'username': username,
+                    'message': message
+                }
+            )
+            await self.channel_layer.group_send(
+                self.room_group_name, {
+                    'type': 'chat_notification',
+                    'username': username,
+                    'message': message
+                }
+            )
+        elif message_type == 'typing_start':
+            username = data['username']
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'user_typing_start',
+                    'username': username
+                }
+            )
+        elif message_type == 'typing_stop':
+            username = data['username']
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'user_typing_stop',
+                    'username': username
+                }
+            )
                 
     async def chat_message(self, event):
         username = event['username']
@@ -77,6 +105,32 @@ class ChatConsumer(AsyncWebsocketConsumer):
         
         # Send the message to the Websocket
         await self.send(text_data=json.dumps({
+            'type': 'message',
             'username': username,
             'message': message
         }))
+    
+    async def user_typing_start(self, event):
+        username = event['username']
+        
+        await self.send(text_data=json.dumps({
+            'type': 'typing_start',
+            'username': username
+        }))
+    async def user_typing_stop(self, event):
+        username = event['username']
+        
+        await self.send(text_data=json.dumps({
+            'type': 'typing_stop',
+            'username': username
+        }))
+    async def chat_notification(self, event):
+        username = event['username']
+        message = event['message']
+        
+        if self.scope['user'].username != username:
+            await self.send(text_data=json.dumps({
+                'type': 'notification',
+                'title': f"New message from {username}",
+                'body': message[:50] + ("..." if len(message) > 50 else "")
+            }))
