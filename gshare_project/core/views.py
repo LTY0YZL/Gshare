@@ -20,6 +20,7 @@ from django.db.models import Q
 from django.db.models import Avg, Count
 from django.http import JsonResponse
 from django.db import connection
+from django.core.files.storage import default_storage
 import json
 import re
 import requests
@@ -28,6 +29,13 @@ from urllib.parse import urlencode
 from . import kroger_api
 import stripe
 from datetime import timedelta
+import io, os, mimetypes
+from uuid import uuid4
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseNotAllowed
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.text import get_valid_filename
+from .models import UploadedImage
+from core.utils.aws_s3 import get_s3_client, get_bucket_and_region
 
 
 from core.models import (
@@ -35,7 +43,7 @@ from core.models import (
     Stores, Items,
     Orders, OrderItems,
     Deliveries, Feedback, GroupOrders, GroupMembers,
-    RecurringCart, RecurringCartItem
+    RecurringCart, RecurringCartItem, ProductImage
 )
 
 """helper functions"""
@@ -191,6 +199,17 @@ def get_orders_by_status(order_status: str):
     if not orders.exists():
         return []
     return orders
+
+def get_orders_by_delivery_person(delivery_person: Users, status: str):
+    try:
+        Delivery = Deliveries.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status)
+
+        for d in Delivery:
+            order = Orders.objects.using('gsharedb').get(id=d.order.id)
+        return order
+
+    except Orders.DoesNotExist:
+        return None
 
 def get_most_recent_order(user: Users, delivery_person: Users, status: str):
     try:
@@ -636,6 +655,248 @@ def _users_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id
         r["latitude"]  = float(r["latitude"])
     return rows
 
+"""image functions"""
+@csrf_exempt  # if you're posting from a non-CSRF context; otherwise keep CSRF
+def upload_image(request):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if "file" not in request.FILES:
+        return HttpResponseBadRequest("Missing 'file' in form-data.")
+
+    file = request.FILES["file"]
+    original_name = get_valid_filename(file.name)
+    content_type = (
+        file.content_type
+        or mimetypes.guess_type(original_name)[0]
+        or "application/octet-stream"
+    )
+
+    # Build a unique S3 key
+    key = f"uploads/{uuid4().hex}_{original_name}"
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    try:
+        # Upload the file to S3
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=file.read(),
+            ContentType=content_type,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"S3 upload failed: {e}"}, status=500)
+
+    # Save record directly into gsharedb
+    img = UploadedImage.objects.using("gsharedb").create(
+        key=key,
+        content_type=content_type,
+        original_name=original_name,
+    )
+
+    # Canonical object URL (may require public ACL if used directly)
+    object_url = f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
+
+    try:
+        presigned_url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=3600,  # 1 hour
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "id": img.id,
+            "key": key,
+            "content_type": content_type,
+            "object_url": object_url,
+            "presigned_url": presigned_url,
+        },
+        status=201,
+    )
+
+
+def get_image_url(request, image_id):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+
+    try:
+        # Retrieve record directly from gsharedb
+        img = UploadedImage.objects.using("gsharedb").get(pk=image_id)
+    except UploadedImage.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "Not found"}, status=404)
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+    object_url = f"https://{bucket}.s3.{region}.amazonaws.com/{img.key}"
+
+    try:
+        presigned_url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": img.key},
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "id": img.id,
+            "key": img.key,
+            "object_url": object_url,
+            "presigned_url": presigned_url,
+        }
+    )
+
+
+def upload_user_avatar(request, user_id: int):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if "file" not in request.FILES:
+        return HttpResponseBadRequest("Missing 'file' in form-data.")
+
+    file = request.FILES["file"]
+    original_name = get_valid_filename(file.name)
+    content_type = file.content_type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+    key = f"avatars/{user_id}/{uuid4().hex}_{original_name}"
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=file.read(),
+            ContentType=content_type,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"S3 upload failed: {e}"}, status=500)
+
+    # Save the key on the user in gsharedb
+    try:
+        Users.objects.using("gsharedb").filter(pk=user_id).update(image_key=key)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"DB update failed: {e}"}, status=500)
+
+    # Return a presigned URL to preview immediately
+    try:
+        presigned = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse({
+        "ok": True,
+        "user_id": user_id,
+        "image_key": key,
+        "preview_url": presigned,
+    }, status=201)
+
+
+def get_user_avatar_url(request, user_id: int):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+
+    try:
+        user = Users.objects.using("gsharedb").get(pk=user_id)
+    except Users.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "User not found"}, status=404)
+
+    if not user.image_key:
+        # Optional: return a default image (S3 key) or None
+        return JsonResponse({"ok": True, "user_id": user_id, "image_key": None, "url": None})
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    try:
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": user.image_key},
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse({"ok": True, "user_id": user_id, "image_key": user.image_key, "url": url})
+
+def upload_user_avatar_helper(user_id: int, uploaded_file) -> dict:
+    """
+    Upload a new avatar to S3 for the given user, store the S3 key on users.image_key (gsharedb),
+    and return {ok, key, url} where url is a presigned GET URL.
+    """
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    original_name = get_valid_filename(uploaded_file.name)
+    content_type = uploaded_file.content_type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+
+    # Build new key: avatars/<user_id>/<uuid>_<filename>
+    new_key = f"avatars/{user_id}/{uuid4().hex}_{original_name}"
+
+    # Read old key (if any) before updating
+    user = Users.objects.using("gsharedb").only("image_key").get(pk=user_id)
+    old_key = user.image_key
+
+    # Upload to S3
+    s3.put_object(
+        Bucket=bucket,
+        Key=new_key,
+        Body=uploaded_file.read(),
+        ContentType=content_type,
+    )
+
+    # Persist the new key
+    Users.objects.using("gsharedb").filter(pk=user_id).update(image_key=new_key)
+
+    # Optional: cleanup old object to avoid orphans
+    if old_key and old_key != new_key:
+        try:
+            s3.delete_object(Bucket=bucket, Key=old_key)
+        except Exception:
+            pass
+
+    # Build presigned URL
+    url = s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": new_key},
+        ExpiresIn=3600,
+    )
+
+    return {"ok": True, "key": new_key, "url": url}
+
+
+def get_user_avatar_url_helper(user_id: int) -> str | None:
+    """
+    Return a presigned GET URL for the user's current avatar, or None if not set.
+    """
+    try:
+        user = Users.objects.using("gsharedb").only("image_key").get(pk=user_id)
+    except Users.DoesNotExist:
+        return None
+
+    if not user.image_key:
+        return None
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+    return s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": user.image_key},
+        ExpiresIn=3600,
+    )
+
 
 """Main functions"""
 
@@ -711,7 +972,7 @@ def signup_view(request):
         auth_login(request, auth_user)
         return redirect('home')
     
-    return render(request, 'signup.html')
+    return render(request, 'login.html')
 
 
 def logout_view(request):
@@ -775,112 +1036,93 @@ def updateProfile(profile, data, files):
 
 @login_required
 def userprofile(request):
-
     user_email = request.user.email
     if not user_email:
         messages.error(request, 'No email associated with your account')
         return redirect('home')
-        
-    profile = get_user("email", user_email)
+
+    profile = get_user("email", user_email)  # your existing helper
     if not profile:
         messages.error(request, 'User profile not found')
         return redirect('login')
-    
+
     errors = []
-    
+
     if request.method == 'POST':
 
         if 'save_description' in request.POST:
             if 'description' in request.POST:
-                    profile.description = request.POST.get('description', '').strip()
-                    print(profile.description)
-
+                profile.description = request.POST.get('description', '').strip()
             profile.save(using='gsharedb')
             messages.success(request, 'About Me updated!')
             return redirect('profile')
 
         if 'save_profile' in request.POST:
             try:
-                if 'name' in request.POST:
-                    profile.name = request.POST['name']
-                
-                if 'email' in request.POST and request.POST['email'] != profile.email:
-                    if Users.objects.using('gsharedb').filter(email=request.POST['email']).exists():
-                        errors.append({
-                            'message': 'This email is already in use',
-                            'is_success': False
-                        })
-                    else:
-                        profile.email = request.POST['email']
-                
-                if 'phone' in request.POST:
-                    profile.phone = request.POST['phone']
-                
-                if 'address' in request.POST:
-                    address = request.POST['address']
+                with transaction.atomic(using='gsharedb'):
+                    # ---- Profile fields ----
+                    if 'name' in request.POST:
+                        profile.name = request.POST['name']
 
-                    profile.address = address
-                    print(f"Updated profile address to {address}")
+                    if 'email' in request.POST and request.POST['email'] != profile.email:
+                        if Users.objects.using('gsharedb').filter(email=request.POST['email']).exists():
+                            errors.append({'message': 'This email is already in use', 'is_success': False})
+                        else:
+                            profile.email = request.POST['email']
 
-                    lat, lng = geoLoc(address)
-                    print(f"Geocoded {address} to lat={lat}, lng={lng}")
+                    if 'phone' in request.POST:
+                        profile.phone = request.POST['phone']
 
-                    profile.address = address
-                    print(f"Updated profile address to {address}")
+                    if 'address' in request.POST:
+                        address = request.POST['address']
+                        profile.address = address
+                        lat, lng = geoLoc(address)  # your existing geocoder
+                        profile.latitude = lat
+                        profile.longitude = lng
 
-                    profile.latitude = lat
-                    profile.longitude = lng
+                    # Save the base profile first
+                    profile.save(using='gsharedb')
 
-                    print(f"Updated profile address to {address}, lat={profile.latitude}, lng={profile.longitude}")
-                                
+                    # ---- Avatar upload via helper ----
+                    uploaded = request.FILES.get('profile_picture')
+                    if uploaded:
+                        res = upload_user_avatar_helper(profile.id, uploaded)
+                        if not res.get("ok"):
+                            raise RuntimeError("Avatar upload failed")
 
-
-                if 'profile_picture' in request.FILES:
-                    profile_picture = request.FILES.get('profile_picture')
-                    if profile_picture:
-                        profile.profile_picture = profile_picture
-                
-                # Save the profile
-                profile.save(using='gsharedb')
-                
-                # Update the auth user's email if it was changed
+                # Sync Django auth email if changed
                 if 'email' in request.POST and request.user.email != request.POST['email']:
                     request.user.email = request.POST['email']
                     request.user.save()
-                
+
                 messages.success(request, 'Profile updated successfully!')
                 return redirect('profile')
-                
+
             except Exception as e:
-                errors.append({
-                    'message': f'Error updating profile: {str(e)}',
-                    'is_success': False
-                })
-        
+                errors.append({'message': f'Error updating profile: {str(e)}', 'is_success': False})
+
         elif 'change_password' in request.POST:
             currentPassword = request.POST.get('current_password', '')
             newPassword1 = request.POST.get('new_password1', '')
             newPassword2 = request.POST.get('new_password2', '')
-            
-            isValid, errorMessage = validatePasswordChange(
-                request, currentPassword, newPassword1, newPassword2
-            )
-            
+            isValid, errorMessage = validatePasswordChange(request, currentPassword, newPassword1, newPassword2)
             if isValid:
                 handlePasswordChange(request, newPassword1)
                 messages.success(request, 'Your password was successfully updated!')
             else:
                 messages.error(request, errorMessage)
-            
             return redirect('profile')
-    
+
+    # ----- Ratings (unchanged) -----
     Feedback, avg_rating = get_user_ratings(profile.id)
     review_count = Feedback.count() if Feedback else 0
-
     avg = float(avg_rating or 0)
-    stars_full = max(0, min(5, int(round(avg))))  
+    stars_full = max(0, min(5, int(round(avg))))
     stars_text = '★' * stars_full + '☆' * (5 - stars_full)
-        
+
+    # ----- Presigned URL for avatar via helper -----
+    avatar_url = get_user_avatar_url_helper(profile.id)
+
     return render(request, "profile.html", {
         'user': profile,
         'errors': errors,
@@ -889,6 +1131,7 @@ def userprofile(request):
         'avg_rating': avg,
         'review_count': review_count,
         'stars_text': stars_text,
+        'avatar_url': avatar_url,
     })
 
 @login_required

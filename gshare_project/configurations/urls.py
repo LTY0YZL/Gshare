@@ -79,6 +79,14 @@ urlpatterns = [
     path('myorders/toggle_cart_status/<int:cart_id>/', views.toggle_cart_status, name='toggle_cart_status'),
     path('myorders/delete_cart/<int:cart_id>/', views.delete_cart, name='delete_cart'),
     path('payment_success/<int:order_id>/', views.payment_success, name='payment_success'),
+
+    # images
+    path("api/upload-image/", views.upload_image, name="upload_image"),
+    path("api/image-url/<int:image_id>/", views.get_image_url, name="get_image_url"),
+    path("api/users/<int:user_id>/avatar/", views.upload_user_avatar, name="upload_user_avatar"),
+    path("api/users/<int:user_id>/avatar/url/", views.get_user_avatar_url, name="get_user_avatar_url"),
+
+
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

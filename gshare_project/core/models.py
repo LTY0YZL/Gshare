@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
+import os
 
 
 class Users(models.Model):
@@ -12,6 +13,7 @@ class Users(models.Model):
     latitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
     longitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
     username = models.CharField(max_length=50, db_column='usernames', unique=True)
+    image_key = models.CharField(max_length=512, null=True, blank=True)
     #area_code = models.IntegerField(db_column = 'addressCode',max_length=10, null=True, blank=True)
 
     class Meta:
@@ -158,3 +160,33 @@ class RecurringCartItem(models.Model):
         
     def __str__(self):
         return f"{self.quantity} x {self.item.name}"
+    
+
+class ProductImage(models.Model):
+    user = models.OneToOneField(Users,on_delete=models.CASCADE,related_name="profile_image",db_constraint=False, null=True, blank=True,  )  # set to True if you control the users table & want an FK constraint
+    image = models.ImageField(upload_to="products/")        # stored in S3, path saved in DB
+    file_name = models.CharField(max_length=255, blank=True) # keep original/base name
+    alt_text = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        # Auto-fill file_name from uploaded file/key if not provided
+        if self.image and not self.file_name:
+            self.file_name = os.path.basename(self.image.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.file_name or self.image.name
+    
+class UploadedImage(models.Model):
+    key = models.CharField(max_length=512, unique=True)      # e.g. uploads/uuid_name.jpg
+    content_type = models.CharField(max_length=128, blank=True)
+    original_name = models.CharField(max_length=256, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "uploaded_image"  # optional but nice to control table name
+        managed = False
+        
+    def __str__(self):
+        return self.key

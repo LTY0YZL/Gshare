@@ -22,133 +22,146 @@
         <div style="display: flex; flex-direction: row; gap: 2rem;">
             <!-- Left Side - Profile Picture and Basic Info -->
             <div style="width: 33.333333%; display: flex; flex-direction: column;">
-                <form method="post" action="{% url 'profile' %}" style="margin-top: 1.5rem;">
+                <!-- The label triggers the hidden file input in the right form -->
+                <label for="profile_picture"
+                        style="width: 8rem; height: 8rem; margin-top: 1.5rem; margin-bottom: 1rem; overflow: hidden;
+                                border-radius: 50%; border: 2px solid #e5e7eb; display:block; cursor:pointer;">
+                    <img id="avatarPreview"
+                        src="{{ avatar_url|default:'' }}"
+                        alt="avatar"
+                        style="width:100%; height:100%; object-fit:cover;">
+                </label>
+
+                <!-- About Me (kept as you had it) -->
+                <form method="post" action="{% url 'profile' %}" style="margin-top: 0.5rem;">
                     {% csrf_token %}
-                    <div style="width: 8rem; height: 8rem; margin-bottom: 1rem; overflow: hidden; border-radius: 50%; border: 2px solid #e5e7eb; align-items: center; justify-self: center;">
-                        {% if user.profile_picture %}
-                        <img src="{{ user.profile_picture.url }}" alt="User's uploaded profile picture" style="width: 100%; height: 100%; object-fit: cover;">
-                        {% else %}
-                            <img src="{% static 'media/user.png' %}" alt="Default profile picture" style="width: 100%; height: 100%; object-fit: cover; border: 1px solid red;">
-                        {% endif %}
-                    </div>
+                    <div style="margin-top: 1rem;">
+                        <label for="description" style="display: block; color: #1f2937; margin-bottom: 0.5rem;">About Me:</label>
+                        <textarea id="description" name="description"
+                            style="width: 100%; height: 8rem; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
+                            placeholder="Tell us about yourself...">{{ user.description|default:'' }}</textarea>
 
-                    <div style="text-align: center;">
-                        <h1 style="font-size: 1.25rem; font-weight: 600;">{{ user.name }}</h1>
-                        <div style="font-size: small; display: flex; flex-direction: column;">
-                            <p>@{{ auth_user.username }}</p>
-                            <p style="color: #6b7280;"> ⛺ Member since {{ auth_user.date_joined|date:"F Y" }}</p>
-                        </div>
-
-                        <div style="margin-top: 0.25rem;">
-                            {% if review_count > 0 %}
-                                <span style="color: #eab308;">{{ stars_text }}</span>
-                                <span style="font-size: 0.875rem; color: #6b7280;">({{ avg_rating|floatformat:1 }} avg, {{ review_count }} reviews)</span>
-                            {% else %}
-                                <span style="color: #eab308;">★★★★★</span>
-                                <span style="font-size: 0.875rem; color: #6b7280;">(0 reviews)</span>
-                            {% endif %}
-                        </div>
-
-                        <!-- About Me -->
-                        <div style="margin-top: 1rem;">
-                            <label for="description" style="display: block; color: #1f2937; margin-bottom: 0.5rem;">About Me:</label>
-                            <textarea id="description" name="description"
-                                style="width: 100%; height: 8rem; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
-                                placeholder="Tell us about yourself...">{{ user.description|default:'' }}</textarea>
-
-                            <button type="submit" name="save_description" style="margin-top: 0.75rem; padding: 0.5rem 1.5rem; background-color: #3b82f6; color: white; border-radius: 0.5rem; border: none; cursor: pointer;" onmouseover="this.style.backgroundColor='#2563eb'" onmouseout="this.style.backgroundColor='#3b82f6'">
-                                Save About Me
-                            </button>
-                        </div>
+                        <button type="submit" name="save_description"
+                            style="margin-top: 0.75rem; padding: 0.5rem 1.5rem; background-color: #3b82f6; color: white; border-radius: 0.5rem; border: none; cursor: pointer;"
+                            onmouseover="this.style.backgroundColor='#2563eb'" onmouseout="this.style.backgroundColor='#3b82f6'">
+                            Save About Me
+                        </button>
                     </div>
                 </form>
             </div>
 
             <!-- Right Side - Account Info -->
             <div style="width: 66.666667%; background-color: white; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); padding: 1.5rem;">
-                <h1 style="font-size: 1.5rem; font-weight: bold; color: #1f2937; margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e5e7eb;">Account Information</h1>
-                
-                <form method="post" action="{% url 'profile' %}" style="display: flex; flex-direction: column; gap: 1.5rem;" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    <!-- Name Field -->
-                    <div style="display: flex; flex-direction: column;">
-                        <label for="username" style="display: block; color: #374151; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem;">Display Name</label>
-                        <input type="text" id="name" name="name" value="{{ user.name|default:'' }}" 
-                               style="width: 100%; padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; outline: none;" onfocus="this.style.boxShadow='0 0 0 2px #3b82f6'; this.style.borderColor='transparent';" onblur="this.style.boxShadow='none'; this.style.borderColor='#d1d5db';">
-                    </div>
-                    
-                    <!-- Email Field -->
-                    <div style="display: flex; flex-direction: column;">
-                        <label for="email" style="display: block; color: #374151; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem;">Email</label>
-                        <input type="email" id="email" name="email" value="{{ user.email }}" 
-                               style="width: 100%; padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; outline: none;" onfocus="this.style.boxShadow='0 0 0 2px #3b82f6'; this.style.borderColor='transparent';" onblur="this.style.boxShadow='none'; this.style.borderColor='#d1d5db';">
-                    </div>
-                    
-                    <!-- Phone Number -->
-                    <div style="display: flex-direction: column;">
-                        <label for="phone" style="display: block; color: #374151; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem;">Phone Number</label>
-                        <input type="tel" id="phone" name="phone" value="{{ user.phone|default:'' }}" 
-                               placeholder="Enter phone number"
-                               style="width: 100%; padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; outline: none;" onfocus="this.style.boxShadow='0 0 0 2px #3b82f6'; this.style.borderColor='transparent';" onblur="this.style.boxShadow='none'; this.style.borderColor='#d1d5db';">
-                    </div>
-                    
-                    <!-- Delivery Address -->
-                    <div style="display: flex; flex-direction: column;">
-                        <label for="address" style="display: block; color: #374151; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem;">Delivery Address</label>
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="text" id="address" name="address" value="{{ user.address|default:'' }}" 
-                                   placeholder="Enter delivery address"
-                                   style="width: 100%; padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; outline: none;" onfocus="this.style.boxShadow='0 0 0 2px #3b82f6'; this.style.borderColor='transparent';" onblur="this.style.boxShadow='none'; this.style.borderColor='#d1d5db';">
-                        </div>
-                    </div>
-                    
-                    <div style="padding-top: 1rem; margin-top: 1.5rem; border-top: 1px solid #e5e7eb;">
-                        <h2 style="font-size: 1.25rem; font-weight: 600; color: #1f2937; margin-bottom: 1rem;">Security</h2>
+                <h1 style="font-size: 1.5rem; font-weight: bold; color: #1f2937; margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e5e7eb;">
+                    Account Information
+                </h1>
+
+                <form id="profile-form" method="post" action="{% url 'profile' %}"
+                        style="display:flex; flex-direction:column; gap:1.5rem;"
+                        enctype="multipart/form-data">
                         
-                        <!-- Password Change -->
-                        <div style="display: flex; flex-direction: column;">
-                            <label style="display: block; color: #374151; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem;">Change Password</label>
-                            {% if errors %}
-                                {% for error in errors %}
-                                    <div style="margin-bottom: 1rem; padding: 0.75rem; font-size: 0.875rem; border-radius: 0.5rem; {% if error.is_success %}background-color: #dcfce7; color: #166534;{% else %}background-color: #fef2f2; color: #dc2626;{% endif %}">
-                                        {{ error.message }}
-                                    </div>
-                                {% endfor %}
-                            {% endif %}
-                            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                                <input type="password" name="current_password" placeholder="Current Password" 
-                                       style="width: 100%; padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; outline: none;" onfocus="this.style.boxShadow='0 0 0 2px #3b82f6'; this.style.borderColor='transparent';" onblur="this.style.boxShadow='none'; this.style.borderColor='#d1d5db';">
-                                <input type="password" name="new_password1" placeholder="New Password" 
-                                       style="width: 100%; padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; outline: none;" onfocus="this.style.boxShadow='0 0 0 2px #3b82f6'; this.style.borderColor='transparent';" onblur="this.style.boxShadow='none'; this.style.borderColor='#d1d5db';">
-                                <input type="password" name="new_password2" placeholder="Confirm New Password" 
-                                       style="width: 100%; padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; outline: none;" onfocus="this.style.boxShadow='0 0 0 2px #3b82f6'; this.style.borderColor='transparent';" onblur="this.style.boxShadow='none'; this.style.borderColor='#d1d5db';">
-                            </div>
-                            <button type="submit" name="change_password" value="true" style="margin-top: 0.5rem; padding: 0.5rem 1rem; background-color: #3b82f6; color: white; border-radius: 0.5rem; border: none; cursor: pointer; font-size: 0.875rem;" onmouseover="this.style.backgroundColor='#2563eb'" onmouseout="this.style.backgroundColor='#3b82f6'">
-                                Update Password
-                            </button>
-                        </div>
+                    {% csrf_token %}
+                    <input type="hidden" name="save_profile" value="1">
+
+                    <!-- Hidden file input (triggered by the label on the left) -->
+                    <input type="file" id="profile_picture" name="profile_picture" accept="image/*" hidden onchange="previewAndSubmit(event)">
+
+                    <!-- Name -->
+                    <div style="display:flex; flex-direction:column;">
+                        <label for="name" style="display:block; color:#374151; font-size:0.875rem; font-weight:500; margin-bottom:0.25rem;">Display Name</label>
+                        <input type="text" id="name" name="name" value="{{ user.name|default:'' }}"
+                            style="width:100%; padding:0.5rem 1rem; border:1px solid #d1d5db; border-radius:0.5rem; outline:none;">
                     </div>
-                    
-                    <!-- Form Actions -->
-                    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; padding-top: 1rem;">
-                        <button type="button" onclick="window.location.reload()" style="padding: 0.5rem 1.5rem; border: 1px solid #d1d5db; border-radius: 0.5rem; color: #374151; background-color: white; cursor: pointer;" onmouseover="this.style.backgroundColor='#f9fafb'" onmouseout="this.style.backgroundColor='white'">
+
+                    <!-- Email -->
+                    <div style="display:flex; flex-direction:column;">
+                        <label for="email" style="display:block; color:#374151; font-size:0.875rem; font-weight:500; margin-bottom:0.25rem;">Email</label>
+                        <input type="email" id="email" name="email" value="{{ user.email }}"
+                            style="width:100%; padding:0.5rem 1rem; border:1px solid #d1d5db; border-radius:0.5rem; outline:none;">
+                    </div>
+
+                    <!-- Phone -->
+                    <div style="display:flex; flex-direction:column;">
+                        <label for="phone" style="display:block; color:#374151; font-size:0.875rem; font-weight:500; margin-bottom:0.25rem;">Phone Number</label>
+                        <input type="tel" id="phone" name="phone" value="{{ user.phone|default:'' }}" placeholder="Enter phone number"
+                            style="width:100%; padding:0.5rem 1rem; border:1px solid #d1d5db; border-radius:0.5rem; outline:none;">
+                    </div>
+
+                    <!-- Address -->
+                    <div style="display:flex; flex-direction:column;">
+                        <label for="address" style="display:block; color:#374151; font-size:0.875rem; font-weight:500; margin-bottom:0.25rem;">Delivery Address</label>
+                        <input type="text" id="address" name="address" value="{{ user.address|default:'' }}" placeholder="Enter delivery address"
+                            style="width:100%; padding:0.5rem 1rem; border:1px solid #d1d5db; border-radius:0.5rem; outline:none;">
+                    </div>
+
+                    <!-- Security -->
+                    <div style="padding-top:1rem; margin-top:1.5rem; border-top:1px solid #e5e7eb;">
+                        <h2 style="font-size:1.25rem; font-weight:600; color:#1f2937; margin-bottom:1rem;">Security</h2>
+
+                        {% if errors %}
+                            {% for error in errors %}
+                            <div style="margin-bottom:1rem; padding:0.75rem; font-size:0.875rem; border-radius:0.5rem; {% if error.is_success %}background-color:#dcfce7; color:#166534;{% else %}background-color:#fef2f2; color:#dc2626;{% endif %}">
+                                {{ error.message }}
+                            </div>
+                            {% endfor %}
+                        {% endif %}
+
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                            <input type="password" name="current_password" placeholder="Current Password"
+                                style="width:100%; padding:0.5rem 1rem; border:1px solid #d1d5db; border-radius:0.5rem; outline:none;">
+                            <input type="password" name="new_password1" placeholder="New Password"
+                                style="width:100%; padding:0.5rem 1rem; border:1px solid #d1d5db; border-radius:0.5rem; outline:none;">
+                            <input type="password" name="new_password2" placeholder="Confirm New Password"
+                                style="width:100%; padding:0.5rem 1rem; border:1px solid #d1d5db; border-radius:0.5rem; outline:none;">
+                        </div>
+
+                        <button type="submit" name="change_password" value="true"
+                                style="margin-top:0.5rem; padding:0.5rem 1rem; background-color:#3b82f6; color:white; border-radius:0.5rem; border:none; cursor:pointer; font-size:0.875rem;">
+                            Update Password
+                        </button>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="display:flex; justify-content:flex-end; gap:0.75rem; padding-top:1rem;">
+                        <button type="button" onclick="window.location.reload()"
+                                style="padding:0.5rem 1.5rem; border:1px solid #d1d5db; border-radius:0.5rem; color:#374151; background-color:white; cursor:pointer;">
                             Cancel
                         </button>
-                        <button type="submit" name="save_profile" style="padding: 0.5rem 1.5rem; background-color: #3b82f6; color: white; border-radius: 0.5rem; border: none; cursor: pointer;" onmouseover="this.style.backgroundColor='#2563eb'" onmouseout="this.style.backgroundColor='#3b82f6'">
+                        <button type="submit" name="save_profile"
+                                style="padding:0.5rem 1.5rem; background-color:#3b82f6; color:white; border-radius:0.5rem; border:none; cursor:pointer;">
                             Save Changes
                         </button>
                     </div>
                 </form>
-                
-                <!-- Sign Out Button -->
-                <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
-                    <a href="{% url 'logout' %}" style="color: #ef4444; text-decoration: none; font-weight: 500;" onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#ef4444'">
-                        Sign Out
-                    </a>
+
+                <!-- Sign Out -->
+                <div style="margin-top:2rem; padding-top:1rem; border-top:1px solid #e5e7eb;">
+                    <a href="{% url 'logout' %}" style="color:#ef4444; text-decoration:none; font-weight:500;">Sign Out</a>
                 </div>
+            </div>
 
         </div>
     </div>
+
+    <script>
+        function previewAndSubmit(e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        // Live preview
+        const reader = new FileReader();
+        reader.onload = function (ev) {
+            const img = document.getElementById('avatarPreview');
+            if (img) img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+
+        // Auto-submit the right form
+        const form = document.getElementById('profile-form');
+        if (form) form.submit();
+        }
+    </script>
+
 </body>
 
 </html>
