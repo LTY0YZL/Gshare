@@ -22,34 +22,30 @@
         <div style="display: flex; flex-direction: row; gap: 2rem;">
             <!-- Left Side - Profile Picture and Basic Info -->
             <div style="width: 33.333333%; display: flex; flex-direction: column;">
-                <!-- Remove form here OR keep it for About Me; avatar can stay here -->
-                <form method="post" action="{% url 'profile' %}" style="margin-top: 1.5rem;">
-                    {% csrf_token %}
-
-                    <!-- Clickable avatar -->
-                    <label for="profile_picture"
-                        style="width: 8rem; height: 8rem; margin-bottom: 1rem; overflow: hidden;
+                <!-- The label triggers the hidden file input in the right form -->
+                <label for="profile_picture"
+                        style="width: 8rem; height: 8rem; margin-top: 1.5rem; margin-bottom: 1rem; overflow: hidden;
                                 border-radius: 50%; border: 2px solid #e5e7eb; display:block; cursor:pointer;">
-                        {% if user.profile_image and user.profile_image.image %}
-                        <div style="font-size:12px; color:#64748b; word-break:break-all;">
-                            <!-- debug -->
-                            {{ user.profile_image.image.name }}<br>
-                            {{ user.profile_image.image.url }}
-                        </div>
-                        {% endif %}
-                    </label>
+                    <img id="avatarPreview"
+                        src="{{ avatar_url|default:'' }}"
+                        alt="avatar"
+                        style="width:100%; height:100%; object-fit:cover;">
+                </label>
 
-                        <!-- About Me -->
-                        <div style="margin-top: 1rem;">
-                            <label for="description" style="display: block; color: #1f2937; margin-bottom: 0.5rem;">About Me:</label>
-                            <textarea id="description" name="description"
-                                style="width: 100%; height: 8rem; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
-                                placeholder="Tell us about yourself...">{{ user.description|default:'' }}</textarea>
+                <!-- About Me (kept as you had it) -->
+                <form method="post" action="{% url 'profile' %}" style="margin-top: 0.5rem;">
+                    {% csrf_token %}
+                    <div style="margin-top: 1rem;">
+                        <label for="description" style="display: block; color: #1f2937; margin-bottom: 0.5rem;">About Me:</label>
+                        <textarea id="description" name="description"
+                            style="width: 100%; height: 8rem; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
+                            placeholder="Tell us about yourself...">{{ user.description|default:'' }}</textarea>
 
-                            <button type="submit" name="save_description" style="margin-top: 0.75rem; padding: 0.5rem 1.5rem; background-color: #3b82f6; color: white; border-radius: 0.5rem; border: none; cursor: pointer;" onmouseover="this.style.backgroundColor='#2563eb'" onmouseout="this.style.backgroundColor='#3b82f6'">
-                                Save About Me
-                            </button>
-                        </div>
+                        <button type="submit" name="save_description"
+                            style="margin-top: 0.75rem; padding: 0.5rem 1.5rem; background-color: #3b82f6; color: white; border-radius: 0.5rem; border: none; cursor: pointer;"
+                            onmouseover="this.style.backgroundColor='#2563eb'" onmouseout="this.style.backgroundColor='#3b82f6'">
+                            Save About Me
+                        </button>
                     </div>
                 </form>
             </div>
@@ -60,13 +56,14 @@
                     Account Information
                 </h1>
 
-                <form id="profile-form" method="post" action="{% url 'profile' %}" style="display:flex; flex-direction:column; gap:1.5rem;" enctype="multipart/form-data">
+                <form id="profile-form" method="post" action="{% url 'profile' %}"
+                        style="display:flex; flex-direction:column; gap:1.5rem;"
+                        enctype="multipart/form-data">
+                        
                     {% csrf_token %}
-
-                    <!-- Hidden input so submit hits 'save_profile' in your view -->
                     <input type="hidden" name="save_profile" value="1">
 
-                    <!-- Hidden file input that the avatar label (left side) points to -->
+                    <!-- Hidden file input (triggered by the label on the left) -->
                     <input type="file" id="profile_picture" name="profile_picture" accept="image/*" hidden onchange="previewAndSubmit(event)">
 
                     <!-- Name -->

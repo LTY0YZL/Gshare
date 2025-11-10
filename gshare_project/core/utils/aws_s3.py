@@ -1,21 +1,28 @@
-import os
+# utils/aws_s3.py
 import boto3
 from botocore.config import Config
+from django.conf import settings
 
 def get_s3_client():
-    region = os.getenv("AWS_S3_REGION_NAME", "us-east-2")
-    cfg = Config(signature_version="s3v4", s3={"addressing_style": "virtual"})
+    region = settings.AWS_S3_REGION_NAME
+    key    = settings.AWS_ACCESS_KEY_ID
+    secret = settings.AWS_SECRET_ACCESS_KEY
+
+    if not key or not secret:
+        raise RuntimeError("AWS keys missing in settings.py")
+
     return boto3.client(
         "s3",
         region_name=region,
-        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        aws_access_key_id=key,
+        aws_secret_access_key=secret,
         endpoint_url=f"https://s3.{region}.amazonaws.com",
-        config=cfg,
+        config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
     )
 
 def get_bucket_and_region():
-    return (
-        os.getenv("AWS_S3_BUCKET_NAME", "gshare-media-prod"),
-        os.getenv("AWS_S3_REGION_NAME", "us-east-2"),
-    )
+    bucket = getattr(settings, "AWS_STORAGE_BUCKET_NAME", None) or getattr(settings, "AWS_S3_BUCKET_NAME", None)
+    region = settings.AWS_S3_REGION_NAME
+    if not bucket:
+        raise RuntimeError("Set AWS_STORAGE_BUCKET_NAME (or AWS_S3_BUCKET_NAME) in settings.py")
+    return bucket, region

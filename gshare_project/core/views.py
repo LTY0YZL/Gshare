@@ -972,7 +972,7 @@ def signup_view(request):
         auth_login(request, auth_user)
         return redirect('home')
     
-    return render(request, 'signup.html')
+    return render(request, 'login.html')
 
 
 def logout_view(request):
@@ -1036,41 +1036,37 @@ def updateProfile(profile, data, files):
 
 @login_required
 def userprofile(request):
-
     user_email = request.user.email
     if not user_email:
         messages.error(request, 'No email associated with your account')
         return redirect('home')
-        
-    profile = get_user("email", user_email)
+
+    profile = get_user("email", user_email)  # your existing helper
     if not profile:
         messages.error(request, 'User profile not found')
         return redirect('login')
-    
+
     errors = []
-    
+
     if request.method == 'POST':
 
         if 'save_description' in request.POST:
             if 'description' in request.POST:
-                    profile.description = request.POST.get('description', '').strip()
-                    print(profile.description)
-
+                profile.description = request.POST.get('description', '').strip()
             profile.save(using='gsharedb')
             messages.success(request, 'About Me updated!')
             return redirect('profile')
 
         if 'save_profile' in request.POST:
             try:
-                # Save everything (profile + image) atomically to gsharedb
                 with transaction.atomic(using='gsharedb'):
+                    # ---- Profile fields ----
                     if 'name' in request.POST:
                         profile.name = request.POST['name']
 
                     if 'email' in request.POST and request.POST['email'] != profile.email:
                         if Users.objects.using('gsharedb').filter(email=request.POST['email']).exists():
                             errors.append({'message': 'This email is already in use', 'is_success': False})
-                            # bail early; render below will show the error
                         else:
                             profile.email = request.POST['email']
 
@@ -1080,29 +1076,21 @@ def userprofile(request):
                     if 'address' in request.POST:
                         address = request.POST['address']
                         profile.address = address
-                        lat, lng = geoLoc(address)
+                        lat, lng = geoLoc(address)  # your existing geocoder
                         profile.latitude = lat
                         profile.longitude = lng
 
-                    # 1) save the profile first (so it has a valid PK in gsharedb)
+                    # Save the base profile first
                     profile.save(using='gsharedb')
 
-                    # 2) handle profile image via ProductImage (OneToOne to Users)
+                    # ---- Avatar upload via helper ----
                     uploaded = request.FILES.get('profile_picture')
                     if uploaded:
-                        # upsert the related row in gsharedb
-                        img, created = ProductImage.objects.using('gsharedb').get_or_create(user=profile)
-                        # optional cleanup: delete the old object in S3 to avoid orphans
-                        if not created and img.image:
-                            try:
-                                default_storage.delete(img.image.name)
-                            except Exception:
-                                pass
-                        img.image = uploaded
-                        img.alt_text = f"{profile.name or 'user'} profile"
-                        img.save(using='gsharedb')
+                        res = upload_user_avatar_helper(profile.id, uploaded)
+                        if not res.get("ok"):
+                            raise RuntimeError("Avatar upload failed")
 
-                # sync Django auth user's email if changed
+                # Sync Django auth email if changed
                 if 'email' in request.POST and request.user.email != request.POST['email']:
                     request.user.email = request.POST['email']
                     request.user.save()
@@ -1112,41 +1100,29 @@ def userprofile(request):
 
             except Exception as e:
                 errors.append({'message': f'Error updating profile: {str(e)}', 'is_success': False})
-        
+
         elif 'change_password' in request.POST:
             currentPassword = request.POST.get('current_password', '')
             newPassword1 = request.POST.get('new_password1', '')
             newPassword2 = request.POST.get('new_password2', '')
-            
-            isValid, errorMessage = validatePasswordChange(
-                request, currentPassword, newPassword1, newPassword2
-            )
-            
+            isValid, errorMessage = validatePasswordChange(request, currentPassword, newPassword1, newPassword2)
             if isValid:
                 handlePasswordChange(request, newPassword1)
                 messages.success(request, 'Your password was successfully updated!')
             else:
                 messages.error(request, errorMessage)
-            
             return redirect('profile')
-    
+
+    # ----- Ratings (unchanged) -----
     Feedback, avg_rating = get_user_ratings(profile.id)
     review_count = Feedback.count() if Feedback else 0
-
     avg = float(avg_rating or 0)
-    stars_full = max(0, min(5, int(round(avg))))  
+    stars_full = max(0, min(5, int(round(avg))))
     stars_text = '★' * stars_full + '☆' * (5 - stars_full)
 
-    try:
-        pi = getattr(profile, "profile_image", None)
-        if pi and pi.image:
-            print("PI key:", pi.image.name)
-            print("PI url:", pi.image.url)  # will fail here if signing can’t happen
-        else:
-            print("No profile_image attached")
-    except Exception as ex:
-        print("URL generation error:", ex)
-        
+    # ----- Presigned URL for avatar via helper -----
+    avatar_url = get_user_avatar_url_helper(profile.id)
+
     return render(request, "profile.html", {
         'user': profile,
         'errors': errors,
@@ -1155,6 +1131,7 @@ def userprofile(request):
         'avg_rating': avg,
         'review_count': review_count,
         'stars_text': stars_text,
+        'avatar_url': avatar_url,
     })
 
 @login_required
