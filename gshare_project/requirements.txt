@@ -11,3 +11,7 @@ honcho
 stripe
 argon2-cffi
 django-extensions
+boto3
+botocore
+Pillow
+django-storages
