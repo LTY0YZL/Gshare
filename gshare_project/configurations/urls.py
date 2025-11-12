@@ -43,8 +43,11 @@ urlpatterns = [
     path('shoppingcart/groupItems/', views.group_data, name='group_items'),
     path('shoppingcart/placedItems/', views.placed_data, name='placed_items'),
     path('shoppingcart/inprogress/', views.inprogress_data, name='inprogress'),
-    
-    path('shoppingcart/<int:order_id>/', views.create_group_order_json, name='create_group_order_json'),  
+
+    # voice orders
+    path('shoppingcart/voice_order/process/', views.process_voice_order, name="process_voice_order"),
+
+    path('shoppingcart/<int:order_id>/', views.create_group_order_json, name='create_group_order_json'),
     path('shoppingcart/add_user_to_group/<int:group>/', views.add_user_to_group_json, name='add_user_to_group_json'),
     path('shoppingcart/remove_user_from_group/<int:group>/', views.remove_user_from_group_json, name='remove_user_from_group_json'),
     path('shoppingcart/updateItem/<int:item_id>/<int:quantity>/', views.add_to_cart, name='add_to_cart'),
@@ -79,6 +82,7 @@ urlpatterns = [
     path('myorders/toggle_cart_status/<int:cart_id>/', views.toggle_cart_status, name='toggle_cart_status'),
     path('myorders/delete_cart/<int:cart_id>/', views.delete_cart, name='delete_cart'),
     path('payment_success/<int:order_id>/', views.payment_success, name='payment_success'),
+
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

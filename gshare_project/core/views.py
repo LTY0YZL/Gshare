@@ -782,6 +782,7 @@ def userprofile(request):
         return redirect('home')
         
     profile = get_user("email", user_email)
+    getItemNamesForUser(profile, ['cart'])
     if not profile:
         messages.error(request, 'User profile not found')
         return redirect('login')
@@ -2202,3 +2203,78 @@ def delete_cart(request, cart_id):
 def payment_success(request, order_id):
     change_order_status(order_id, "delivered") 
     return redirect("order_history")
+
+# Voice Orders
+def getItemNamesForUser(user, statuses = ['delivered']):
+    namesAndId = []
+    for status in statuses:
+        orders = get_orders(user, status)
+        for order in orders:
+            items = get_order_items(order)
+            for row in items:
+                namesAndId.append((row[4], row[1]))
+
+
+@login_required
+def process_voice_order(request):
+    # get the user voice transcript
+    transcript = None
+
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+        transcript = (payload.get('transcript') or '').strip()
+        # print(f"Extracted transcript: {transcript}")
+    except json.JSONDecodeError as e:
+        #print(f"JSON decode error: {e}")
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+
+    if not transcript:
+        # print("Transcript is empty")
+        return JsonResponse({'success': False, 'error': 'Transcript is required'}, status=400)
+
+    user = get_user("email", request.user.email)
+    #print(f"User: {user}")
+
+    # get user's past order items, in this format: [itemName, item_id]
+    userPastItems = getItemNamesForUser(user, "delivered")
+    print(f"User past items: {userPastItems}")
+
+    # get all items available
+    print("Getting all items from database")
+    allItems = getAllItemsFromDatabase()
+    print(f"All items count: {len(allItems)}")
+
+    # generate json
+    print("Generating JSON")
+    jsonString = generateJsonFromTranscriptAndItems(transcript, userPastItems, allItems)
+
+    parsed_result = {
+        "items": [],   # expected final structure: [{"item_id": 12, "quantity": 2}, ...]
+        "unknown": []
+    }
+
+    return JsonResponse({
+        "success": True,
+        "transcript": transcript,
+        "parsed": parsed_result,
+        "received_at": timezone.now().isoformat()
+    })
+
+
+def generateJsonFromTranscriptAndItems(transcript, userPastItems, allItems):
+    print("Generating JSON from transcript and items")
+    print("transcrupt includes: " + str(transcript))
+    print("user's past items: " + str(userPastItems))
+    print("all items: " + str(allItems))
+    return
+
+def getAllItemsFromDatabase():
+    items_qs = Items.objects.using('gsharedb').select_related('store').values(
+        'id', 'name'
+    )
+
+    result = []
+    for row in items_qs:
+        result.append((row.get('name'), row.get('id')))
+
+    return result
