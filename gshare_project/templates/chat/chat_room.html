@@ -38,16 +38,16 @@
                  class="block px-3 py-2 rounded hover:bg-blue-700 transition">{{ group.name }}</a>
             </li>
           {% empty %}
-            <p class="text-gray-300 text-sm">You’re not part of any groups yet.</p>
+            <p class="text-gray-300 text-sm">You're not part of any groups yet.</p>
           {% endfor %}
         </ul>
       </div>
     </aside>
 
     <!-- CHAT SECTION -->
-    <main class="flex flex-col h-full">
+    <main class="flex flex-col h-full min-h-0"> <!-- added min-h-0 -->
       <div id="chat-log"
-        class="flex flex-col flex-1 overflow-y-auto px-6 py-4 space-y-2 text-sm leading-snug">
+        class="flex flex-col flex-1 overflow-y-auto px-6 py-4 space-y-2 text-sm leading-snug min-h-0">
         {% for message in messages %}
           <div
             class="max-w-[70%] px-4 py-2 rounded-2xl break-words
@@ -57,16 +57,33 @@
                 bg-gray-300 text-gray-900 self-start
               {% endif %}">
             <span class="font-semibold">{{ message.sender.username }}:</span> {{ message.content }}
+            {% if message.image %}
+              <br><img src="{{ message.image }}" alt="Image" class="max-w-xs rounded-lg mt-2">
+            {% endif %}
           </div>
         {% endfor %}
       </div>
 
-      <div class="flex items-center gap-3 p-4 border-t border-gray-300 bg-white">
-        <input id="chat-message-input"
-          class="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-base focus:ring-2 focus:ring-blue-400 outline-none"
-          type="text" placeholder="Type your message..." />
-        <button id="chat-message-submit"
-          class="bg-blue-600 text-white px-5 py-2 rounded-xl hover:bg-blue-700 transition font-medium">Send</button>
+      <!-- Image Preview -->
+    <div class="sticky bottom-0 z-10 bg-white border-t border-gray-300">
+        <div class="flex items-center gap-3 p-4">
+          <div id="image-preview" class="hidden items-center gap-3">
+            <img id="preview-img" class="w-20 h-20 object-cover rounded-lg shadow-sm" alt="Preview">
+            <button id="remove-image-btn" class="text-red-600 hover:text-red-800">Remove</button>
+          </div>
+
+          <input id="chat-message-input"
+            class="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-base focus:ring-2 focus:ring-blue-400 outline-none"
+            type="text" placeholder="Type your message..." />
+          <input id="image-input" type="file" accept="image/*" style="display:none;" />
+
+          <button id="image-upload-btn" class="bg-gray-600 text-white px-4 py-2 rounded-xl hover:bg-gray-700 transition font-medium">
+              +
+          </button>
+
+          <button id="chat-message-submit"
+            class="bg-blue-600 text-white px-5 py-2 rounded-xl hover:bg-blue-700 transition font-medium">Send</button>
+        </div>
       </div>
     </main>
 
@@ -97,7 +114,7 @@
       {% endif %}
 
       <div class="p-4">
-        <h3 class="text-lg font-semibold mb-3"> Unread Notifications</h3>
+        <h3 class="text-lg font-semibold mb-3">Unread Notifications</h3>
         <div id="notification-badge" class="fixed top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full shadow-lg cursor-pointer">
             0
         </div>
@@ -128,60 +145,139 @@
     {% endif %}
 
     const chatLog = document.querySelector('#chat-log');
+    let selectedImage = null;
+    let isTyping = false;
+    let unreadNotifications = [];
 
     window.onload = () => chatLog.scrollTop = chatLog.scrollHeight;
 
-    let unreadNotifications = []
-
-    chatSocket.onmessage = function (e) {
-      const data = JSON.parse(e.data);
-      const chatLog = document.querySelector('#chat-log');
-      
-      if (data.type === 'message'){
-        const messageDiv = document.createElement('div');
-        const isSelf = data.username === username;
-        messageDiv.className = `max-w-[70%] px-4 py-2 rounded-2xl break-words text-sm leading-snug ${
-            isSelf ? 'bg-blue-600 text-white self-end' : 'bg-gray-300 text-gray-900 self-start'
-        }`;
-        messageDiv.innerHTML = `<span class='font-semibold'>${data.username}:</span> ${data.message}`;
-        chatLog.appendChild(messageDiv);
-        chatLog.scrollTop = chatLog.scrollHeight;
-
-        removeTypingIndicator(data.username);
-      }
-
-      if (data.type === 'notification' && data.username !== username) {
-        unreadNotifications.push({
-            title: `New message from ${data.username}`,
-            body: data.message.slice(0, 15)
-        });
-        updateNotificationUI();
-      }
-
-      if (data.type === 'typing_start') {
-        {% comment %} if (data.username !== username) { {% endcomment %}
-        showTypingIndicator(data.username);
-        {% comment %} } {% endcomment %}
-      }
-      
-      if (data.type === 'typing_stop') {
-        removeTypingIndicator(data.username);
-      }
-
-    };
-
-    document.querySelector('#chat-message-submit').onclick = function () {
-      const input = document.querySelector('#chat-message-input');
-      if (!input.value.trim()) return;
-      chatSocket.send(JSON.stringify({ username, message: input.value }));
-      input.value = '';
-    };
-
-    document.querySelector('#chat-message-input').addEventListener('keypress', e => {
-      if (e.key === 'Enter') document.querySelector('#chat-message-submit').click();
+    // Image Upload Button
+    document.getElementById('image-upload-btn').addEventListener('click', () => {
+        document.getElementById('image-input').click();
     });
 
-    // Sidebar Collapse Logic
+    // File Input Change
+    document.getElementById('image-input').addEventListener('change', (e) => {
+        selectedImage = e.target.files[0];
+        if (selectedImage) {
+            showImagePreview(selectedImage);
+            console.log("Image selected:", selectedImage.name);
+        }
+    });
+
+    // Paste Image
+    document.getElementById('chat-message-input').addEventListener('paste', (e) => {
+        const items = e.clipboardData.items;
+
+        for (let item of items) {
+            if (item.type.indexOf('image') !== -1) {
+                e.preventDefault();
+                selectedImage = item.getAsFile();
+                showImagePreview(selectedImage);
+                console.log("Image pasted:", selectedImage.name);
+                break;
+            }
+        }
+    });
+
+    // Show Image Preview
+    function showImagePreview(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const previewDiv = document.getElementById('image-preview');
+            const previewImg = document.getElementById('preview-img');
+            previewImg.src = e.target.result;
+            previewDiv.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // Remove Image Button
+    document.getElementById('remove-image-btn').addEventListener('click', () => {
+        selectedImage = null;
+        document.getElementById('image-preview').classList.add('hidden');
+        document.getElementById('image-input').value = '';
+    });
+
+    // Handle Messages
+    chatSocket.onmessage = function (e) {
+        const data = JSON.parse(e.data);
+
+        if (data.type === 'message') {
+            const messageDiv = document.createElement('div');
+            const isSelf = data.username === username;
+            messageDiv.className = `max-w-[70%] px-4 py-2 rounded-2xl break-words text-sm leading-snug ${
+                isSelf ? 'bg-blue-600 text-white self-end' : 'bg-gray-300 text-gray-900 self-start'
+            }`;
+            messageDiv.innerHTML = `<span class='font-semibold'>${data.username}:</span> ${data.message}`;
+
+            if (data.image_url) {
+                messageDiv.innerHTML += `<br><img src="${data.image_url}" alt="Image" class="max-w-xs rounded-lg mt-2">`;
+            }
+            chatLog.appendChild(messageDiv);
+            chatLog.scrollTop = chatLog.scrollHeight;
+
+            removeTypingIndicator(data.username);
+        }
+
+        if (data.type === 'notification' && data.username !== username) {
+            unreadNotifications.push({
+                title: `New message from ${data.username}`,
+                body: data.message.slice(0, 15)
+            });
+            updateNotificationUI();
+        }
+
+        if (data.type === 'typing_start') {
+            showTypingIndicator(data.username);
+        }
+
+        if (data.type === 'typing_stop') {
+            removeTypingIndicator(data.username);
+        }
+    };
+
+    // Send Message
+    document.querySelector('#chat-message-submit').onclick = function () {
+        const input = document.querySelector('#chat-message-input');
+        const msg = input.value.trim();
+
+        if (!msg && !selectedImage) return;
+
+        if (selectedImage) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const imageData = event.target.result;
+                chatSocket.send(JSON.stringify({
+                    type: 'message',
+                    username: username,
+                    message: msg,
+                    image: imageData
+                }));
+                input.value = '';
+                selectedImage = null;
+                document.getElementById('image-preview').classList.add('hidden');
+                document.getElementById('image-input').value = '';
+                isTyping = false;
+            };
+            reader.readAsDataURL(selectedImage);
+        } else {
+            chatSocket.send(JSON.stringify({
+                type: 'message',
+                username: username,
+                message: msg
+            }));
+            input.value = '';
+            isTyping = false;
+        }
+    };
+
+    // Enter Key to Send
+    document.querySelector('#chat-message-input').addEventListener('keypress', e => {
+        if (e.key === 'Enter') document.querySelector('#chat-message-submit').click();
+    });
+
+    // Sidebar Toggle Logic
     const leftSidebar = document.getElementById('left-sidebar');
     const rightSidebar = document.getElementById('right-sidebar');
     const toggleLeft = document.getElementById('toggle-left');
@@ -191,19 +287,20 @@
     let rightOpen = true;
 
     toggleLeft.addEventListener('click', () => {
-      leftOpen = !leftOpen;
-      leftSidebar.style.width = leftOpen ? '16rem' : '0';
-      leftSidebar.style.padding = leftOpen ? '1rem' : '0';
-      toggleLeft.innerText = leftOpen ? '⮜' : '⮞';
+        leftOpen = !leftOpen;
+        leftSidebar.style.width = leftOpen ? '16rem' : '0';
+        leftSidebar.style.padding = leftOpen ? '1rem' : '0';
+        toggleLeft.innerText = leftOpen ? '⮜' : '⮞';
     });
 
     toggleRight.addEventListener('click', () => {
-      rightOpen = !rightOpen;
-      rightSidebar.style.width = rightOpen ? '16rem' : '0';
-      rightSidebar.style.padding = rightOpen ? '1rem' : '0';
-      toggleRight.innerText = rightOpen ? '⮞' : '⮜';
+        rightOpen = !rightOpen;
+        rightSidebar.style.width = rightOpen ? '16rem' : '0';
+        rightSidebar.style.padding = rightOpen ? '1rem' : '0';
+        toggleRight.innerText = rightOpen ? '⮞' : '⮜';
     });
 
+    // Typing Indicators
     function showTypingIndicator(user) {
         let indicator = document.getElementById(`typing-${user}`);
         if (!indicator) {
@@ -225,8 +322,6 @@
 
     const messageInput = document.querySelector('#chat-message-input');
 
-    let isTyping = false;
-    
     messageInput.addEventListener('input', () => {
         const text = messageInput.value.trim();
 
@@ -236,7 +331,7 @@
                 type: 'typing_start',
                 username: username
             }));
-        } 
+        }
 
         if (!text && isTyping) {
             isTyping = false;
@@ -244,30 +339,8 @@
                 type: 'typing_stop',
                 username: username
             }));
-        }  
-    });
-
-    document.querySelector('#chat-message-submit').onclick = function () {
-        const input = document.querySelector('#chat-message-input');
-        const msg = input.value.trim();
-
-        if(!msg) return;
-
-        chatSocket.send(JSON.stringify({ 
-            type: 'message', 
-            username: username,
-            message: msg
-        }));
-        input.value = '';
-        
-        if (isTyping) {
-            isTyping = false;
-            chatSocket.send(JSON.stringify({
-                type: 'typing_stop',
-                username: username
-            }));
         }
-    };
+    });
 
     function updateNotificationUI() {
         const badge = document.getElementById('notification-badge');
@@ -278,7 +351,7 @@
     const chatMain = document.querySelector('main');
 
     chatMain.addEventListener('focusin', () => {
-        unreadNotifications = [];  // clear list
+        unreadNotifications = [];
         const badge = document.getElementById('notification-badge');
         badge.textContent = '0';
     });

@@ -42,7 +42,7 @@ class Message(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
     thread = models.ForeignKey(DirectMessageThread, on_delete=models.CASCADE, null=True, blank=True, related_name='messages')
     content = models.TextField()
-    # image = models.ImageField(upload_to='chat_images/', null=True, blank=True)
+    image = models.CharField(max_length=500, null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -55,4 +55,7 @@ class Message(models.Model):
         from django.core.exceptions import ValidationError
         if bool(self.group) == bool(self.thread):
             raise ValidationError("Message must be associated with either a group or a direct message thread.")
+        
+
+
 

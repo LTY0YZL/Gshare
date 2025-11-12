@@ -1776,14 +1776,14 @@ def inprogress_data(request):
         print("no user")
         return JsonResponse({'error': 'Profile not found'}, status=404)
 
-    orders = get_orders(profile, 'inprogress')
-    print(orders)
-    if not orders:
+    my_orders = get_orders(profile, 'inprogress')
+    print(my_orders)
+    if not my_orders:
         return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
 
-    order_list = []
+    my_order_list = []
     
-    for order in orders:
+    for order in my_orders:
         items = get_order_items(order) if order else []
         subtotal = 0
         items_with_totals = []
@@ -1805,14 +1805,46 @@ def inprogress_data(request):
             'tax': tax,
             'total': grand_total,
         }
-        order_list.append({
+        my_order_list.append({
             'id': order.id,
             'summary': order_summary,
             'items': items_with_totals,
         })
-    print(order_list)
+        
+    my_deliveries = []
+    deliveries = get_orders_by_delivery_person(profile, 'inprogress')
+        
+    for order in deliveries:
+        items = get_order_items(order) if order else []
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+        
+        tax = Decimal(calculate_tax(subtotal)) / 100
+        grand_total = round(subtotal + tax, 2)
+
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+        my_deliveries.append({
+            'id': order.id,
+            'summary': order_summary,
+            'items': items_with_totals,
+        })
+    print(my_deliveries)
     return JsonResponse({
-        'orders': order_list
+        'orders': my_order_list,
+        'deliveries': my_deliveries
     })
     
     
