@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from django.core.validators import MaxValueValidator, MinValueValidator
 import os
 
@@ -175,6 +176,10 @@ class ProductImage(models.Model):
             self.file_name = os.path.basename(self.image.name)
         super().save(*args, **kwargs)
 
+    class Meta:
+        managed = False
+        db_table = 'core_productimage'
+
     def __str__(self):
         return self.file_name or self.image.name
     
@@ -190,3 +195,47 @@ class UploadedImage(models.Model):
         
     def __str__(self):
         return self.key
+    
+
+class Receipt(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    uploader = models.ForeignKey('Users', null=True, blank=True, on_delete=models.SET_NULL)
+    s3_bucket = models.CharField(max_length=128)
+    s3_key = models.CharField(max_length=512)
+    uploaded_at = models.DateTimeField(default=timezone.now)
+    status = models.CharField(max_length=20, default='pending',
+                              choices=[('pending','pending'),('processing','processing'),('done','done'),('error','error')])
+    error = models.TextField(blank=True, default='')
+    gemini_json = models.JSONField(null=True, blank=True)  # parsed receipt JSON (lines)
+    inferred_order_id = models.IntegerField(null=True, blank=True)  # best guess
+
+    class Receipt(models.Model):
+        
+        # fields...
+        class Meta:
+            db_table = 'receipt'
+
+
+class ReceiptLine(models.Model):
+    receipt = models.ForeignKey(Receipt, related_name='lines', on_delete=models.CASCADE)
+    name = models.CharField(max_length=256)
+    quantity = models.FloatField(default=1)
+    unit_price = models.FloatField(null=True, blank=True)
+    total_price = models.FloatField(null=True, blank=True)
+    meta = models.JSONField(null=True, blank=True)  # brand, code, etc.
+
+    class ReceiptLine(models.Model):
+        # fields...
+        class Meta:
+            db_table = 'receipt_line'
+
+class ReceiptChatMessage(models.Model):
+    receipt = models.ForeignKey(Receipt, related_name='chat', on_delete=models.CASCADE)
+    role = models.CharField(max_length=10, choices=[('user','user'),('assistant','assistant'),('system','system')])
+    content = models.TextField()
+    created_at = models.DateTimeField(default=timezone.now)
+
+class ReceiptChatMessage(models.Model):
+    # fields...
+    class Meta:
+        db_table = 'receipt_chat_message'
