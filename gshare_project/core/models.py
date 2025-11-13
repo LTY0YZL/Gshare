@@ -179,13 +179,13 @@ class ProductImage(models.Model):
         return self.file_name or self.image.name
     
 class UploadedImage(models.Model):
-    key = models.CharField(max_length=512, unique=True)      # e.g. uploads/uuid_name.jpg
+    key = models.CharField(max_length=512, unique=True)      
     content_type = models.CharField(max_length=128, blank=True)
     original_name = models.CharField(max_length=256, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "uploaded_image"  # optional but nice to control table name
+        db_table = "uploaded_image"  
         managed = False
         
     def __str__(self):
