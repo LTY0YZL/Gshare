@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Receipt</title>
+</head>
+
+{% include "navbar.html" %}
+
+<body class="desgin">
+
+    <div class="flex flex-col items-center mt-12">
+        <h1 class="mb-4 text-4xl font-bold text-center">
+            Upload a grocery receipt
+        </h1>
+
+        <p class="mb-8 text-lg text-gray-700 text-center max-w-xl">
+            Take a clear photo of your receipt and we’ll scan it for items.
+        </p>
+
+        <form method="post" enctype="multipart/form-data" style="text-align:center;">
+            {% csrf_token %}
+
+            <p class="mb-4">Please choose an image.</p>
+
+            <input
+                type="file"
+                name="receipt_image"
+                accept="image/*"
+                style="
+                    display:block;
+                    margin: 0 auto 1rem auto;
+                    padding: 0.4rem 0.75rem;
+                    border: 1px solid #d4d4d4;
+                    border-radius: 0.5rem;
+                "
+            >
+
+            <!-- force visible label + green background -->
+            <button
+                type="submit"
+                style="
+                    padding: 0.5rem 1.5rem;
+                    background: #16a34a;
+                    color: #ffffff;
+                    font-size: 16px;
+                    border-radius: 0.5rem;
+                    border: 1px solid #d4d4d4;
+                    cursor: pointer;
+                "
+            >
+                Upload &amp; Scan
+            </button>
+        </form>
+    </div>
+
+</body>
+
+</html>

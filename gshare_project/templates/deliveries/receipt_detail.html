@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Receipt #{{ receipt.id }}</title>
+</head>
+
+{% include "navbar.html" %}
+
+<body class="desgin">
+<div class="max-w-3xl mx-auto mt-16 px-4">
+
+    <!-- Title -->
+    <h1 class="text-3xl font-bold mb-2 text-center">
+        Receipt #{{ receipt.id }}
+    </h1>
+
+    <!-- Status Badge -->
+    <div class="text-center mb-6">
+        <span class="font-semibold">Status:</span>
+        <span
+            style="padding:4px 10px; border-radius:6px;"
+            class="
+                {% if receipt.status == 'done' %}
+                    bg-green-200 text-green-800
+                {% elif receipt.status == 'processing' %}
+                    bg-yellow-200 text-yellow-800
+                {% elif receipt.status == 'error' %}
+                    bg-red-200 text-red-800
+                {% else %}
+                    bg-gray-200 text-gray-800
+                {% endif %}
+            ">
+            {{ receipt.status }}
+        </span>
+    </div>
+
+    <!-- Step Indicator -->
+    <div class="flex items-center justify-center gap-4 text-sm mb-8">
+        <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full
+                {% if receipt.status in 'pending processing done error' %} bg-green-600 {% else %} bg-gray-400 {% endif %}"></div>
+            <span>Uploaded</span>
+        </div>
+
+        <div class="flex-1 h-px bg-gray-300 max-w-24"></div>
+
+        <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full
+                {% if receipt.status in 'processing done error' %} bg-green-600 {% else %} bg-gray-400 {% endif %}"></div>
+            <span>Scanning</span>
+        </div>
+
+        <div class="flex-1 h-px bg-gray-300 max-w-24"></div>
+
+        <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full
+                {% if receipt.status == 'done' %} bg-green-600
+                {% elif receipt.status == 'error' %} bg-red-600
+                {% else %} bg-gray-400 {% endif %}"></div>
+            <span>{% if receipt.status == "error" %}Error{% else %}Finished{% endif %}</span>
+        </div>
+    </div>
+
+    <!-- Receipt Image -->
+    {% if image_url %}
+        <div class="text-center mb-8">
+            <h2 class="text-lg font-medium mb-2">Receipt Image</h2>
+            <img src="{{ image_url }}" alt="Receipt image"
+                 class="max-h-96 mx-auto border border-gray-300 rounded-lg shadow">
+        </div>
+    {% endif %}
+
+    <!-- Extracted Items -->
+    {% if lines %}
+        <h2 class="text-xl font-semibold mb-3 text-center">Extracted Items</h2>
+
+        <div class="inline-block w-full max-w-xl mx-auto text-left">
+            <ul class="divide-y divide-gray-300 border rounded-lg shadow-sm bg-white">
+                {% for line in lines %}
+                    <li class="px-4 py-2">
+                        <strong>{{ line.name }}</strong><br>
+                        Qty: {{ line.quantity }}  
+                        {% if line.unit_price %}
+                            — Unit: ${{ line.unit_price|floatformat:2 }}
+                        {% endif %}
+                        {% if line.total_price %}
+                            — Total: ${{ line.total_price|floatformat:2 }}
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% elif receipt.status == "processing" %}
+        <p class="text-center text-gray-700 mb-4">
+            We're scanning your receipt for items…
+        </p>
+    {% elif receipt.status == "pending" %}
+        <p class="text-center text-gray-700 mb-4">
+            Starting scan… refresh in a few seconds.
+        </p>
+    {% elif receipt.status == "error" %}
+        <p class="text-center text-red-700 mb-4">
+            Error: {{ receipt.error }}
+        </p>
+    {% endif %}
+
+    <!-- Gemini Chat Section -->
+    {% if receipt.status == "done" %}
+        <div class="mt-12 max-w-xl mx-auto">
+            <h2 class="text-xl font-semibold mb-3 text-center">Chat with AI</h2>
+
+            <!-- Chat History -->
+            <div class="border rounded-lg p-4 bg-white mb-4 max-h-80 overflow-y-auto">
+                {% for msg in chat_message %}
+                    <div class="mb-3">
+                        {% if msg.role == "user" %}
+                            <div class="text-right">
+                                <div class="inline-block bg-blue-100 text-blue-800 px-3 py-2 rounded-lg">
+                                    {{ msg.content }}
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="text-left">
+                                <div class="inline-block bg-gray-200 text-gray-800 px-3 py-2 rounded-lg">
+                                    {{ msg.content }}
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <!-- Chat Input -->
+            <form method="post" action="{% url 'receipt_chat' rid=receipt.id %}">
+                {% csrf_token %}
+                <textarea name="message"
+                          placeholder="Ask something about the receipt…"
+                          class="w-full border rounded-lg p-3 mb-3"
+                          rows="3"
+                          required></textarea>
+
+                <button type="submit"
+                        class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">
+                    Send
+                </button>
+            </form>
+        </div>
+    {% endif %}
+
+    <!-- Buttons -->
+    <div class="mt-12 flex justify-center gap-4">
+        <a href="{% url 'receipt_upload' %}"
+           class="px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-100">
+            Upload another receipt
+        </a>
+        <a href="{% url 'cart' %}"
+           class="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700">
+            Go to cart
+        </a>
+    </div>
+
+</div>
+</body>
+</html>

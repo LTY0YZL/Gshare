@@ -81,11 +81,10 @@ urlpatterns = [
     path('payment_success/<int:order_id>/', views.payment_success, name='payment_success'),
 
     # receipt parsing and chat
-    path('deliveries/receipt-upload/', views.receipt_upload_view, name='receipt_upload'),
-    path('deliveries/receipt/<int:rid>/', views.receipt_detail_view, name='receipt_detail'),
-    path('api/receipts/<int:rid>/chat', views.receipt_chat_api, name='receipt_chat_api'),
-
-
+    path("deliveries/receipt-upload/", views.receipt_upload_view, name="receipt_upload"),
+    path("deliveries/receipt/<int:rid>/", views.receipt_detail_view, name="receipt_detail"),
+    path("deliveries/receipt/<int:rid>/chat/", views.receipt_chat_view, name="receipt_chat"),
+    
     # images
     path("api/upload-image/", views.upload_image, name="upload_image"),
     path("api/image-url/<int:image_id>/", views.get_image_url, name="get_image_url"),
