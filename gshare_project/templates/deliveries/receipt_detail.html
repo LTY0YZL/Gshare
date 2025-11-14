@@ -4,163 +4,317 @@
 <head>
     <meta charset="UTF-8">
     <title>Receipt #{{ receipt.id }}</title>
+
+    <style>
+        .page-wrapper {
+            max-width: 1100px;
+            margin: 2.5rem auto 4rem auto;
+            padding: 0 1.5rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: #e5e7eb;
+        }
+        .status-badge.done    { background: #dcfce7; color: #166534; }
+        .status-badge.pending { background: #fef3c7; color: #92400e; }
+        .status-badge.processing { background: #e0f2fe; color: #075985; }
+
+        .timeline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 1.5rem 0 2rem 0;
+        }
+        .timeline-step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+        .timeline-step:not(:last-child)::after {
+            content: "";
+            position: absolute;
+            top: 14px;
+            right: -50%;
+            width: 100%;
+            height: 3px;
+            background: #e5e7eb;
+            z-index: 0;
+        }
+        .timeline-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            margin: 0 auto 0.25rem auto;
+            background: #e5e7eb;
+            border: 2px solid #9ca3af;
+            position: relative;
+            z-index: 1;
+        }
+        .timeline-step.active .timeline-dot {
+            background: #2563eb;
+            border-color: #2563eb;
+        }
+        .timeline-step.active {
+            color: #111827;
+            font-weight: 600;
+        }
+
+        .section-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1.5rem;
+            background: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        }
+        .section-title {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            text-align: left;
+        }
+
+        .image-box {
+            width: 100%;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+        .image-box img {
+            display: block;
+            width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+            background: #f9fafb;
+        }
+
+        .items-list {
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        .item-row {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .item-row:last-child {
+            border-bottom: none;
+        }
+        .item-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .item-meta {
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .flex-2col {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .flex-2col > .col {
+            flex: 1 1 300px;
+        }
+
+        /* Chat styles */
+        .chat-box {
+            max-height: 260px;
+            overflow-y: auto;
+            padding: 0.5rem;
+            border-radius: 0.75rem;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            margin-bottom: 0.75rem;
+        }
+        .chat-row {
+            display: flex;
+            margin: 0.35rem 0;
+        }
+        .chat-row.user {
+            justify-content: flex-end;
+        }
+        .chat-row.assistant {
+            justify-content: flex-start;
+        }
+        .chat-bubble {
+            max-width: 75%;
+            padding: 0.45rem 0.7rem;
+            border-radius: 0.9rem;
+            font-size: 0.9rem;
+            line-height: 1.35;
+        }
+        .chat-bubble.user {
+            background: #2563eb;
+            color: #ffffff;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .chat-bubble.assistant {
+            background: #e5e7eb;
+            color: #111827;
+            border-bottom-left-radius: 0.25rem;
+        }
+        .chat-empty {
+            font-size: 0.85rem;
+            color: #9ca3af;
+            text-align: center;
+            padding: 0.5rem 0;
+        }
+
+        .chat-form textarea {
+            width: 100%;
+            min-height: 70px;
+            resize: vertical;
+            padding: 0.6rem 0.75rem;
+            border-radius: 0.65rem;
+            border: 1px solid #d1d5db;
+            font-size: 0.95rem;
+            margin-bottom: 0.5rem;
+        }
+        .chat-form button {
+            display: block;
+            width: 100%;
+            padding: 0.55rem 0.75rem;
+            border-radius: 0.65rem;
+            border: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            background: #2563eb;
+            color: #ffffff;
+        }
+        .chat-form button:hover {
+            background: #1d4ed8;
+        }
+
+        .footer-actions {
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+        .btn-secondary {
+            display: inline-block;
+            padding: 0.45rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #d1d5db;
+            background: #ffffff;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .btn-secondary:hover {
+            background: #f3f4f6;
+        }
+    </style>
 </head>
 
 {% include "navbar.html" %}
 
 <body class="desgin">
-<div class="max-w-3xl mx-auto mt-16 px-4">
+<div class="page-wrapper">
 
-    <!-- Title -->
-    <h1 class="text-3xl font-bold mb-2 text-center">
+    <h1 style="text-align:center; font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem;">
         Receipt #{{ receipt.id }}
     </h1>
-
-    <!-- Status Badge -->
-    <div class="text-center mb-6">
-        <span class="font-semibold">Status:</span>
-        <span
-            style="padding:4px 10px; border-radius:6px;"
-            class="
-                {% if receipt.status == 'done' %}
-                    bg-green-200 text-green-800
-                {% elif receipt.status == 'processing' %}
-                    bg-yellow-200 text-yellow-800
-                {% elif receipt.status == 'error' %}
-                    bg-red-200 text-red-800
-                {% else %}
-                    bg-gray-200 text-gray-800
-                {% endif %}
-            ">
-            {{ receipt.status }}
+    <p style="text-align:center; margin-bottom: 0.5rem;">
+        Status:
+        <span class="status-badge {{ receipt.status }}">
+            {{ receipt.status|default:"pending" }}
         </span>
-    </div>
+    </p>
 
-    <!-- Step Indicator -->
-    <div class="flex items-center justify-center gap-4 text-sm mb-8">
-        <div class="flex items-center gap-2">
-            <div class="w-3 h-3 rounded-full
-                {% if receipt.status in 'pending processing done error' %} bg-green-600 {% else %} bg-gray-400 {% endif %}"></div>
-            <span>Uploaded</span>
+    <div class="timeline">
+        <div class="timeline-step active">
+            <div class="timeline-dot"></div>
+            <div>Uploaded</div>
         </div>
-
-        <div class="flex-1 h-px bg-gray-300 max-w-24"></div>
-
-        <div class="flex items-center gap-2">
-            <div class="w-3 h-3 rounded-full
-                {% if receipt.status in 'processing done error' %} bg-green-600 {% else %} bg-gray-400 {% endif %}"></div>
-            <span>Scanning</span>
+        <div class="timeline-step {% if receipt.status in 'processing done' %}active{% endif %}">
+            <div class="timeline-dot"></div>
+            <div>Scanning</div>
         </div>
-
-        <div class="flex-1 h-px bg-gray-300 max-w-24"></div>
-
-        <div class="flex items-center gap-2">
-            <div class="w-3 h-3 rounded-full
-                {% if receipt.status == 'done' %} bg-green-600
-                {% elif receipt.status == 'error' %} bg-red-600
-                {% else %} bg-gray-400 {% endif %}"></div>
-            <span>{% if receipt.status == "error" %}Error{% else %}Finished{% endif %}</span>
+        <div class="timeline-step {% if receipt.status == 'done' %}active{% endif %}">
+            <div class="timeline-dot"></div>
+            <div>Finished</div>
         </div>
     </div>
 
-    <!-- Receipt Image -->
-    {% if image_url %}
-        <div class="text-center mb-8">
-            <h2 class="text-lg font-medium mb-2">Receipt Image</h2>
-            <img src="{{ image_url }}" alt="Receipt image"
-                 class="max-h-96 mx-auto border border-gray-300 rounded-lg shadow">
+    <div class="section-card">
+        <div class="section-title">Receipt Image</div>
+        <div class="image-box">
+            {% if image_url %}
+                <img src="{{ image_url }}" alt="Receipt image">
+            {% else %}
+                <div style="padding: 2rem; text-align:center; color:#9ca3af;">
+                    No image available for this receipt.
+                </div>
+            {% endif %}
         </div>
-    {% endif %}
+    </div>
 
-    <!-- Extracted Items -->
-    {% if lines %}
-        <h2 class="text-xl font-semibold mb-3 text-center">Extracted Items</h2>
+    <div class="section-card">
+        <div class="section-title">Extracted Items</div>
 
-        <div class="inline-block w-full max-w-xl mx-auto text-left">
-            <ul class="divide-y divide-gray-300 border rounded-lg shadow-sm bg-white">
+        {% if lines %}
+            <div class="items-list">
                 {% for line in lines %}
-                    <li class="px-4 py-2">
-                        <strong>{{ line.name }}</strong><br>
-                        Qty: {{ line.quantity }}  
-                        {% if line.unit_price %}
-                            — Unit: ${{ line.unit_price|floatformat:2 }}
-                        {% endif %}
-                        {% if line.total_price %}
-                            — Total: ${{ line.total_price|floatformat:2 }}
-                        {% endif %}
-                    </li>
-                {% endfor %}
-            </ul>
-        </div>
-    {% elif receipt.status == "processing" %}
-        <p class="text-center text-gray-700 mb-4">
-            We're scanning your receipt for items…
-        </p>
-    {% elif receipt.status == "pending" %}
-        <p class="text-center text-gray-700 mb-4">
-            Starting scan… refresh in a few seconds.
-        </p>
-    {% elif receipt.status == "error" %}
-        <p class="text-center text-red-700 mb-4">
-            Error: {{ receipt.error }}
-        </p>
-    {% endif %}
-
-    <!-- Gemini Chat Section -->
-    {% if receipt.status == "done" %}
-        <div class="mt-12 max-w-xl mx-auto">
-            <h2 class="text-xl font-semibold mb-3 text-center">Chat with AI</h2>
-
-            <!-- Chat History -->
-            <div class="border rounded-lg p-4 bg-white mb-4 max-h-80 overflow-y-auto">
-                {% for msg in chat_message %}
-                    <div class="mb-3">
-                        {% if msg.role == "user" %}
-                            <div class="text-right">
-                                <div class="inline-block bg-blue-100 text-blue-800 px-3 py-2 rounded-lg">
-                                    {{ msg.content }}
-                                </div>
-                            </div>
-                        {% else %}
-                            <div class="text-left">
-                                <div class="inline-block bg-gray-200 text-gray-800 px-3 py-2 rounded-lg">
-                                    {{ msg.content }}
-                                </div>
-                            </div>
-                        {% endif %}
+                    <div class="item-row">
+                        <div class="item-name">{{ line.name }}</div>
+                        <div class="item-meta">
+                            Qty: {{ line.quantity|floatformat:-2 }}
+                            {% if line.unit_price %} — Unit: ${{ line.unit_price|floatformat:2 }}{% endif %}
+                            {% if line.total_price %} — Total: ${{ line.total_price|floatformat:2 }}{% endif %}
+                        </div>
                     </div>
                 {% endfor %}
             </div>
-
-            <!-- Chat Input -->
-            <form method="post" action="{% url 'receipt_chat' rid=receipt.id %}">
-                {% csrf_token %}
-                <textarea name="message"
-                          placeholder="Ask something about the receipt…"
-                          class="w-full border rounded-lg p-3 mb-3"
-                          rows="3"
-                          required></textarea>
-
-                <button type="submit"
-                        class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">
-                    Send
-                </button>
-            </form>
-        </div>
-    {% endif %}
-
-    <!-- Buttons -->
-    <div class="mt-12 flex justify-center gap-4">
-        <a href="{% url 'receipt_upload' %}"
-           class="px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-100">
-            Upload another receipt
-        </a>
-        <a href="{% url 'cart' %}"
-           class="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700">
-            Go to cart
-        </a>
+        {% else %}
+            <p style="color:#6b7280; font-size:0.9rem;">
+                We haven’t parsed any items yet. If you just uploaded this receipt,
+                wait a few seconds and refresh.
+            </p>
+        {% endif %}
     </div>
 
+    <div class="section-card">
+        <div class="section-title">Chat with AI</div>
+
+        <div class="chat-box">
+            {% if chat_messages %}
+                {% for m in chat_messages %}
+                    <div class="chat-row {% if m.role == 'user' %}user{% else %}assistant{% endif %}">
+                        <div class="chat-bubble {% if m.role == 'user' %}user{% else %}assistant{% endif %}">
+                            {{ m.content|linebreaksbr }}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="chat-empty">
+                    Ask a question about this receipt (e.g., “What are the total snacks?”).
+                </div>
+            {% endif %}
+        </div>
+
+        <form class="chat-form" method="post" action="{% url 'receipt_chat' rid=receipt.id %}">
+            {% csrf_token %}
+            <textarea
+                name="message"
+                placeholder="Ask something about the receipt…"
+                required
+            ></textarea>
+            <button type="submit">Send</button>
+        </form>
+    </div>
+
+    <div class="footer-actions">
+        <a href="{% url 'receipt_upload' %}" class="btn-secondary">
+            Upload another receipt
+        </a>
+    </div>
 </div>
 </body>
 </html>
