@@ -196,46 +196,72 @@ class UploadedImage(models.Model):
     def __str__(self):
         return self.key
     
-
 class Receipt(models.Model):
     id = models.BigAutoField(primary_key=True)
-    uploader = models.ForeignKey('Users', null=True, blank=True, on_delete=models.SET_NULL)
+
+    uploader = models.ForeignKey(
+        'Users',
+        models.DO_NOTHING,
+        db_column='uploader_id',
+        null=True,
+        blank=True,
+    )
+
     s3_bucket = models.CharField(max_length=128)
     s3_key = models.CharField(max_length=512)
     uploaded_at = models.DateTimeField(default=timezone.now)
-    status = models.CharField(max_length=20, default='pending',
-                              choices=[('pending','pending'),('processing','processing'),('done','done'),('error','error')])
+    status = models.CharField(max_length=20, default='pending')
     error = models.TextField(blank=True, default='')
-    gemini_json = models.JSONField(null=True, blank=True)  # parsed receipt JSON (lines)
-    inferred_order_id = models.IntegerField(null=True, blank=True)  # best guess
+    gemini_json = models.JSONField(null=True, blank=True)
+    inferred_order_id = models.IntegerField(null=True, blank=True)
 
-    class Receipt(models.Model):
-        
-        # fields...
-        class Meta:
-            db_table = 'receipt'
+    class Meta:
+        db_table = 'core_receipt'   # matches your existing table
+        managed = False
+
+    def __str__(self):
+        return f"Receipt #{self.id}"
 
 
 class ReceiptLine(models.Model):
-    receipt = models.ForeignKey(Receipt, related_name='lines', on_delete=models.CASCADE)
+    # FK to the receipt row
+    receipt = models.ForeignKey(
+        Receipt,
+        related_name='lines',
+        on_delete=models.DO_NOTHING,
+        db_column='receipt_id',   # <- matches the column in receipt_line
+    )
     name = models.CharField(max_length=256)
     quantity = models.FloatField(default=1)
     unit_price = models.FloatField(null=True, blank=True)
     total_price = models.FloatField(null=True, blank=True)
     meta = models.JSONField(null=True, blank=True)  # brand, code, etc.
 
-    class ReceiptLine(models.Model):
-        # fields...
-        class Meta:
-            db_table = 'receipt_line'
+    class Meta:
+        db_table = 'core_receiptline'
+        managed = False
+
+    def __str__(self):
+        return f"{self.name} (receipt {self.receipt_id})"
+
 
 class ReceiptChatMessage(models.Model):
-    receipt = models.ForeignKey(Receipt, related_name='chat', on_delete=models.CASCADE)
-    role = models.CharField(max_length=10, choices=[('user','user'),('assistant','assistant'),('system','system')])
+    receipt = models.ForeignKey(
+        Receipt,
+        related_name='chat',
+        on_delete=models.DO_NOTHING,
+        db_column='receipt_id',   # <- matches the column in receipt_chat_message
+    )
+    role = models.CharField(
+        max_length=10,
+        choices=[('user', 'user'), ('assistant', 'assistant'), ('system', 'system')],
+    )
     content = models.TextField()
     created_at = models.DateTimeField(default=timezone.now)
 
-class ReceiptChatMessage(models.Model):
-    # fields...
     class Meta:
-        db_table = 'receipt_chat_message'
+        db_table = 'core_receiptchatmessage'
+        managed = False
+
+    def __str__(self):
+        return f"{self.role}: {self.content[:40]}"
