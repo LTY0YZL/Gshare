@@ -102,6 +102,7 @@ window.sendVoiceChatMessage = function() {
       const assistantText = data.assistant || 'Sorry, I could not generate a response.';
       voiceMessages[voiceMessages.length - 1] = { role: 'assistant', content: assistantText };
       renderVoiceChat();
+    })
     .catch(err => {
       console.error('Chat error:', err);
       voiceMessages[voiceMessages.length - 1] = {
