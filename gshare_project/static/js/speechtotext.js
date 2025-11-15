@@ -1,29 +1,38 @@
 // Check if SpeechRecognition is supported
 let latestTranscript = '';
-let AIsResponse = '';
 
 let voiceMessages = [];
 let voiceSessionActive = false;
+function saveVoiceMessages() {
+  localStorage.setItem('voiceMessages', JSON.stringify(voiceMessages));
+}
+function loadVoiceMessages() {
+  const raw = localStorage.getItem('voiceMessages');
+  if (!raw) return;
+  const parsed = JSON.parse(raw);
+  if (Array.isArray(parsed)) {
+    voiceMessages = parsed;
+  }
+}
+loadVoiceMessages();
+
 
 function getCsrfToken() {
   const meta = document.querySelector('meta[name="csrf-token"]');
-  if (meta && meta.content) return meta.content;
+  return meta ? meta.content : '';
 }
 
 function renderVoiceChat() {
   const container = document.getElementById('speech-output');
-  if (!container){
-    console.warn('renderVoiceChat(): speech-output element not found');
-    return;
-  }
+  if (!container) return;
 
   let html = '';
   for (const m of voiceMessages) {
     const isUser = m.role === 'user';
     const alignmentStyle = isUser ? 'text-align:right;' : 'text-align:left;';
     const bubbleStyle = isUser
-      ? 'display:inline-block; padding:4px 8px; margin:4px 0; border-radius:6px; background:#dbeafe; color:#111827;'
-      : 'display:inline-block; padding:4px 8px; margin:4px 0; border-radius:6px; background:#f3f4f6; color:#111827;';
+      ? 'display:inline-block; padding:4px 8px; margin:4px 0; border-radius:6px; background:#dbeafe; color:#111827; white-space:pre-wrap;'
+      : 'display:inline-block; padding:4px 8px; margin:4px 0; border-radius:6px; background:#f3f4f6; color:#111827; white-space:pre-wrap;';
     const text = m.content || '';
     html += '<div style="' + alignmentStyle + '"><div style="' + bubbleStyle + '">' + text + '</div></div>';
   }
@@ -33,11 +42,12 @@ function renderVoiceChat() {
 
 window.startVoiceOrderSession = function() {
   voiceSessionActive = true;
-  voiceMessages = [{
-    role: 'assistant',
-    content: 'Please state your desired cart in the following format: From [store_name] I would like quantity -> itemName, quantity -> itemName. If possible, be specific about your desired brand for each product.'
-  }];
-
+  if (!voiceMessages.length) {
+    voiceMessages = [{
+      role: 'assistant',
+      content: 'Please state your desired cart in the following format: From [store_name] I would like quantity -> itemName, quantity -> itemName. If possible, be specific about your desired brand for each product.'
+    }];
+  }
   const startContainer = document.getElementById('voice-order-start-container');
   if (startContainer) {
     startContainer.style.display = 'none';
@@ -49,86 +59,106 @@ window.startVoiceOrderSession = function() {
     controls.style.display = 'flex';
   }
   renderVoiceChat();
+  saveVoiceMessages();
+};
+
+window.restartVoiceOrderSession = function() {
+  voiceMessages = [];
+  localStorage.removeItem('voiceMessages');
+  startVoiceOrderSession();
 };
 
 window.sendVoiceChatMessage = function() {
   if (!voiceSessionActive || !latestTranscript) {
-    console.warn('No active voice session or transcript to send.');
     return;
   }
 
+  // Add the latest user utterance to the conversation history
   voiceMessages.push({ role: 'user', content: latestTranscript });
-  voiceMessages.push({
-    role: 'assistant',
-    content: 'Thanks, I received that: ' + latestTranscript
-  });
+  const sendingMessages = voiceMessages.slice();
+
+  // Optional: simple loading state by adding a temporary assistant message
+  voiceMessages.push({ role: 'assistant', content: 'Thinking...' });
   renderVoiceChat();
+
+  const csrfToken = getCsrfToken();
+
+  fetch('/shoppingcart/voice_order/chat/', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrfToken || ''
+    },
+    body: JSON.stringify({ messages: sendingMessages })
+  })
+    .then(resp => {
+      if (!resp.ok) {
+        throw new Error('Chat request failed with status ' + resp.status);
+      }
+      return resp.json();
+    })
+    .then(data => {
+      const assistantText = data.assistant || 'Sorry, I could not generate a response.';
+      voiceMessages[voiceMessages.length - 1] = { role: 'assistant', content: assistantText };
+      renderVoiceChat();
+    .catch(err => {
+      console.error('Chat error:', err);
+      voiceMessages[voiceMessages.length - 1] = {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.'
+      };
+      renderVoiceChat();
+    })
+    .finally(() => {
+      // Clear the latest transcript so we don't re-send it accidentally
+      latestTranscript = '';
+      saveVoiceMessages();
+    });
 };
 
-function ConvertTranscript() {
-    const transcript = latestTranscript;
-    if (!transcript) {
-        console.warn('No transcript available to send.');
+window.finalizeVoiceOrderCart = function() {
+  if (!voiceSessionActive || !voiceMessages.length) {
+    return;
+  }
+
+  const csrfToken = getCsrfToken();
+  const sendingMessages = voiceMessages.slice();
+
+  fetch('/shoppingcart/voice_order/chat/', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrfToken || ''
+    },
+    body: JSON.stringify({ messages: sendingMessages, mode: 'finalize' })
+  })
+    .then(resp => resp.json())
+    .then(data => {
+      if (!data.success || !data.cart) {
+        const msg = data.error || 'Could not finalize cart.';
+        voiceMessages.push({ role: 'assistant', content: msg });
         return;
-    }
+      }
 
-    const csrfToken = getCsrfToken();
+      const pretty = JSON.stringify(data.cart, null, 2);
+      voiceMessages.push({ role: 'assistant', content: 'Final cart JSON:\n' + pretty });
 
-    fetch('/shoppingcart/voice_order/process/', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken
-        },
-        body: JSON.stringify({ transcript: transcript })
-    }).then(resp => {
-        console.log('Voice POST response status:', resp.status);
-        if (!resp.ok) {
-            console.error('Voice POST failed with status:', resp.status);
-        }
-        return resp.json().catch(()=>null);
-    }).then(data => {
-        if (data) {
-            console.log('Voice response:', data);
-        } else {
-            console.warn('No data returned from voice endpoint');
-        }
-    }).catch(err => {
-        console.error('Voice send error:', err);
-    });
-}
-
-function createCart() {
-    if (!AIsResponse) {
-        console.warn('No order JSON available to send.');
-        return;
-    }
-
-    const csrfToken = getCsrfToken();
-
-    fetch('/shoppingcart/voice_order/process/', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken
-        },
-        body: JSON.stringify({ transcript: transcript })
-    }).then(resp => {
-        console.log('Voice POST response status:', resp.status);
-        if (!resp.ok) {
-            console.error('Voice POST failed with status:', resp.status);
-        }
-        return resp.json().catch(()=>null);
-    }).then(data => {
-        if (data) {
-            console.log('Voice response:', data);
-        } else {
-            console.warn('No data returned from voice endpoint');
-        }
-    }).catch(err => {
-        console.error('Voice send error:', err);
+      if (data.order_id) {
+        voiceMessages.push({
+          role: 'assistant',
+          content: 'I added these items to your <a href="/shoppingcart/" style="color:#2563eb; text-decoration:underline;">cart</a>.'
+        });
+      }
+    })
+    .catch(err => {
+      console.error('Finalize error:', err);
+      voiceMessages.push({ role: 'assistant', content: 'Sorry, I could not finalize the cart.' });
+    })
+    .finally(() => {
+      renderVoiceChat();
+      saveVoiceMessages();
     });
 }
 
@@ -159,9 +189,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     };
 
     // Event handler for when recognition ends
-    recognition.onend = () => {
-        console.log('Speech recognition ended');
-    };
+    recognition.onend = () => {};
 
     // Event handler for errors
     recognition.onerror = (event) => {
@@ -173,13 +201,6 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         recognition.start();
     };
 
-    window.sendTranscript = () => {
-        ConvertTranscript();
-    }
-
-    window.createCartFromTranscript = () => {
-        createCart();
-    }
 } else {
     console.error('Speech Recognition not supported in this browser');
 }

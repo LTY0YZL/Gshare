@@ -45,7 +45,7 @@ urlpatterns = [
     path('shoppingcart/inprogress/', views.inprogress_data, name='inprogress'),
 
     # voice orders
-    path('shoppingcart/voice_order/process/', views.process_voice_order, name="process_voice_order"),
+    path('shoppingcart/voice_order/chat/', views.voice_order_chat, name="voice_order_chat"),
 
     path('shoppingcart/<int:order_id>/', views.create_group_order_json, name='create_group_order_json'),
     path('shoppingcart/add_user_to_group/<int:group>/', views.add_user_to_group_json, name='add_user_to_group_json'),
