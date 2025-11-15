@@ -77,20 +77,36 @@
             </form>
         </div>
 
-        <div style="width:100%; box-sizing:border-box; margin:0 auto; display:flex; gap:0.75rem; align-items:center; background:#ffffff; border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.75rem; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-            <button type="button" onclick="startSpeechToText()"
-            style="background:#3b82f6; color:#fff; padding:0.5rem 1rem; border-radius:0.5rem; border:none; cursor:pointer; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
-            Start Listening
+        <div id="voice-order-start-container" style="width:100%; box-sizing:border-box; margin:0 auto; display:flex; justify-content:flex-start; gap:0.75rem; align-items:center; background:#ffffff; border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.75rem; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+            <button type="button" onclick="startVoiceOrderSession()"
+            style="background:#6366f1; color:#fff; padding:0.5rem 1rem; border-radius:0.5rem; border:none; cursor:pointer; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+            Start Voice Order
             </button>
+        </div>
+
+        <div id="voice-controls" class="hidden"
+            style="width:100%; box-sizing:border-box; margin:0.75rem auto 0; display:none; gap:0.75rem; align-items:stretch; background:#ffffff; border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.75rem; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
             <div id="speech-output"
-            style="flex:1; border:1px solid #e5e7eb; padding:0.5rem; border-radius:0.5rem; color:#4b5563; background:#ffffff; min-height:2.5rem; display:flex; align-items:center;">
+            style="flex:1; border:1px solid #e5e7eb; padding:0.5rem; border-radius:0.5rem; color:#4b5563; background:#ffffff;
+            min-height:3.5rem; max-height:8rem; overflow-y:auto; display:block;">
             Output here
             </div>
-            <button  type="button" onclick="console.log('Button clicked'); console.log('sendTranscript function:', typeof sendTranscript, sendTranscript); sendTranscript();"  id="sendVoiceRequestButton" style="background:#10b981; color:#fff; padding:0.5rem 1rem; border-radius:0.5rem; border:none; cursor:pointer; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
-            Send Request
-            </button>
+            <div style="display:flex; flex-direction:column; gap:0.5rem; align-items:center;">
+                <button type="button" onclick="startSpeechToText()" title="Start listening"
+                style="background:#3b82f6; color:#fff; border:none; padding:0.25rem 0.5rem; border-radius:9999px; cursor:pointer; font-size:1.1rem;">
+                    🎤
+                </button>
+                <button type="button" onclick="console.log('Button clicked'); console.log('sendTranscript function:', typeof sendTranscript, sendTranscript); sendTranscript();" title="Create Cart" id="sendVoiceRequestButton"
+                style="background:#10b981; color:#fff; border:none; padding:0.25rem 0.5rem; border-radius:9999px; cursor:pointer; font-size:1.1rem;">
+                    🛒
+                </button>
+                <button type="button" onclick="startVoiceOrderSession()" title="Restart voice order"
+                style="background:#6b7280; color:#fff; border:none; padding:0.25rem 0.5rem; border-radius:9999px; cursor:pointer; font-size:1.1rem;">
+                    🔁
+                </button>
             </div>
-            
+        </div>
+
         </div>
 
         {% comment %} <div name="Items_list" class="grid grid-cols-1 md:grud-cols-2 lg:grid-cols-3 gap-6">

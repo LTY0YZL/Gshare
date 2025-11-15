@@ -170,7 +170,8 @@ Returns:
 """
 def get_orders(user: Users, order_status: str):
 
-    orders = Orders.objects.using('gsharedb').filter(user_id = user, status = order_status) # Getting all the orders related to this user and status.
+    # Filter by the actual user object (or its id), not the Users instance itself as user_id
+    orders = Orders.objects.using('gsharedb').filter(user=user, status=order_status)
     if not orders.exists():  # Checking if the queryset is empty.
         return []
     return orders
@@ -2214,6 +2215,8 @@ def getItemNamesForUser(user, statuses = ['delivered']):
             for row in items:
                 namesAndId.append((row[4], row[1]))
 
+    return namesAndId
+
 
 @login_required
 def process_voice_order(request):
@@ -2236,7 +2239,7 @@ def process_voice_order(request):
     #print(f"User: {user}")
 
     # get user's past order items, in this format: [itemName, item_id]
-    userPastItems = getItemNamesForUser(user, "delivered")
+    userPastItems = getItemNamesForUser(user, ["delivered"])
     print(f"User past items: {userPastItems}")
 
     # get all items available
@@ -2266,6 +2269,7 @@ def generateJsonFromTranscriptAndItems(transcript, userPastItems, allItems):
     print("transcrupt includes: " + str(transcript))
     print("user's past items: " + str(userPastItems))
     print("all items: " + str(allItems))
+    
     return
 
 def getAllItemsFromDatabase():
