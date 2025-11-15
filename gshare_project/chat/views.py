@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import ChatGroup, DirectMessageThread, Message
+from .models import ChatGroup, DirectMessageThread, Message, Notification
 from django.contrib.auth.models import User
 from django.utils.text import slugify
 from django.http import JsonResponse
@@ -40,6 +40,10 @@ def chat_room(request, room_name):
         user_groups = ChatGroup.objects.filter(members=request.user)
         members = room.members.all()
         
+        unread_notifications = request.user.notifications.filter(is_read=False)
+        
+        unread_notifications.update(is_read=True)
+        
         DMs = DirectMessageThread.objects.filter(participants=request.user)
         # for each DM, get the other participant
         dm_list = [
@@ -50,7 +54,7 @@ def chat_room(request, room_name):
             for dm in DMs
         ]
         # show all the other users in the DM's then display all the DM's
-        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code, 'messages': chat_messages, 'groups': user_groups, 'members': members, 'dm_list':dm_list, 'user': request.user})
+        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code, 'messages': chat_messages, 'groups': user_groups, 'members': members, 'dm_list':dm_list, 'user': request.user, 'notifications': unread_notifications})
     except ChatGroup.DoesNotExist:
         messages.error(request, "Chat room does not exist.")
         return redirect('groups_page')
@@ -103,6 +107,10 @@ def direct_message(request, thread_id):
         other_user = thread.participants.exclude(id=request.user.id).first()
         user_groups = ChatGroup.objects.filter(members=request.user)
         DMs = DirectMessageThread.objects.filter(participants=request.user)
+        
+        unread_notifications = request.user.notifications.filter(is_read=False)
+        
+        unread_notifications.update(is_read=True)
         # for each DM, get the other participant
         dm_list = [
             {
@@ -111,7 +119,7 @@ def direct_message(request, thread_id):
             }
             for dm in DMs
         ]
-        return render(request, 'chat/chat_room.html', {'thread': thread, 'messages': messages_qs, 'other_user': other_user, 'groups': user_groups, 'dm_list': dm_list, 'user': request.user})
+        return render(request, 'chat/chat_room.html', {'thread': thread, 'messages': messages_qs, 'other_user': other_user, 'groups': user_groups, 'dm_list': dm_list, 'user': request.user, 'notifications': unread_notifications})
         
 @require_GET
 def autocomplete_usernames(request):
@@ -122,5 +130,6 @@ def autocomplete_usernames(request):
         users = User.objects.filter(username__icontains=query)[:10]
         results = list(users.values_list("username", flat=True))
     return JsonResponse(results, safe=False)
+
         
 

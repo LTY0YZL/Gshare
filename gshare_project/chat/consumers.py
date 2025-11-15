@@ -1,6 +1,6 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
-from .models import Message, ChatGroup, DirectMessageThread
+from .models import Message, ChatGroup, DirectMessageThread, Notification
 from django.contrib.auth.models import User
 from channels.db import database_sync_to_async
 from core.utils.aws_s3 import upload_image_to_aws
@@ -30,6 +30,21 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.room_group_name,
             self.channel_name
         )
+    
+    @database_sync_to_async
+    def handle_new_message(self, sender, chat_group, message):
+        try:
+            group = ChatGroup.objects.get(slug=chat_group)
+            
+            for member in group.members.all():
+                if member.username != sender:
+                    Notification.objects.create(
+                        user=member,
+                        message=f"New message from {sender}: {message[:50]}"
+                    )
+                    print(f"Notification created for {member.username}: New message from {sender}")
+        except ChatGroup.DoesNotExist:
+            print(f"ChatGroup with slug {chat_group} does not exist.")
     
     @database_sync_to_async
     def save_message(self, username, message, image_url=None):
@@ -82,6 +97,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         'image_url': image_url
                     }
                 )
+                # Handle notifications
+                await self.handle_new_message(username, self.room_name if hasattr(self, 'room_name') else None, message)
+                
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {

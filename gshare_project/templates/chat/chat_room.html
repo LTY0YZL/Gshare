@@ -101,9 +101,9 @@
       </div>
 
       {% if members %}
-      <div class="p-4">
+      <div class="p-4 border-b border-blue-800">
         <h3 class="text-lg font-semibold mb-3">Members</h3>
-        <ul class="space-y-1">
+        <ul class="space-y-1 max-h-48 overflow-y-auto">
           {% for member in members %}
             <li>
               <span class="block px-3 py-2 rounded hover:bg-blue-700 transition">{{ member.username }}</span>
@@ -113,10 +113,29 @@
       </div>
       {% endif %}
 
+      <!-- Display Persistent Notifications -->
+      <div class="p-4 border-b border-blue-800">
+        <h3 class="text-lg font-semibold mb-3">Notifications</h3>
+        <div id="notification-list" class="space-y-2 max-h-48 overflow-y-auto">
+          {% if notifications %}
+            {% for notification in notifications %}
+              <div class="bg-blue-800 rounded-lg p-3 text-sm break-words">
+                <p class="text-gray-200">{{ notification.message }}</p>
+                <p class="text-xs text-gray-400 mt-1">{{ notification.created_at|date:"H:i" }}</p>
+              </div>
+            {% empty %}
+              <p class="text-gray-300 text-sm">No new notifications</p>
+            {% endfor %}
+          {% else %}
+            <p class="text-gray-300 text-sm">No notifications</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Badge for unread count -->
       <div class="p-4">
-        <h3 class="text-lg font-semibold mb-3">Unread Notifications</h3>
-        <div id="notification-badge" class="fixed top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full shadow-lg cursor-pointer">
-            0
+        <div id="notification-badge" class="fixed top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full shadow-lg hidden">
+          <span id="badge-count">0</span>
         </div>
       </div>
     </aside>
@@ -150,6 +169,24 @@
     let unreadNotifications = [];
 
     window.onload = () => chatLog.scrollTop = chatLog.scrollHeight;
+
+    // load notifications on page load
+    window.addEventListener('load', () => {
+      const notifications = document.querySelectorAll('#notification-list > div');
+      updateNotificationBadge(notifications.length);
+    });
+
+    function updateNotificationBadge(count) {
+      const badge = document.getElementById('notification-badge');
+      const badgeCount = document.getElementById('badge-count');
+
+      if (count > 0) {
+          badgeCount.textContent = count;
+          badge.classList.remove('hidden');
+      } else {
+          badge.classList.add('hidden');
+      }
+    }
 
     // Image Upload Button
     document.getElementById('image-upload-btn').addEventListener('click', () => {
@@ -221,11 +258,21 @@
         }
 
         if (data.type === 'notification' && data.username !== username) {
-            unreadNotifications.push({
-                title: `New message from ${data.username}`,
-                body: data.message.slice(0, 15)
-            });
-            updateNotificationUI();
+          const notificationList = document.getElementById('notification-list');
+          const notificationDiv = document.createElement('div');
+          notificationDiv.className = 'bg-blue-800 rounded-lg p-3 text-sm break-words';
+          const now = new Date();
+          const timeStr = now.getHours().toString().padStart(2, '0') + ':' + 
+                          now.getMinutes().toString().padStart(2, '0');
+          notificationDiv.innerHTML = `
+            <p class="text-gray-200>${data.title}</p>
+            <p class="text-xs text-gray-400 mt-1">${timeStr}</p>
+            `;
+          notificationList.insertBefore(notificationDiv, notificationList.firstChild);
+
+          const allNotifications = document.querySelectorAll('#notification-list > div');
+          updateNotificationBadge(allNotifications.length);
+
         }
 
         if (data.type === 'typing_start') {
