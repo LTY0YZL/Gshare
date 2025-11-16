@@ -7,8 +7,8 @@ from enum import Enum
 
 
 class AIModel(str, Enum):
-    #VOICE_ORDERS = "moonshotai/kimi-k2-instruct-0905"
-    VOICE_ORDERS = "meta-llama/llama-4-scout-17b-16e-instruct"
+    VOICE_ORDERS = "moonshotai/kimi-k2-instruct-0905"
+    #VOICE_ORDERS = "meta-llama/llama-4-scout-17b-16e-instruct"
 
     @property
     def max_tokens(self) -> int:
