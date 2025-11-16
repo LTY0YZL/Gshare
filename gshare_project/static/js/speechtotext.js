@@ -45,7 +45,7 @@ window.startVoiceOrderSession = function() {
   if (!voiceMessages.length) {
     voiceMessages = [{
       role: 'assistant',
-      content: 'Tell me what you want to buy from [store name], including quantities and brands you prefer.'
+      content: 'Welcome to GShare! I am your AI assistant. I can help you order groceries from your favorite stores. Please tell me what you want to buy, including quantities and brands you prefer.'
     }];
   }
   const startContainer = document.getElementById('voice-order-start-container');
