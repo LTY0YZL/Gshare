@@ -118,10 +118,29 @@ window.sendVoiceChatMessage = function() {
     });
 };
 
+window.sendTypedVoiceChatMessage = function() {
+  const input = document.getElementById('voice-text-input');
+  if (!input) {
+    return;
+  }
+  const text = input.value.trim();
+  if (!text) {
+    return;
+  }
+  latestTranscript = text;
+  input.value = '';
+  window.sendVoiceChatMessage();
+};
+
+
 window.finalizeVoiceOrderCart = function() {
   if (!voiceMessages.length) {
     return;
   }
+
+  voiceMessages.push({ role: 'assistant', content: 'Adding these items to your cart...' });
+  renderVoiceChat();
+  saveVoiceMessages();
 
   const csrfToken = getCsrfToken();
 

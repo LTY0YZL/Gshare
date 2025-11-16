@@ -86,10 +86,21 @@
 
         <div id="voice-controls" class="hidden"
             style="width:100%; box-sizing:border-box; margin:0.75rem auto 0; display:none; gap:0.75rem; align-items:stretch; background:#ffffff; border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.75rem; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-            <div id="speech-output"
-            style="flex:1; border:1px solid #e5e7eb; padding:0.5rem; border-radius:0.5rem; color:#4b5563; background:#ffffff;
-            min-height:8rem; max-height:16rem; overflow-y:auto; display:block;">
-            Output here
+            <div style="flex:1; display:flex; flex-direction:column; gap:0.5rem;">
+                <div id="speech-output"
+                style="flex:1; border:1px solid #e5e7eb; padding:0.5rem; border-radius:0.5rem; color:#4b5563; background:#ffffff;
+                min-height:8rem; max-height:16rem; overflow-y:auto; display:block;">
+                Output here
+                </div>
+                <div style="display:flex; gap:0.5rem; margin-top:0.25rem;">
+                    <input type="text" id="voice-text-input" placeholder="Type a message"
+                    style="flex:1; border:1px solid #e5e7eb; border-radius:0.375rem; padding:0.25rem 0.5rem;"
+                    onkeydown="if(event.key==='Enter'){ sendTypedVoiceChatMessage(); }">
+                    <button type="button" onclick="sendTypedVoiceChatMessage()"
+                    style="background:#3b82f6; color:#fff; border:none; padding:0.25rem 0.75rem; border-radius:0.375rem; cursor:pointer; font-size:0.9rem;">
+                        Send
+                    </button>
+                </div>
             </div>
             <div style="display:flex; flex-direction:column; gap:0.5rem; align-items:center;">
                 <button type="button" onclick="startSpeechToText()" title="Start listening"
