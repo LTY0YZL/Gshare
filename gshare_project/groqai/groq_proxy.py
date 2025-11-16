@@ -1,9 +1,9 @@
 import requests
-from groqai.instructions import SYSTEM_INSTRUCTIONS
+from groqai.instructions import SYSTEM_INSTRUCTIONS, AIModel
 
 WORKER_URL = "https://groq-voice-orders.ams63tube.workers.dev/"
 
-def call_groq(messages, model="moonshotai/kimi-k2-instruct-0905", temperature=1, max_tokens=8192, stream=False, system_instructions=None):
+def call_groq(messages, model=AIModel.VOICE_ORDERS, temperature=1, max_tokens=None, stream=False, system_instructions=None):
     """
     Call Groq API through Cloudflare Worker
     """
@@ -16,8 +16,18 @@ def call_groq(messages, model="moonshotai/kimi-k2-instruct-0905", temperature=1,
         {"role": "system", "content": system_instructions}
     ] + messages
 
+    # Resolve model name and default max_tokens from the enum
+    if isinstance(model, AIModel):
+        model_name = model.value
+        if max_tokens is None:
+            max_tokens = model.max_tokens
+    else:
+        model_name = model
+        if max_tokens is None:
+            max_tokens = 8192
+
     payload = {
-        "model": model,
+        "model": model_name,
         "messages": full_messages,
         "temperature": temperature,
         "max_completion_tokens": max_tokens,

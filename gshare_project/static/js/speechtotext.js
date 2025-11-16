@@ -45,7 +45,7 @@ window.startVoiceOrderSession = function() {
   if (!voiceMessages.length) {
     voiceMessages = [{
       role: 'assistant',
-      content: 'Please state your desired cart in the following format: From [store_name] I would like quantity -> itemName, quantity -> itemName. If possible, be specific about your desired brand for each product.'
+      content: 'Tell me what you want to buy from [store name], including quantities and brands you prefer.'
     }];
   }
   const startContainer = document.getElementById('voice-order-start-container');
@@ -69,7 +69,7 @@ window.restartVoiceOrderSession = function() {
 };
 
 window.sendVoiceChatMessage = function() {
-  if (!voiceSessionActive || !latestTranscript) {
+  if (!latestTranscript) {
     return;
   }
 
@@ -119,12 +119,11 @@ window.sendVoiceChatMessage = function() {
 };
 
 window.finalizeVoiceOrderCart = function() {
-  if (!voiceSessionActive || !voiceMessages.length) {
+  if (!voiceMessages.length) {
     return;
   }
 
   const csrfToken = getCsrfToken();
-  const sendingMessages = voiceMessages.slice();
 
   fetch('/shoppingcart/voice_order/chat/', {
     method: 'POST',
@@ -133,7 +132,7 @@ window.finalizeVoiceOrderCart = function() {
       'Content-Type': 'application/json',
       'X-CSRFToken': csrfToken || ''
     },
-    body: JSON.stringify({ messages: sendingMessages, mode: 'finalize' })
+    body: JSON.stringify({ messages: voiceMessages, mode: 'finalize' })
   })
     .then(resp => resp.json())
     .then(data => {
@@ -143,8 +142,8 @@ window.finalizeVoiceOrderCart = function() {
         return;
       }
 
-      const pretty = JSON.stringify(data.cart, null, 2);
-      voiceMessages.push({ role: 'assistant', content: 'Final cart JSON:\n' + pretty });
+      // const pretty = JSON.stringify(data.cart, null, 2);
+      // voiceMessages.push({ role: 'assistant', content: 'Final cart JSON:\n' + pretty });
 
       if (data.order_id) {
         voiceMessages.push({

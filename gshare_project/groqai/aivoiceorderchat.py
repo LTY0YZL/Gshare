@@ -36,9 +36,7 @@ def chat_with_ai():
                         "content": user_input
                     }
                 ],
-                model="moonshotai/kimi-k2-instruct-0905",
                 temperature=0.6,
-                max_tokens=4096,
             )
 
             # Get final response JSON and print assistant message

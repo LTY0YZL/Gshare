@@ -2224,7 +2224,7 @@ def apply_voice_cart_items(profile, cart):
 
     items = cart.get("items") or []
     if not isinstance(items, list) or not items:
-        return {"success": False, "error": "No items to add"}
+        return {"success": False, "error": "Sorry, I have not been able deduce any items from your requests so far."}
 
     order = None
     total = 0
@@ -2299,16 +2299,10 @@ def voice_order_chat(request):
         return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
     messages = payload.get("messages") or []
     mode = (payload.get("mode") or "chat").strip()
-    cleaned_messages = []
-    for m in messages:
-        role = (m.get("role") or "").strip()
-        content = (m.get("content") or "").strip()
-        if role in ("user", "assistant") and content:
-            cleaned_messages.append({"role": role, "content": content})
-    if not cleaned_messages:
-        return JsonResponse({"success": False, "error": "No valid messages provided"}, status=400)
-    if mode == "finalize" and len(cleaned_messages) > 12:
-        cleaned_messages = cleaned_messages[-12:]
+    if not messages:
+        return JsonResponse({"success": False, "error": "No messages provided"}, status=400)
+    if mode == "finalize" and len(messages) > 12:
+        messages = messages[-12:]
 
     user = get_user("email", request.user.email)
     userPastItems = getItemNamesForUser(user, ["delivered"])
@@ -2332,7 +2326,7 @@ def voice_order_chat(request):
             context_text = "Use these item lists to match items by name to IDs, stores, and prices when constructing your JSON cart. Always copy the item names exactly as written when you fill in the JSON." + context_suffix
             final_messages.append({"role": "system", "content": context_text})
         convo_lines = []
-        for m in cleaned_messages:
+        for m in messages:
             role = m["role"]
             content = m["content"] or ""
             if role == "user":
@@ -2355,9 +2349,7 @@ def voice_order_chat(request):
         })
         resp = call_groq(
             messages=final_messages,
-            model="moonshotai/kimi-k2-instruct-0905",
             temperature=0.2,
-            max_tokens=512,
             stream=False,
             system_instructions=VOICE_ORDER_FINALIZE_INSTRUCTIONS,
         )
@@ -2393,12 +2385,10 @@ def voice_order_chat(request):
 
     if context_lines:
         context_text = "Use the following item lists when referring to items. Always copy the item name exactly as written when you write 'Selected option' or 'Other options'." + context_suffix
-        cleaned_messages.insert(0, {"role": "system", "content": context_text})
+        messages.insert(0, {"role": "system", "content": context_text})
     resp = call_groq(
-        messages=cleaned_messages,
-        model="moonshotai/kimi-k2-instruct-0905",
+        messages=messages,
         temperature=0.6,
-        max_tokens=1024,
         stream=False,
         system_instructions=VOICE_ORDER_CHAT_INSTRUCTIONS,
     )
