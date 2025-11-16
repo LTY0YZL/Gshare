@@ -21,6 +21,9 @@
 
             </div>
         </div>
+        <button id="shareBtn" class="fixed bottom-6 right-6 px-4 py-2 rounded-full shadow-lg bg-blue-600 text-white">
+            Start Sharing
+        </button>
     </div>
 
     <!-- pop up html --> 
@@ -90,9 +93,219 @@
 
         });
 
+        const HUB_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/location/';
+        const WANT_KEY = 'gshare.sharelocation.v1';
+
+        {% comment %} add user id {% endcomment %}
+        const CURRENT_UID = {{ request.user.id }};
+        const CURRENT_VIEWER_ID = {{ viewer_id }};
+
+        let pageWS  = null;
+        let pageWatchId = null;
+
+        let directionsService;
+        let directionsRenderer;
+        let lastRouteUpdate = 0;
+        let activeStorePos = null;  
+        let profilePos = null; 
+        let storeMarker = null;
+
+        let storeLegPolyline = null;    // driver to store
+        let profileLegPolyline = null;  // store to profile
+        let directLegPolyline = null;   // driver TO profile WITHOUT STORE,  JUST FOR TEST
+
+        function circleIcon(fill, stroke) {
+            return {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 7,
+                fillOpacity: 0.9,
+                fillColor: fill,
+                strokeColor: stroke,
+                strokeWeight: 2,
+            };
+        }
+
+        const liveMarkers = new Map();  
+        let meLiveMarker = null;        
+
+        function ensureLiveMarker(uid, username, role, isMe) {
+            if (isMe && meLiveMarker) return meLiveMarker;
+            if (!isMe && liveMarkers.has(uid)) return liveMarkers.get(uid);
+
+            const marker = new google.maps.Marker({
+                map,
+                title: `${username}${role ? ' (' + role + ')' : ''}`,
+                icon: isMe ? circleIcon('#1a73e8', '#0b57d0')  
+                    : circleIcon('#34a853', '#0b8043'), 
+                });
+
+            if (isMe) meLiveMarker = marker; else liveMarkers.set(uid, marker);
+            return marker;
+        }
+
+        function subscribeHub() {
+            if (pageWS) return;
+            pageWS = new WebSocket(HUB_URL);
+
+            pageWS.onmessage = (evt) => {
+                const data = JSON.parse(evt.data || '{}');
+                if (data.type !== 'loc') return;
+
+                const isMe = data.uid === CURRENT_UID;
+                const m = ensureLiveMarker(data.uid, data.username, data.role, isMe);
+                m.setPosition({ lat: data.lat, lng: data.lng });
+            };
+
+            pageWS.onclose = () => {
+                pageWS = null;
+            };
+        }
+
+        function setShareBtn(on) {
+            const b = document.getElementById('shareBtn');
+            b.textContent = on ? 'Stop Sharing' : 'Start Sharing';
+            b.style.color = "black";
+        }
+
+        function buildPathFromLeg(leg) {
+            const path = [];
+            leg.steps.forEach(step => {
+                step.path.forEach(p => path.push(p));
+            });
+            return path;
+        }
+
+        function updateRouteFromDriver(driverPos) {
+            if (!directionsService) return;
+            if (!profilePos) return;  
+
+            const now = Date.now();
+            if (now - lastRouteUpdate < 5000) {
+                return;
+            }
+            lastRouteUpdate = now;
+
+            const req = {
+                origin: driverPos,
+                destination: profilePos,
+                travelMode: google.maps.TravelMode.DRIVING
+            };
+
+            if (activeStorePos) {
+                req.waypoints = [{ location: activeStorePos, stopover: true }];
+            }
+
+            directionsService.route(req, (result, status) => {
+                if (status !== 'OK') {
+                    console.warn('Directions request failed:', status);
+                    return;
+                }
+
+                const route = result.routes[0];
+                const legs = route.legs;
+
+                if (storeLegPolyline) {
+                    storeLegPolyline.setMap(null);
+                    storeLegPolyline = null;
+                }
+                if (profileLegPolyline) {
+                    profileLegPolyline.setMap(null);
+                    profileLegPolyline = null;
+                }
+                if (directLegPolyline) {
+                    directLegPolyline.setMap(null);
+                    directLegPolyline = null;
+                }
+
+                if (legs.length === 2) {
+                    const pathToStore = buildPathFromLeg(legs[0]);
+                    storeLegPolyline = new google.maps.Polyline({
+                        map,
+                        path: pathToStore,
+                        strokeColor: '#EE0000',   
+                        strokeOpacity: 1.0,
+                        strokeWeight: 6
+                    });
+
+                    const pathToProfile = buildPathFromLeg(legs[1]);
+                    profileLegPolyline = new google.maps.Polyline({
+                        map,
+                        path: pathToProfile,
+                        strokeColor: '#66ccff',   
+                        strokeOpacity: 1.0,
+                        strokeWeight: 6
+                    });
+                } else if (legs.length === 1) {
+                    const pathDirect = buildPathFromLeg(legs[0]);
+                    directLegPolyline = new google.maps.Polyline({
+                        map,
+                        path: pathDirect,
+                        strokeColor: '#66ccff',  
+                        strokeOpacity: 1.0,
+                        strokeWeight: 6
+                    });
+                }
+                map.fitBounds(route.bounds)
+            });
+        }      
+
+        function startSharingNow(role='buyer') {
+            localStorage.setItem(WANT_KEY, '1');
+            setShareBtn(true);
+
+            if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+            if (pageWatchId !== null) return;
+
+            if (!pageWS) subscribeHub();  
+
+            function sendPing(lat, lng, acc) {
+                if (pageWS && pageWS.readyState === 1) {
+                    pageWS.send(JSON.stringify({ type: 'ping', lat, lng, role, accuracy: acc }));
+                }
+            }
+
+            pageWatchId = navigator.geolocation.watchPosition(
+                (pos) => {
+                    const { latitude, longitude, accuracy } = pos.coords;
+
+                    const driverPos = { lat: latitude, lng: longitude };
+                    const me = ensureLiveMarker(CURRENT_UID, 'You', role, true);
+                    me.setPosition(driverPos);
+                    sendPing(latitude, longitude, accuracy);
+                    updateRouteFromDriver(driverPos);
+                },
+                (err) => {
+                    console.error(err);
+                    alert('Location permission or GPS issue.');
+                    stopSharingNow();
+                },
+                { enableHighAccuracy: true, maximumAge: 2000, timeout: 8000 }
+            );
+        }
+        
+
+        function stopSharingNow() {
+            localStorage.removeItem(WANT_KEY);
+            setShareBtn(false);
+            if (pageWatchId !== null) {
+                navigator.geolocation.clearWatch(pageWatchId);
+                pageWatchId = null;
+            }
+        }
+
+        document.getElementById('shareBtn').addEventListener('click', () => {
+            if (localStorage.getItem(WANT_KEY)) stopSharingNow(); else startSharingNow('buyer');
+        });
+
+        function afterMapReady() {
+            subscribeHub();                         
+            setShareBtn(!!localStorage.getItem(WANT_KEY));  
+        }
+
         let map;
         let geocoder;
         let markers = {};
+
         {% comment %} const addresses_with_info = JSON.parse('{{ delivery_addresses_with_info_json|escapejs }}'); {% endcomment %}
         const user_address = '{{ user_address|escapejs }}';
         let fetchTimeout = null; // for debouncing
@@ -114,11 +327,15 @@
                 }
             });
 
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer({map, suppressMarkers: true});
+
             map.addListener("idle", () => {
                 if (fetchTimeout) clearTimeout(fetchTimeout);
                 fetchTimeout = setTimeout(fetchMapData, 500); // wait 0.5s after idle
             });
-
+            setInterval(fetchMapData, 5000);
+            afterMapReady();
         }
         let user = "";
 
@@ -200,112 +417,230 @@
                         });
 
                         marker.addListener('click', () => {
-                            // Display user info in your popup
+                            // open the side popup with order details
                             showPopup(group);
-
                             setTimeout(() => shop.click(), 100);
+
+                            profilePos = location;
+
+                            const order = group.orders && group.orders.length > 0 ? group.orders[0] : null;
+
+                            if (!order || !order.store_address) {
+                                console.warn('No store_address on order for this marker; cannot show store pin.');
+                                if (meLiveMarker) {
+                                    updateRouteFromDriver(meLiveMarker.getPosition());
+                                }
+                                return;
+                            }
+
+                            const geocodeRequest = {
+                                address: order.store_address,
+                                bounds: map.getBounds(),
+                                componentRestrictions: { country: 'US' },
+                            };
+
+                            geocoder.geocode(geocodeRequest, (results, status) => {
+                                if (status !== 'OK' || !results[0]) {
+                                    console.warn('Store geocode failed:', status);
+                                    if (meLiveMarker) {
+                                        updateRouteFromDriver(meLiveMarker.getPosition());
+                                    }
+                                    return;
+                                }       
+
+                                const storeLoc = results[0].geometry.location;
+                                activeStorePos = storeLoc;
+
+                                if (!storeMarker) {
+                                    storeMarker = new google.maps.Marker({
+                                        map,
+                                        position: storeLoc,
+                                        title: order.store_name ? `Store: ${order.store_name}` : 'Store',
+                                        icon: {
+                                            path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+                                                scale: 6,
+                                                fillColor: '#66ccff',
+                                                fillOpacity: 1,
+                                                strokeColor: '#cc9900ff',
+                                                strokeWeight: 2,
+                                        },
+                                    });
+                                } else {
+                                    storeMarker.setPosition(storeLoc);
+                                    storeMarker.setTitle(order.store_name ? `Store: ${order.store_name}` : 'Store');
+                                    storeMarker.setMap(map);
+                                }
+
+                                console.log('activeStorePos set:', activeStorePos.toString());
+                                console.log('profilePos set:', profilePos.toString());
+
+                                if (meLiveMarker) {
+                                    updateRouteFromDriver(meLiveMarker.getPosition());
+                                }
+                            });
                         });
 
                         // store the user marker
                         markers[address] = marker;
+
+                        const hasMyActiveOrder = group.orders.some(o =>
+                            o.status === 'inprogress' &&
+                            (o.user_id === CURRENT_VIEWER_ID || o.driver_id === CURRENT_VIEWER_ID)
+                        );
+
+                        if (hasMyActiveOrder) {
+                            google.maps.event.trigger(marker, 'click');
+                        }
                     } else {
                         console.error("Geocode failed:", status);
                     }
                 });
             });
         }
-        let popupJustOpened = false;
 
+        let popupJustOpened = false;
 
         function showPopup(group) {
             console.log("popup");
             let ordersHTML = group.orders.map(order => {
-                const orderUser = order.user;
-                console.log("order user:", orderUser);
-                console.log("current user:", user);
-                const isOwn = (orderUser === user);
-                console.log("is own order?", isOwn);
+            const isBuyer  = (order.user_id === CURRENT_VIEWER_ID);
+            const isDriver = (order.driver_id === CURRENT_VIEWER_ID);
 
-                const buttonText = isOwn ? "Take own order" : "Accept Request";
-                return `
-                    <div class="border-t border-gray-300 mt-4 pt-4">
-                        <p class="text-gray-700 text-xl"><b>Address:</b> ${group.address}</p>
-                        <ul class="list-disc pl-6">
-                            ${order.items.map(item => `
-                                <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
-                                    <span class="font-semibold">${item.name}</span>:
-                                    <span class="font-semibold">${item.quantity} × $${item.price} =</span>
-                                    <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
-                                </li>
-                            `).join('')}
-                        </ul>
-                        <p class="text-right text-lg font-bold mt-2">Subtotal: $${order.subtotal.toFixed(2)}</p>
-                        <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
-                                onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
-                            ${buttonText}
-                        </button>
-                    </div>
-                `}).join('');
+            let actionHtml = '';
 
-            const popup = document.getElementById('popup');
-            console.log("popup element found?", popup);
-            console.log("popup classes before:", popup?.classList.value);
+            if (order.status === 'placed') {
+                const buttonText = isBuyer ? "Take own order" : "Accept Request";
+                actionHtml = `
+                    <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
+                            onclick="changeOrderStatus(${order.order_id}, 'inprogress')">
+                        ${buttonText}
+                    </button>
+                `;
+            } else if (order.status === 'inprogress') {
+                const canConfirm = isBuyer || isDriver;
 
-            const userName = group.orders[0].user;
-            const userId = group.orders[0].user_id;
-
-            popup.classList.remove('translate-x-full');
-            console.log("popup classes after:", popup.classList.value);
-            // Inject into popup
-            document.getElementById('popup-content').innerHTML = `
-                <div class="space-y-4">
-                    <a href="/profile/${userId}/" class="no-underline hover:underline">
-                        <h2 class="text-4xl font-bold mb-2 text-center">${userName}</h2>
-                    </a>
-                    ${ordersHTML}
-                </div>
-            `;
-            {% comment %} document.getElementById('popup').classList.remove('translate-x-full'); {% endcomment %}
-
-            closePopup.addEventListener('click', () => {
-                const popup = document.getElementById('popup');
-                const map_popup = document.getElementById('map_popup');
-                popup.classList.add('translate-x-full');
-                map_popup.classList.remove('-translate-x-50');
-            });
-
-            {% comment %} document.addEventListener('click', (event) => {
-                const popup = document.getElementById('popup');
-
-                // if popup is currently visible
-                if (!popup.classList.contains('translate-x-full')) {
-                    // check if click was *outside* popup
-                    if (!popup.contains(event.target)) {
-                        popup.classList.add('translate-x-full');
-                    }
+                let baseText = '';
+                if (isBuyer && isDriver) {
+                    baseText = `
+                    <p class="mt-2 text-green-700 font-semibold">
+                        You are picking up your own order.
+                    </p>
+                `;
+                } else if (isDriver) {
+                    baseText = `
+                        <p class="mt-2 text-green-700 font-semibold">
+                            You are delivering this order.
+                         </p>
+                        `;
+                } else if (isBuyer) {
+                    baseText = `
+                        <p class="mt-2 text-blue-700 font-semibold">
+                            Your order is in progress.<br>
+                            Driver: ${order.driver_name || 'TBD'}
+                        </p>
+                    `;
+                } else {
+                    baseText = `
+                        <p class="mt-2 text-gray-500">
+                            This order has already been accepted.
+                        </p>
+                    `;
                 }
-            }); {% endcomment %}
-            console.log("end");
-            popupJustOpened = true;
-        }
 
-        // global listener for outside clicks
-        document.addEventListener("click", (event) => {
-            const popup = document.getElementById("popup");
-            if (!popup || popup.classList.contains("translate-x-full")) return;
+                const buttonHtml = canConfirm ? `
+                    <button button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2""
+                        onclick="confirmDelivered(${order.order_id})">
+                        Mark as delivered
+                    </button>
+                ` : '';
 
-            // Ignore the first click right after popup opens
-            if (popupJustOpened) {
-                popupJustOpened = false;
-                return;
+                actionHtml = baseText + buttonHtml;
+
+            } else {
+                actionHtml = `
+                    <p class="mt-2 text-gray-500">
+                        Order status: ${order.status}
+                    </p>
+                `;
             }
 
-            // If click was inside popup, ignore
-            if (popup.contains(event.target)) return;
+            return `
+                <div class="border-t border-gray-300 mt-4 pt-4">
+                    <p class="text-gray-700 text-xl"><b>Address:</b> ${group.address}</p>
+                    <ul class="list-disc pl-6">
+                        ${order.items.map(item => `
+                            <li class="mb-1 border border-gray-300 rounded-lg p-2 mt-2">
+                                <span class="font-semibold">${item.name}</span>:
+                                <span class="font-semibold">${item.quantity} × $${item.price} =</span>
+                                <span class="text-blue-700 font-bold">$${item.total.toFixed(2)}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                    <p class="text-right text-lg font-bold mt-2">
+                        Subtotal: $${order.subtotal.toFixed(2)}
+                    </p>
+                    ${actionHtml}
+                </div>
+            `;
+        }).join('');
 
-            // Otherwise, close popup
-            popup.classList.add("translate-x-full");
+        const popup = document.getElementById('popup');
+        console.log("popup element found?", popup);
+        console.log("popup classes before:", popup?.classList.value);
+
+        const userName = group.orders[0].user;
+        const userId   = group.orders[0].user_id;
+
+        popup.classList.remove('translate-x-full');
+        console.log("popup classes after:", popup.classList.value);
+
+        document.getElementById('popup-content').innerHTML = `
+            <div class="space-y-4">
+                <a href="/profile/${userId}/" class="no-underline hover:underline">
+                    <h2 class="text-4xl font-bold mb-2 text-center">${userName}</h2>
+                </a>
+                ${ordersHTML}
+            </div>
+        `;
+
+        closePopup.addEventListener('click', () => {
+            const popup = document.getElementById('popup');
+            const map_popup = document.getElementById('map_popup');
+            popup.classList.add('translate-x-full');
+            map_popup.classList.remove('-translate-x-50');
         });
+
+        console.log("end");
+        popupJustOpened = true
+    }
+
+    function confirmDelivered(orderId) {
+        fetch(`/orders/${orderId}/confirm_delivery/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}',
+            },
+            body: JSON.stringify({}),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                alert(data.error || 'Failed to confirm delivery');
+                return;
+            }
+            if (data.fully_delivered) {
+                alert('Order marked delivered by both buyer and driver.');
+                window.location.reload();
+            } else {
+                alert('Thanks! Waiting for the other person to confirm.');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Error confirming delivery.');
+        });
+    }
 
         function geocodeAddress() {
             const address = document.getElementById('input_location').value;

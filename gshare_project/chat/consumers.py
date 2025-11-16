@@ -80,3 +80,4 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'username': username,
             'message': message
         }))
+

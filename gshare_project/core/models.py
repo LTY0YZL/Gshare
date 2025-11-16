@@ -21,7 +21,12 @@ class Users(models.Model):
 class Stores(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
-    location = models.CharField(max_length=255, null=True, blank=True)
+    street      = models.CharField(max_length=255, null=True, blank=True)
+    city        = models.CharField(max_length=100, null=True, blank=True)
+    state       = models.CharField(max_length=50, null=True, blank=True)
+    postal_code = models.CharField(max_length=20, null=True, blank=True)
+    country     = models.CharField(max_length=50, null=True, blank=True, default="US")
+    location    = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         managed = False
@@ -33,6 +38,8 @@ class Items(models.Model):
     name = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     stock = models.IntegerField(null=True, blank=True)
+    
+    description = models.TextField(null=True, blank=True)
 
     class Meta:
         managed = False
@@ -87,11 +94,14 @@ class OrderItems(models.Model):
 
 class Deliveries(models.Model):
     id = models.AutoField(primary_key=True)
-    order = models.ForeignKey('Orders', on_delete=models.CASCADE)
+    order = models.ForeignKey('Orders', on_delete=models.CASCADE, related_name='deliveries')
     delivery_person = models.ForeignKey('Users', on_delete=models.CASCADE, null=True, blank=True)
     status = models.CharField(max_length=50, null=True, blank=True)
     pickup_time = models.DateTimeField(null=True, blank=True)
     delivery_time = models.DateTimeField(null=True, blank=True)
+    
+    buyer_confirmed = models.BooleanField(default=False)
+    driver_confirmed = models.BooleanField(default=False)
 
     class Meta:
         managed = False

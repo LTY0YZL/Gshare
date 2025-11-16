@@ -28,6 +28,7 @@ from urllib.parse import urlencode
 from . import kroger_api
 import stripe
 from datetime import timedelta
+from chat.models import ChatGroup
 
 
 from core.models import (
@@ -277,11 +278,64 @@ def change_order_status(order_id: int, new_status: str) -> bool:
     except Exception as e:
         print(f"Error updating order status: {e}")
         return False
-    
+
+def change_order_status_with_driver(request, order_id, new_status):
+    try:
+        order = Orders.objects.using('gsharedb').get(id=order_id)
+        order.status = new_status
+        order.save(using='gsharedb')
+
+        if new_status == 'inprogress':
+            driver = get_user("email", request.user.email)
+            delivery, _ = Deliveries.objects.using('gsharedb').get_or_create(order=order)
+            delivery.delivery_person = driver
+            delivery.status = 'inprogress'
+            delivery.save(using='gsharedb')
+        elif new_status == 'delivered':
+            delivery, _ = Deliveries.objects.using('gsharedb').get_or_create(order=order)
+            delivery.status = 'delivered'
+            delivery.save(using='gsharedb')
+        return True
+    except Orders.DoesNotExist:
+        return False
+
+@login_required
+def confirm_delivery_json(request, order_id):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'}, status=405)
+
+    user = get_user("email", request.user.email)
+    try:
+        order = Orders.objects.using('gsharedb').get(id=order_id)
+    except Orders.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+
+    delivery, _ = Deliveries.objects.using('gsharedb').get_or_create(order=order)
+
+    if user.id == order.user_id:
+        delivery.buyer_confirmed = True
+    if delivery.delivery_person and user.id == delivery.delivery_person.id:
+        delivery.driver_confirmed = True
+
+    delivery.save(using='gsharedb')
+
+    fully = delivery.buyer_confirmed and delivery.driver_confirmed
+    if fully:
+        order.status = 'delivered'
+        order.save(using='gsharedb')
+        delivery.status = 'delivered'
+        delivery.save(using='gsharedb')
+
+    return JsonResponse({'success': True, 'fully_delivered': fully})
+
 def change_order_status_json(request, order_id, new_status):
     if request.method == 'POST':
-        success = change_order_status(order_id, new_status)
-        return JsonResponse({'success': success})
+        try:
+            success = change_order_status_with_driver(request, order_id, new_status)
+            return JsonResponse({'success': success})
+        except Exception as e:
+            print("Error in change_order_status_json:", e)
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
     
 """
@@ -578,7 +632,7 @@ def verify_group_password(group, raw_password: str) -> bool:
     Returns:
         list: A list of dictionaries containing order details and user information.
 """
-def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500):
+def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500, viewer=None):
     print(f"orders_in_viewport: {min_lat}, {min_lng}, {max_lat}, {max_lng}, limit={limit}")
     # Get users within the viewport
     users_in_viewport = _users_in_viewport(min_lat, min_lng, max_lat, max_lng, limit)
@@ -591,22 +645,37 @@ def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500):
     user_ids = [user['id'] for user in users_in_viewport]
     print(f"Found {len(user_ids)} users in viewport")
 
-    # Fetch orders for the users in the viewport
-    orders = Orders.objects.using('gsharedb').filter(user_id__in=user_ids, status="placed").select_related('user')
+    base_qs = Orders.objects.using('gsharedb').filter(user_id__in=user_ids)
+
+    if viewer is not None:
+        orders = base_qs.filter(
+            Q(status="placed") |
+            Q(status="inprogress", user=viewer) |
+            Q(status="inprogress", deliveries__delivery_person=viewer)
+        ).select_related('user', 'store').distinct()
+    else:
+        orders = base_qs.filter(status="placed").select_related('user', 'store')
 
     # Prepare the output
     orders_with_users = []
     for order in orders:
         user = next((u for u in users_in_viewport if u['id'] == order.user_id), None)
-        if user:
-            orders_with_users.append({
-                'order_id': order.id,
-                'user': user,
-                'status': order.status,
-                'total_amount': float(order.total_amount or 0),
-                'order_date': order.order_date,
-                'delivery_address': order.delivery_address,
-            })
+        if not user:
+            continue
+
+        store = order.store 
+
+        orders_with_users.append({
+            'order_id': order.id,
+            'user': user,
+            'status': order.status,
+            'total_amount': float(order.total_amount or 0),
+            'order_date': order.order_date,
+            'delivery_address': order.delivery_address,
+            'store_id': store.id if store else None,
+            'store_name': store.name if store else "",
+            'store_address': store.location if (store and store.location) else "",
+        })
 
     return orders_with_users
 
@@ -1094,13 +1163,18 @@ def cart(request):
             try:
                 locations = kroger_api.find_kroger_locations_by_zip(zip_code)
                 if locations:
-                    loc_id = locations[0]['locationId']
+                    loc = locations[0]
+                    loc_id = loc['locationId']
+                    store = upsert_kroger_store_from_location(loc)
+                    context['kroger_store'] = store
+                    request.session['kroger_store_id'] = store.id
                     context['kroger_products'] = kroger_api.search_kroger_products(
                         loc_id, search_query
                     )
                 else:
                     messages.error(request, f"No Kroger-owned stores found near {zip_code}.")
-            except Exception:
+            except Exception as e:
+                print("Kroger search error:", e)
                 messages.error(request, "Kroger search failed.")
         else:
             messages.info(request, "Enter a zip code and a search term for Kroger search.")
@@ -1193,13 +1267,47 @@ def cart(request):
     # #     'custom_user': profile,
     # # })
     
+def upsert_kroger_store_from_location(loc):
+    addr = loc.get("address", {}) or {}
+
+    street = addr.get("addressLine1")
+    city   = addr.get("city")
+    state  = addr.get("state")
+    postal = addr.get("zipCode")
+    country = addr.get("countryCode", "US")
+
+    store_name = loc.get("name") or "Kroger"
+
+    parts = [p for p in [street, city, state, postal, country] if p]
+    full_location = ", ".join(parts) if parts else None
+
+    defaults = {
+        "name": store_name,     
+        "street": street,
+        "city": city,
+        "state": state,
+        "postal_code": postal,
+        "country": country,
+        "location": full_location,
+    }
+
+    store, created = Stores.objects.using('gsharedb').update_or_create(
+        street=street,
+        postal_code=postal,
+        defaults=defaults,
+    )
+
+    return store
+    
 @login_required
 def add_kroger_item_to_cart(request):
     if request.method != 'POST':
         messages.error(request, "Invalid request.")
         return redirect('cart')
+
     product_name = (request.POST.get('product_name') or '').strip()
     product_price = request.POST.get('product_price')
+
     if not product_name and request.content_type == 'application/json':
         try:
             body = json.loads(request.body or '{}')
@@ -1217,7 +1325,17 @@ def add_kroger_item_to_cart(request):
     except Exception:
         messages.error(request, "Invalid Kroger product price.")
         return redirect('cart')
-    kroger_store, _ = Stores.objects.using('gsharedb').get_or_create(name='Kroger')
+
+    store_id = request.session.get('kroger_store_id')
+    if not store_id:
+        messages.error(request, "No Kroger store selected. Please run a Kroger search again.")
+        return redirect('cart')
+
+    kroger_store = Stores.objects.using('gsharedb').filter(id=store_id).first()
+    if kroger_store is None:
+        messages.error(request, "Selected Kroger store not found. Please search again.")
+        return redirect('cart')
+
     item, _ = Items.objects.using('gsharedb').update_or_create(
         name=product_name,
         store=kroger_store,
@@ -1231,22 +1349,33 @@ def save_kroger_results(request):
     if request.method != 'POST':
         messages.error(request, "Invalid request.")
         return redirect('cart')
+
     raw = request.POST.get('products_json') or '[]'
     try:
         products = json.loads(raw)
     except Exception:
         products = []
 
-    kroger_store, _ = Stores.objects.using('gsharedb').get_or_create(name='Kroger')
+    store_id = request.session.get('kroger_store_id')
+    if not store_id:
+        messages.error(request, "No Kroger store selected. Please run a Kroger search again.")
+        return redirect('cart')
+
+    kroger_store = Stores.objects.using('gsharedb').filter(id=store_id).first()
+    if kroger_store is None:
+        messages.error(request, "Selected Kroger store not found. Please search again.")
+        return redirect('cart')
+
     created = 0
     updated = 0
+
     for p in products:
         try:
             name = (p.get('description') or '').strip()
             regular = (
                 p.get('items', [{}])[0]
-                 .get('price', {})
-                 .get('regular')
+                  .get('price', {})
+                  .get('regular')
             )
             if not name or regular is None:
                 continue
@@ -1257,12 +1386,13 @@ def save_kroger_results(request):
         _, was_created = Items.objects.using('gsharedb').update_or_create(
             name=name,
             store=kroger_store,
-            defaults={'price': price_dec, 'stock': 0}
+            defaults={'price': price_dec, 'stock': 0, 'description': name}
         )
         if was_created:
             created += 1
         else:
             updated += 1
+
     messages.success(request, f"Saved {created} new and {updated} existing Kroger item(s).")
     return redirect('cart')
 
@@ -1354,7 +1484,9 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
     
     info = {}
     
-    oiv = orders_in_viewport(min_lat, min_lng, max_lat, max_lng)
+    viewer = get_user("email", request.user.email)
+    
+    oiv = orders_in_viewport(min_lat, min_lng, max_lat, max_lng, viewer=viewer)
     
     for order in oiv:
         address = order['delivery_address']
@@ -1362,7 +1494,13 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
             continue
         
         user = get_user("id", order['user']['id'])
+        
+        delivery = Deliveries.objects.using('gsharedb').filter(order_id=order['order_id']) \
+            .select_related('delivery_person').first()
 
+        driver_id = delivery.delivery_person.id if delivery and delivery.delivery_person else None
+        driver_name = delivery.delivery_person.name if delivery and delivery.delivery_person else None
+        
         items = get_order_items_by_order_id(order['order_id'])
                 
         subtotal = 0
@@ -1383,6 +1521,15 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
             'order_id': order['order_id'],
             'user': user.name,
             'user_id': user.id,
+            
+            #store info
+            'store_id': order.get('store_id'),
+            'store_name': order.get('store_name', ''),
+            'store_address': order.get('store_address', ''),
+            
+            'status': order['status'],        
+            'driver_id': driver_id,           
+            'driver_name': driver_name,
         }
 
         # Group by user name (or user.id if you prefer)
@@ -1474,6 +1621,9 @@ def maps(request):
         'location': {'lat': 40.7607, 'lng': -111.8939},
         'stores_for_map': stores,
         'user_address': user_address,
+        'user_lat': float(user.latitude) if user.latitude is not None else None,
+        'user_lng': float(user.longitude) if user.longitude is not None else None,
+        'viewer_id': user.id,
     })
     
 def placed_data(request):
@@ -1978,8 +2128,8 @@ def paymentsCheckout(request):
             ## KEEP ABOVE ONLY ONCE PAYMENTS ARE IN LIVE MODE, THIS WONT WORK IN TEST MODE
             customer_email=request.user.email,  # helps with tax and receipts
             
-            success_url=f"http://127.0.0.1:8000/payment_success/{order.id}/", # should do this if success: # consider moving this to webhook on payment success
-            cancel_url="http://127.0.0.1:8000/cart/payments",
+            success_url=f"http://www.gshare.me/payment_success/{order.id}/", # should do this if success: # consider moving this to webhook on payment success
+            cancel_url="http://www.gshare.me/cart/payments",
         )
         print("Session URL: " + checkoutSession.url)
         return redirect(checkoutSession.url)
@@ -2202,3 +2352,18 @@ def delete_cart(request, cart_id):
 def payment_success(request, order_id):
     change_order_status(order_id, "delivered") 
     return redirect("order_history")
+
+@login_required
+def group_map(request, slug):
+    group = get_object_or_404(ChatGroup, slug=slug)
+    return render(request, 'maps.html', {
+        'group': group,
+        'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
+        'user_address': getattr(getattr(request.user, 'profile', None), 'address', ''),
+    })
+    
+@login_required
+def join_group(request, slug):
+    group = get_object_or_404(ChatGroup, slug=slug)
+    group.members.add(request.user)
+    return redirect('group_map', slug=slug)
