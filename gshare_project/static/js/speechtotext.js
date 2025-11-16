@@ -73,11 +73,9 @@ window.sendVoiceChatMessage = function() {
     return;
   }
 
-  // Add the latest user utterance to the conversation history
   voiceMessages.push({ role: 'user', content: latestTranscript });
   const sendingMessages = voiceMessages.slice();
 
-  // Optional: simple loading state by adding a temporary assistant message
   voiceMessages.push({ role: 'assistant', content: 'Thinking...' });
   renderVoiceChat();
 
