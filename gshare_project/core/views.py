@@ -40,14 +40,7 @@ from .models import UploadedImage
 from core.utils.aws_s3 import get_s3_client, get_bucket_and_region
 from .tasks import parse_receipt_task
 from .utils.aws_s3 import upload_file_like, presigned_url
-from .utils.orders_for_driver import get_active_orders_for_driver
-from .utils.order_resolver import assign_lines_to_orders, pick_best_order_for_receipt
-from .utils.gemini_tools import (
-    start_chat_session_with_resolver,
-    run_chat_turn_with_resolver,
-)
 from django.views.decorators.http import require_POST
-from core.ai.receipt_gemini import chat_about_receipt
 
 
 from core.models import (
@@ -1049,40 +1042,43 @@ def updateProfile(profile, data, files):
 
 @login_required
 def receipt_upload_view(request):
-    if request.method == "POST" and request.FILES.get("receipt_image"):
-        uploaded = request.FILES["receipt_image"]
+    if request.method == "POST":
+        uploaded = request.FILES.get("receipt_image")
+        if not uploaded:
+            messages.error(request, "Please choose an image.")
+            return redirect("receipt_upload")
+
+        # gsharedb user row
+        g_user = Users.objects.using("gsharedb").get(email=request.user.email)
 
         s3 = get_s3_client()
-        bucket, _ = get_bucket_and_region()
+        bucket, region = get_bucket_and_region()
 
         original_name = get_valid_filename(uploaded.name)
-        content_type = uploaded.content_type or "image/jpeg"
-        key = f"receipts/{request.user.id}/{uuid4().hex}_{original_name}"
+        key = f"receipts/{g_user.id}/{uuid4().hex}_{original_name}"
 
+        # Upload to S3
         s3.put_object(
             Bucket=bucket,
             Key=key,
             Body=uploaded.read(),
-            ContentType=content_type,
+            ContentType=uploaded.content_type or "image/jpeg",
         )
 
-        # map Django auth user -> gsharedb Users row
-        guser = Users.objects.using("gsharedb").get(pk=request.user.id)
-
-        # create Receipt row in gsharedb
+        # Create Receipt in gsharedb
         receipt = Receipt.objects.using("gsharedb").create(
-            uploader=guser,
+            uploader=g_user,
             s3_bucket=bucket,
             s3_key=key,
             status="pending",
         )
 
-        # 🔥 simplest: run scan right now (page waits; okay for dev)
+        # FASTEST: do scan synchronously right here (may take a few seconds)
         try:
             scan_receipt(receipt.id)
         except Exception as e:
             receipt.status = "error"
-            receipt.error = str(e)[:2000]
+            receipt.error = str(e)
             receipt.save(using="gsharedb")
 
         return redirect("receipt_detail", rid=receipt.id)
@@ -1090,25 +1086,25 @@ def receipt_upload_view(request):
     return render(request, "deliveries/receipt_upload.html")
 
 
+
 @login_required
 def receipt_detail_view(request, rid: int):
     # Receipt from gsharedb
     receipt = get_object_or_404(Receipt.objects.using("gsharedb"), pk=rid)
 
+    # lines from gsharedb
     lines = (
         ReceiptLine.objects.using("gsharedb")
         .filter(receipt=receipt)
         .order_by("id")
     )
 
-    # Chat history (default DB)
     chat_messages = (
         ReceiptChatMessage.objects
         .filter(receipt_id=receipt.id)
         .order_by("created_at", "id")
     )
 
-    # S3 image URL, if we have bucket+key
     image_url = None
     if getattr(receipt, "s3_bucket", None) and getattr(receipt, "s3_key", None):
         try:
@@ -1122,7 +1118,7 @@ def receipt_detail_view(request, rid: int):
         {
             "receipt": receipt,
             "lines": lines,
-            "chat_messages": chat_messages,  # <- name we'll use in template
+            "chat_messages": chat_messages,
             "image_url": image_url,
         },
     )
@@ -1134,10 +1130,8 @@ def receipt_chat_view(request, rid: int):
     user_message = request.POST.get("message", "").strip()
 
     if not user_message:
-        # nothing typed – just go back
         return redirect("receipt_detail", rid=receipt.id)
 
-    # Load prior chat (user + assistant)
     history_qs = ReceiptChatMessage.objects.filter(
         receipt_id=receipt.id
     ).order_by("created_at", "id")
@@ -1151,10 +1145,7 @@ def receipt_chat_view(request, rid: int):
         content=user_message,
     )
 
-    # Call Gemini (your helper)
     try:
-        from core.utils.gemini_tools import chat_about_receipt  # or wherever you defined it
-
         assistant_text = chat_about_receipt(
             receipt,
             history + [("user", user_message)],
@@ -1163,14 +1154,12 @@ def receipt_chat_view(request, rid: int):
     except Exception as e:
         assistant_text = f"Sorry, I had an error talking to the AI: {e}"
 
-    # Save assistant reply
     ReceiptChatMessage.objects.create(
         receipt_id=receipt.id,
         role="assistant",
         content=assistant_text,
     )
 
-    # Go back to the detail page (page will now include the new messages)
     return redirect("receipt_detail", rid=receipt.id)
 
 
