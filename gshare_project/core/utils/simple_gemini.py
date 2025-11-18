@@ -4,7 +4,12 @@ import base64
 import json
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
+from decimal import Decimal
+
+
+
 
 from google import genai
 
@@ -13,6 +18,124 @@ from core.utils.aws_s3 import get_s3_client
 
 # Single shared Gemini client
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+def _dump_items_for_receipt(receipt):
+    """Return a pure-Python list of items for prompts/JSON."""
+    lines = (
+        ReceiptLine.objects.using("gsharedb")
+        .filter(receipt=receipt)
+        .order_by("id")
+    )
+    items = []
+    for l in lines:
+        items.append({
+            "name": l.name,
+            "quantity": float(l.quantity or 1),
+            "unit_price": float(l.unit_price) if l.unit_price is not None else None,
+            "total_price": float(l.total_price) if l.total_price is not None else None,
+            "meta": l.meta or {},
+        })
+    return items
+
+
+def _apply_operations_to_receipt(receipt: Receipt, operations):
+    """
+    Apply a list of edit operations to ReceiptLine rows *safely*.
+
+    `operations` can be:
+      - a dict with key "operations"
+      - a JSON string
+      - a list of dicts
+      - anything else (which we ignore)
+    """
+
+    # -------- Normalize `operations` into a Python list of dicts ----------
+    if isinstance(operations, str):
+        # maybe the model returned a JSON string
+        try:
+            operations = json.loads(operations)
+        except Exception:
+            operations = []
+
+    if isinstance(operations, dict) and "operations" in operations:
+        operations = operations["operations"]
+
+    if not isinstance(operations, list):
+        operations = []
+
+    # ---------------------------------------------------------------------
+    # From here on, `operations` is a list. Each element might still be
+    # garbage (like a string), so we guard every access with isinstance().
+    # ---------------------------------------------------------------------
+
+    with transaction.atomic(using="gsharedb"):
+        for op in operations:
+            if not isinstance(op, dict):
+                # this is what stops `'str' object has no attribute "get"'`
+                continue
+
+            action = op.get("op")
+            if not action:
+                continue
+
+            action = action.lower().strip()
+
+            name = (op.get("name") or "").strip()
+            old_name = (op.get("old_name") or "").strip()
+            new_name = (op.get("new_name") or "").strip()
+
+            qs = ReceiptLine.objects.using("gsharedb").filter(receipt=receipt)
+
+            if action == "remove" and name:
+                qs.filter(name__iexact=name).delete()
+
+            elif action == "update_quantity" and name:
+                try:
+                    qty = float(op.get("quantity"))
+                except Exception:
+                    continue
+                for line in qs.filter(name__iexact=name):
+                    line.quantity = qty
+                    line.save(using="gsharedb")
+
+            elif action == "rename" and old_name and new_name:
+                qs.filter(name__iexact=old_name).update(name=new_name)
+
+            elif action == "add" and name:
+                def _safe_float(x):
+                    try:
+                        return float(x)
+                    except Exception:
+                        return None
+
+                qty = _safe_float(op.get("quantity")) or 1
+                unit_price = _safe_float(op.get("unit_price"))
+                total_price = _safe_float(op.get("total_price"))
+
+                ReceiptLine.objects.using("gsharedb").create(
+                    receipt=receipt,
+                    name=name[:256],
+                    quantity=qty,
+                    unit_price=unit_price,
+                    total_price=total_price,
+                    meta=op,
+                )
+
+        # After edits, refresh the JSON snapshot on the receipt
+        new_items = [
+            {
+                "name": l.name,
+                "quantity": l.quantity,
+                "unit_price": l.unit_price,
+                "total_price": l.total_price,
+            }
+            for l in ReceiptLine.objects.using("gsharedb")
+            .filter(receipt=receipt)
+            .order_by("id")
+        ]
+        receipt.gemini_json = {"items": new_items}
+        receipt.uploaded_at = timezone.now()
+        receipt.save(using="gsharedb")
 
 
 def _load_image_bytes_from_s3(receipt: Receipt) -> bytes:
@@ -106,72 +229,69 @@ def scan_receipt(receipt_id: int) -> None:
     receipt.save(using="gsharedb")
 
 
-def chat_about_receipt(receipt: Receipt, history, user_message: str):
+def chat_about_receipt(receipt: Receipt, history, user_message: str) -> str:
     """
-    Use Gemini to BOTH:
-      - generate a natural-language reply
-      - return JSON operations to update ReceiptLine rows.
+    Mixed mode:
+      - answer questions about the receipt (totals, cheapest, etc.)
+      - optionally edit the list when user asks, via JSON operations.
+    """
 
-    Returns a dict:
-      {
-        "reply_text": str,
-        "operations": [
-          {
-            "op": "update" | "add" | "delete",
-            "target_name": "string or null",
-            "fields": {
-              "name": "optional string",
-              "quantity": optional number,
-              "unit_price": optional number,
-              "total_price": optional number
-            }
-          },
-          ...
-        ]
-      }
-    """
-    # current items
-    lines = (
-        ReceiptLine.objects.using("gsharedb")
+    items = [
+        {
+            "name": l.name,
+            "quantity": l.quantity,
+            "unit_price": l.unit_price,
+            "total_price": l.total_price,
+        }
+        for l in ReceiptLine.objects.using("gsharedb")
         .filter(receipt=receipt)
         .order_by("id")
-    )
-
-    items_text = "\n".join(
-        f"- {l.name} x{l.quantity} (total {l.total_price})" for l in lines
-    ) or "No items were parsed yet."
+    ]
+    items_json = json.dumps({"items": items}, ensure_ascii=False, indent=2)
 
     system_prompt = f"""
-You are helping correct a grocery order based on this receipt.
+You are an assistant for grocery receipts.
 
-Here are the current parsed items (do NOT rename them unless the user explicitly says so):
+You can:
+- Answer questions about the receipt (totals, most expensive, cheapest, counts, etc.).
+- Edit the list (remove items, change quantities, rename, add items).
 
-{items_text}
+Current items (JSON):
 
-When the user asks to change something in the list (e.g., change quantity, fix a name, delete an item, or add a missing item),
-you MUST respond ONLY in valid JSON with this exact schema:
+{items_json}
+
+When you respond, you MUST:
+
+1) First, write a natural-language reply for the user.
+
+2) At the END, output a JSON block between:
+
+BEGIN_OPERATIONS
+...JSON here...
+END_OPERATIONS
+
+Format:
 
 {{
-  "reply_text": "a short, friendly explanation to show to the user",
   "operations": [
+    {{"op": "remove", "name": "KRO COCONUT"}},
+    {{"op": "update_quantity", "name": "BANANAS", "quantity": 3}},
+    {{"op": "rename", "old_name": "BANANAS", "new_name": "Organic Bananas"}},
     {{
-      "op": "update" | "add" | "delete",
-      "target_name": "name of the existing item you are changing or deleting, or null for add",
-      "fields": {{
-        "name": "optional new name for the item",
-        "quantity": optional number,
-        "unit_price": optional number,
-        "total_price": optional number
-      }}
+      "op": "add",
+      "name": "NEW ITEM",
+      "quantity": 1,
+      "unit_price": 1.23,
+      "total_price": 1.23
     }}
   ]
 }}
 
-Rules:
-- If the user is only asking a question (no change), return an empty list for "operations".
-- For update/delete, set "target_name" to exactly one of the item names from the list above.
-- For add, set "target_name" to null and fill in "fields.name" (and quantity/price if given).
-- Never include extra keys. Always return valid JSON, no backticks, no markdown.
+If the user did NOT request changes, still output:
+
+BEGIN_OPERATIONS
+{{"operations": []}}
+END_OPERATIONS
 """
 
     history_text = ""
@@ -183,36 +303,47 @@ Rules:
         system_prompt
         + "\n\nConversation so far:\n"
         + history_text
-        + f"\nUser: {user_message}\n"
-        + 'Now return ONLY the JSON object as described above.'
+        + f"\nUser: {user_message}\nAssistant:"
     )
 
     resp = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.0-flash",       # 🔴 2.0 model here
         contents=[full_prompt],
     )
 
-    raw = resp.text or "{}"
+    text = (resp.text or "").strip()
 
-    # Try to parse JSON – same style as scan_receipt
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        start = raw.find("{")
-        end = raw.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            data = json.loads(raw[start : end + 1])
-        else:
-            # fallback: no ops, plain text error
-            return {
-                "reply_text": "Sorry, I had trouble understanding that change.",
-                "operations": [],
-            }
+    # ---- Extract operations block ------------------------------------------
+    ops_start = text.find("BEGIN_OPERATIONS")
+    ops_end = text.find("END_OPERATIONS")
 
-    # Make sure structure is at least present
-    if "reply_text" not in data:
-        data["reply_text"] = "Okay, I updated the items."
-    if "operations" not in data or not isinstance(data["operations"], list):
-        data["operations"] = []
+    natural_reply = text
+    ops_raw = []
 
-    return data
+    if ops_start != -1 and ops_end != -1 and ops_end > ops_start:
+        natural_reply = text[:ops_start].strip()
+        ops_block = text[ops_start + len("BEGIN_OPERATIONS"):ops_end].strip()
+
+        # strip code fences like ```json ... ```
+        ops_block = ops_block.strip().strip("`")
+        if ops_block.lower().startswith("json"):
+            ops_block = ops_block[4:].strip()
+
+        try:
+            parsed = json.loads(ops_block)
+        except Exception:
+            # maybe it's a quoted string of JSON
+            try:
+                parsed = json.loads(ops_block.strip('"'))
+            except Exception:
+                parsed = {"operations": []}
+
+        # let _apply_operations_to_receipt normalize further
+        ops_raw = parsed
+    else:
+        ops_raw = {"operations": []}
+
+    # Apply changes + refresh gemini_json
+    _apply_operations_to_receipt(receipt, ops_raw)
+
+    return natural_reply or "Okay, I’ve updated the receipt."

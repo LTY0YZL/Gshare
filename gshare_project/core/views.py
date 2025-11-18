@@ -82,6 +82,51 @@ def get_most_recent_order(user: Users, delivery_person: Users, status: str):
         return order
     except Orders.DoesNotExist:
         return None
+    
+def Create_delivery(order: Orders, delivery_person: Users):
+    try:
+        delivery = Deliveries.objects.using('gsharedb').create(
+            order=order,
+            delivery_person=delivery_person,
+            status='pending',
+            pickup_time=timezone.now() + timedelta(minutes=15),
+        )
+        return delivery
+    except IntegrityError as e:
+        print(f"Error creating delivery: {e}")
+        return None
+    
+def reject_delivery(delivery: Deliveries):
+    try:
+        delivery.delete()
+        return True
+    except Exception as e:
+        print(f"Error deleting delivery: {e}")
+        return False
+    
+def get_order_for_delivery(delivery: Deliveries):
+    try:
+        order = Orders.objects.using('gsharedb').get(id=delivery.order.id)
+        return order
+    except Orders.DoesNotExist:
+        return None
+
+def get_delivery_for_order(order: Orders):
+    try:
+        delivery = Deliveries.objects.using('gsharedb').get(order=order)
+        return delivery
+    except Deliveries.DoesNotExist:
+        return None
+    
+def delivery_done(delivery: Deliveries):
+    try:
+        delivery.status = 'delivered'
+        delivery.delivery_time = timezone.now()
+        delivery.save(using='gsharedb')
+        return True
+    except Exception as e:
+        print(f"Error updating delivery status: {e}")
+        return False
 
 """
 Retrieve a user from the 'gsharedb' database based on a specific field and value.
@@ -112,6 +157,20 @@ def edit_user(user_email: str, field: str, value: str):
         return None
     except Exception as e:
         print(f"Error updating user: {e}")
+        return None
+    
+def get_store_for_order(order: Orders):
+    try:
+        store = Stores.objects.using('gsharedb').get(id=order.store.id)
+        return store
+    except Stores.DoesNotExist:
+        return None
+    
+def get_store_from_item(item: Items):
+    try:
+        store = Stores.objects.using('gsharedb').get(id=item.store.id)
+        return store
+    except Stores.DoesNotExist:
         return None
 
 """
@@ -206,16 +265,17 @@ def get_orders_by_status(order_status: str):
         return []
     return orders
 
+
+"""
+Return a queryset of Orders assigned to this delivery person
+with the given status.
+"""
 def get_orders_by_delivery_person(delivery_person: Users, status: str):
-    try:
-        Delivery = Deliveries.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status)
-
-        for d in Delivery:
-            order = Orders.objects.using('gsharedb').get(id=d.order.id)
-        return order
-
-    except Orders.DoesNotExist:
-        return None
+  
+    return Deliveries.objects.using('gsharedb').filter(
+        delivery_person=delivery_person,
+        status=status,
+    ).distinct()
 
 def get_most_recent_order(user: Users, delivery_person: Users, status: str):
     try:
@@ -227,6 +287,19 @@ def get_most_recent_order(user: Users, delivery_person: Users, status: str):
 
     except Orders.DoesNotExist:
         return None
+
+
+def update_status_order_accepting(order: Orders):
+    try:
+        order.status = "accepting"
+        order.save(using='gsharedb')
+        user = (Deliveries.objects.using('gsharedb').get(order=order)).delivery_person
+        return user
+    except Exception as e:
+        print(f"Error updating order status or get order: {e}")
+        return False
+    
+
 
 """
 Retrieve all items in a specific order from the 'gsharedb' database.
@@ -1123,20 +1196,126 @@ def receipt_detail_view(request, rid: int):
         },
     )
 
+def _apply_receipt_operations(receipt, operations):
+    """
+    Apply Gemini's operations to ReceiptLine objects in gsharedb.
+    operations is a list of dicts with keys:
+      - op: "update" | "add" | "delete"
+      - target_name: str or None
+      - fields: dict with optional keys name, quantity, unit_price, total_price
+    """
+    qs = ReceiptLine.objects.using("gsharedb").filter(receipt=receipt)
+
+    def find_line_by_name(name: str):
+        # exact (case-insensitive) first
+        q = qs.filter(name__iexact=name)
+        if q.exists():
+            return q.first()
+        # fallback: contains
+        q = qs.filter(name__icontains=name)
+        return q.first() if q.exists() else None
+
+    for op in operations:
+        kind = (op.get("op") or "").lower()
+        target_name = op.get("target_name")
+        fields = op.get("fields") or {}
+
+        if kind == "update":
+            if not target_name:
+                continue
+            line = find_line_by_name(target_name)
+            if not line:
+                continue
+
+            new_name = fields.get("name")
+            if new_name:
+                line.name = new_name
+
+            if "quantity" in fields:
+                try:
+                    line.quantity = float(fields["quantity"])
+                except (TypeError, ValueError):
+                    pass
+
+            if "unit_price" in fields:
+                try:
+                    line.unit_price = float(fields["unit_price"])
+                except (TypeError, ValueError):
+                    pass
+
+            if "total_price" in fields:
+                try:
+                    line.total_price = float(fields["total_price"])
+                except (TypeError, ValueError):
+                    pass
+
+            # optionally keep a copy of everything in meta
+            line.meta = fields
+            line.save(using="gsharedb")
+
+        elif kind == "delete":
+            if not target_name:
+                continue
+            line = find_line_by_name(target_name)
+            if line:
+                line.delete(using="gsharedb")
+
+        elif kind == "add":
+            f = fields
+            name = f.get("name")
+            if not name:
+                continue
+
+            qty = f.get("quantity", 1)
+            unit_price = f.get("unit_price")
+            total_price = f.get("total_price")
+
+            try:
+                qty = float(qty)
+            except (TypeError, ValueError):
+                qty = 1
+
+            if unit_price is not None:
+                try:
+                    unit_price = float(unit_price)
+                except (TypeError, ValueError):
+                    unit_price = None
+
+            if total_price is not None:
+                try:
+                    total_price = float(total_price)
+                except (TypeError, ValueError):
+                    total_price = None
+
+            ReceiptLine.objects.using("gsharedb").create(
+                receipt=receipt,
+                name=name[:256],
+                quantity=qty,
+                unit_price=unit_price,
+                total_price=total_price,
+                meta=f,
+            )
+
+
 @login_required
 @require_POST
 def receipt_chat_view(request, rid: int):
     receipt = get_object_or_404(Receipt.objects.using("gsharedb"), pk=rid)
-    user_message = request.POST.get("message", "").strip()
+    user_message = (request.POST.get("message") or "").strip()
 
     if not user_message:
         return redirect("receipt_detail", rid=receipt.id)
 
+    # Load prior chat (user + assistant) from default DB
     history_qs = ReceiptChatMessage.objects.filter(
         receipt_id=receipt.id
     ).order_by("created_at", "id")
 
-    history = [(m.role, m.content) for m in history_qs if m.role in ("user", "assistant")]
+    history = [
+        (m.role, m.content)
+        for m in history_qs
+        if m.role in ("user", "assistant")
+    ]
 
     # Save user message
     ReceiptChatMessage.objects.create(
@@ -1145,23 +1324,27 @@ def receipt_chat_view(request, rid: int):
         content=user_message,
     )
 
+    # Call Gemini – it will:
+    #  - answer the user
+    #  - apply any operations to ReceiptLine inside chat_about_receipt
     try:
-        assistant_text = chat_about_receipt(
+        reply_text = chat_about_receipt(
             receipt,
             history + [("user", user_message)],
             user_message,
         )
     except Exception as e:
-        assistant_text = f"Sorry, I had an error talking to the AI: {e}"
+        reply_text = f"Sorry, I had an error talking to the AI: {e}"
 
+    # Save assistant reply
     ReceiptChatMessage.objects.create(
         receipt_id=receipt.id,
         role="assistant",
-        content=assistant_text,
+        content=reply_text,
     )
 
+    # When you redirect back, receipt_detail_view will reload the updated lines
     return redirect("receipt_detail", rid=receipt.id)
-
 
 @login_required
 def userprofile(request):
