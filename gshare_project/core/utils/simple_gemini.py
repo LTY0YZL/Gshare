@@ -179,7 +179,7 @@ def scan_receipt(receipt_id: int) -> None:
     """
 
     result = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="models/gemini-2.0-flash",
         contents=[
             prompt,
             {
@@ -307,7 +307,7 @@ END_OPERATIONS
     )
 
     resp = client.models.generate_content(
-        model="gemini-2.0-flash",       # 🔴 2.0 model here
+        model="models/gemini-2.0-flash",       # 🔴 2.0 model here
         contents=[full_prompt],
     )
 
@@ -324,7 +324,7 @@ END_OPERATIONS
         natural_reply = text[:ops_start].strip()
         ops_block = text[ops_start + len("BEGIN_OPERATIONS"):ops_end].strip()
 
-        # strip code fences like ```json ... ```
+        # strip code fences like ```json ... ``` if they appear
         ops_block = ops_block.strip().strip("`")
         if ops_block.lower().startswith("json"):
             ops_block = ops_block[4:].strip()
@@ -338,7 +338,12 @@ END_OPERATIONS
             except Exception:
                 parsed = {"operations": []}
 
-        # let _apply_operations_to_receipt normalize further
+        # 🚨 Normalize to a dict with "operations" key
+        if isinstance(parsed, list):
+            parsed = {"operations": parsed}
+        elif not isinstance(parsed, dict):
+            parsed = {"operations": []}
+
         ops_raw = parsed
     else:
         ops_raw = {"operations": []}
