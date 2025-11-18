@@ -9,6 +9,52 @@
         {% endblock %}
     </title>
 </head>
+
+<script>
+    (function () {
+        const WANT_KEY = 'gshare.sharelocation.v1';     
+        if (!localStorage.getItem(WANT_KEY)) return;   
+
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const url = `${proto}://${location.host}/ws/location/`;
+        let ws = new WebSocket(url);
+        let wid = null;
+
+        function startWatch() {
+            if (!navigator.geolocation || wid !== null) return;
+            wid = navigator.geolocation.watchPosition(pos => {
+            if (ws.readyState === 1) {
+                ws.send(JSON.stringify({
+                    type: 'ping',
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    role: 'buyer'
+                }));
+            }
+            }, err => {
+                console.error('geo err', err);
+            }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 8000 });
+        }
+
+        ws.onopen = () => {
+        startWatch();
+    };
+
+    ws.onclose = () => {
+        if (localStorage.getItem(WANT_KEY)) {
+            setTimeout(() => { ws = new WebSocket(url); }, 800);
+        } else if (wid !== null) {
+            navigator.geolocation.clearWatch(wid);
+            wid = null;
+        }
+    };
+
+    window.addEventListener('beforeunload', () => {
+        if (wid !== null) navigator.geolocation.clearWatch(wid);
+    });
+    })();
+</script>
+
 <body>
     
     

@@ -82,6 +82,13 @@ urlpatterns = [
     path('myorders/toggle_cart_status/<int:cart_id>/', views.toggle_cart_status, name='toggle_cart_status'),
     path('myorders/delete_cart/<int:cart_id>/', views.delete_cart, name='delete_cart'),
     path('payment_success/<int:order_id>/', views.payment_success, name='payment_success'),
+    
+    path('groups/<slug:slug>/map/', views.group_map, name='group_map'),
+    path('groups/<slug:slug>/join/', views.join_group, name='join_group'),
+    
+    # delivery confirmation
+    path('orders/<int:order_id>/confirm_delivery/', views.confirm_delivery_json, name='confirm_delivery'),
+
 
 ]
 
