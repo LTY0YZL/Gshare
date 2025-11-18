@@ -16,12 +16,16 @@
         <button class="tabButton" onclick="display('group', this)">Group Cart</button>
         <button class="tabButton" onclick="display('placed', this)">Orders Placed</button>
         <button class="tabButton" onclick="display('inprogress', this)">Orders In Progress</button>
+        <button class="tabButton" onclick="display('pending', this)">Order Requests</button>
+
     </div>
 
     {% comment %} <div id="tab-cart" class="tab-content"></div> {% endcomment %}
     <div id="tab-group" class="tab-content hidden"></div>
     <div id="tab-placed" class="tab-content hidden"></div>
     <div id="tab-inprogress" class="tab-content hidden"></div>
+    <div id="tab-pending" class="tab-content hidden"></div>
+
     
     <div id="tab-cart" class="tab-content grid grid-cols-2 h-screen gap-4 p-4">
         <div class="col-span-1 bg-white">
@@ -43,7 +47,7 @@
                         </div>
                         <button class="ml-auto self-center">
                             <a class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
-                            onclick="removeItem({{ item.id }})">Remove item</a>
+                            onclick="removeItem({{ item.id }}, {{item.quantity}})">Remove item</a>
                         </button>
                     </div>
                 </div>
@@ -183,6 +187,8 @@
             displayPlacedOrders();
         } else if (tabName === 'inprogress') {
             displayInProgressOrders();
+        } else if (tabName === 'pending') {
+            displayPendingOrders();
         }
     }
 
@@ -404,6 +410,7 @@
                 console.log('placed items response:', data);
                 const tab = document.getElementById("tab-inprogress");
                 const orders = Array.isArray(data) ? data : (Array.isArray(data.orders) ? data.orders : []);
+                const deliveries = Array.isArray(data) ? data : (Array.isArray(data.deliveries) ? data.deliveries : []);
                 console.log(orders);
 
                 if (orders.length === 0) {
@@ -541,6 +548,104 @@
             });
         }
 
+    function displayPendingOrders() {
+        const placedItemsUrl = "{% url 'pending_orders' %}";
+        fetch(placedItemsUrl)
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                console.log('placed items response:', data);
+                const tab = document.getElementById("tab-pending");
+                const orders = Array.isArray(data) ? data : (Array.isArray(data.orders) ? data.orders : []);
+
+                if (orders.length === 0) {
+                    tab.innerHTML = `<p class='p-4'>You have no placed orders.</p>`;
+                    return;
+                }
+
+                let html = '';
+                orders.forEach(order => {
+                    const items = Array.isArray(order.items) ? order.items : [];
+                    const summary = order.summary || {};
+                    const subtotal = Number(summary.subtotal) || 0;
+                    const tax = Number(summary.tax) || 0;
+                    const total = Number(summary.total) || 0;
+                    const orderId = order.id || 'null';
+                    const delivery_person = order.delivery_person || 'Unassigned';
+                    const delivery_person_id = order.delivery_person_id || 'null';
+                    console.log(delivery_person);
+
+                    html += `<div class="bg-gray-100 shadow-md rounded-lg p-4 mb-6">`; // <-- light gray background + shadow + padding
+
+                    html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
+
+                    // left column - items (same style as displayCart)
+                    html += `<div class="col-span-1">`;
+                    if (items.length === 0) {
+                        html += `<p class="p-4">No items for this order.</p>`;
+                    } else {
+                        items.forEach(item => {
+                            const itemQty = Number(item.quantity) || 0;
+                            const itemPrice = Number(item.price) || 0;
+                            const itemTotal = Number(item.total) || (itemQty * itemPrice);
+                            html += `
+                            <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
+                                <div class="flex flex-row">
+                                    <div class="flex flex-col">
+                                        <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
+                                        {% comment %} <div flex flex-row> {% endcomment %}
+                                            <p class="mb-1 pl-32">Quantity: ${itemQty}</p>
+                                            {% comment %} <input type="number" name="item_amount" value="${itemQty}" min="1"
+                                                class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black"> {% endcomment %}
+                                        {% comment %} </div> {% endcomment %}
+                                        <p class="mb-1 pl-32">Price: $${itemPrice.toFixed(2)}</p>
+                                        <p class="mb-1 pl-32"><b>Total: $${itemTotal.toFixed(2)}</b></p>
+                                    </div>
+                                </div>
+                            </div>`;
+                        });
+                    }
+                    html += `</div>`; // end left column
+
+                    // right column - summary (same style as displayCart)
+                    html += `
+                    <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
+                        <h2 class="text-2xl font-bold mb-4">Delivery Person</h2>
+                        <div class="mb-4 p-4 bg-white rounded-lg shadow-md">
+                            <a href="/profile/${delivery_person_id}/" class="no-underline hover:underline">
+                                <p class="font-semibold">${delivery_person}</p>
+                            </a>
+                            {% comment %} add 2 buttons for accepting or declining if declined it sets order status to placed if accepted it goes to inprogress {% endcomment %}
+                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 mr-2"
+                            onclick="updateDelivery(${orderId}, 'inprogress', true)">
+                                Accept Order
+                            </button>
+                            <button class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600"
+                            onclick="updateDelivery(${orderId}, 'placed', false)">
+                                Decline Order
+                            </button>
+                            
+                        </div>
+
+                    </div>`;
+
+                    html += `</div>`; // end order grid
+
+                    html += `</div>`; // end order container
+
+                });
+
+                tab.innerHTML = html;
+            })
+            .catch(err => {
+                console.error('Error retrieving placed orders:', err);
+                const tab = document.getElementById("tab-placed");
+                tab.innerHTML = `<p class="p-4">Error loading placed orders.</p>`;
+            });
+        }
+
 
 
 
@@ -601,9 +706,9 @@
                 </div>
                 <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
                     <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                    <p class="mb-2">Subtotal: $${data.order.subtotal}</p>
-                    <p class="mb-2">Tax: $${data.order.tax}</p>
-                    <p class="mb-4 font-bold">Total: $${data.order.total}</p>
+                    <p class="mb-2">Subtotal: $${Number(data.order.subtotal).toFixed(2)}</p>
+                    <p class="mb-2">Tax: $${Number(data.order.tax).toFixed(2)}</p>
+                    <p class="mb-4 font-bold">Total: $${Number(data.order.total).toFixed(2)}</p>
                     <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
                             onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
                         Publish Order
@@ -690,6 +795,61 @@
         .catch(error => {
             console.error('Error:', error);
             alert('An error occurred while updating the order status.');
+        });
+    }
+
+    function updateDelivery(orderId, newStatus, accepted) {
+        changeOrderStatus(orderId, newStatus);
+
+        if (accepted) {
+            update_Delivery_Status(orderId);
+        }
+        else {
+            remove_delivery(orderId);
+        }
+
+
+    }
+
+    function update_Delivery_Status(orderId) {
+        fetch(`/update_delivery_person/${orderId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'  // Include CSRF token for security
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Delivery person assigned successfully!');
+            } else {
+                console.error('Failed to assign delivery person.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+    }
+
+    function remove_delivery(orderId) {
+        fetch(`/remove_delivery_person/${orderId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'  // Include CSRF token for security
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Delivery person removed successfully!');
+            } else {
+                console.error('Failed to remove delivery person.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
         });
     }
     
@@ -798,12 +958,12 @@
     }
 
 
-    function removeItem(itemId) {
+    function removeItem(itemId, quantity) {
         console.log("remove item?");
         console.log(itemId);
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-        fetch(`/shoppingcart/removeItem/${itemId}/`, {
+        fetch(`/shoppingcart/removeItem/${itemId}/${quantity}/`, {
             method: 'POST',
             headers: {
                 'X-CSRFToken': csrfToken,
@@ -820,7 +980,7 @@
         .then(data => {
             if (data.success) {
                 console.log("removed item");
-                display('cart')
+                display('cart');
             } else {
                 console.error(data.error);
             }
@@ -854,7 +1014,7 @@
         .then(data => {
             if (data.success) {
                 console.log("updated item quantity");
-                display('cart')
+                display('cart');
             } else {
                 console.error(data.error);
             }
