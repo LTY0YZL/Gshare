@@ -29,8 +29,8 @@ from . import kroger_api
 import stripe
 from datetime import timedelta
 from chat.models import ChatGroup
-
-
+from groqai.groq_proxy import call_groq
+from groqai.instructions import VOICE_ORDER_CHAT_INSTRUCTIONS, VOICE_ORDER_FINALIZE_INSTRUCTIONS
 from core.models import (
     Users,
     Stores, Items,
@@ -171,7 +171,8 @@ Returns:
 """
 def get_orders(user: Users, order_status: str):
 
-    orders = Orders.objects.using('gsharedb').filter(user_id = user, status = order_status) # Getting all the orders related to this user and status.
+    # Filter by the actual user object (or its id), not the Users instance itself as user_id
+    orders = Orders.objects.using('gsharedb').filter(user=user, status=order_status)
     if not orders.exists():  # Checking if the queryset is empty.
         return []
     return orders
@@ -851,6 +852,7 @@ def userprofile(request):
         return redirect('home')
         
     profile = get_user("email", user_email)
+    getItemNamesForUser(profile, ['cart'])
     if not profile:
         messages.error(request, 'User profile not found')
         return redirect('login')
@@ -2367,3 +2369,207 @@ def join_group(request, slug):
     group = get_object_or_404(ChatGroup, slug=slug)
     group.members.add(request.user)
     return redirect('group_map', slug=slug)
+
+# Voice Orders
+def getItemNamesForUser(user, statuses = ['delivered']):
+    namesAndId = []
+    for status in statuses:
+        orders = get_orders(user, status)
+        for order in orders:
+            items = get_order_items(order)
+            for row in items:
+                namesAndId.append((row[4], row[1]))
+
+    return namesAndId
+
+
+def apply_voice_cart_items(profile, cart):
+    if not profile:
+        return {"success": False, "error": "Profile not found"}
+
+    items = cart.get("items") or []
+    if not isinstance(items, list) or not items:
+        return {"success": False, "error": "Sorry, I have not been able deduce any items from your requests so far."}
+
+    order = None
+    total = 0
+
+    with transaction.atomic(using='gsharedb'):
+        with connections['gsharedb'].cursor() as cur:
+            for entry in items:
+                if not isinstance(entry, dict):
+                    continue
+                item_id = entry.get("ID") or entry.get("id")
+                quantity = entry.get("quantity") or 1
+                try:
+                    quantity = int(quantity)
+                except (TypeError, ValueError):
+                    quantity = 1
+                if not item_id or quantity <= 0:
+                    continue
+                try:
+                    item = Items.objects.using('gsharedb').get(id=item_id)
+                except Items.DoesNotExist:
+                    continue
+
+                if order is None:
+                    order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
+                    if not order:
+                        order = Orders.objects.using('gsharedb').create(
+                            user=profile,
+                            status='cart',
+                            order_date=timezone.now(),
+                            store=item.store,
+                            total_amount=0,
+                            delivery_address=profile.address,
+                        )
+
+                cur.execute(
+                    """
+                    INSERT INTO order_items (order_id, item_id, quantity, price)
+                    VALUES (%s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        quantity = quantity + VALUES(quantity)
+                    """,
+                    [order.id, item.id, quantity, str(item.price or 0)],
+                )
+
+            if order is None:
+                return {"success": False, "error": "No valid items to add"}
+
+            cur.execute(
+                """
+                SELECT COALESCE(SUM(quantity * price), 0)
+                FROM order_items
+                WHERE order_id = %s
+                """,
+                [order.id],
+            )
+            total = cur.fetchone()[0] or 0
+
+    order.total_amount = total
+    order.order_date = timezone.now()
+    order.save(using='gsharedb')
+
+    return {"success": True, "order_id": order.id}
+
+
+@login_required
+def voice_order_chat(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "POST required"}, status=405)
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
+    messages = payload.get("messages") or []
+    mode = (payload.get("mode") or "chat").strip()
+    if not messages:
+        return JsonResponse({"success": False, "error": "No messages provided"}, status=400)
+    if mode == "finalize" and len(messages) > 12:
+        messages = messages[-12:]
+
+    user = get_user("email", request.user.email)
+    userPastItems = getItemNamesForUser(user, ["delivered"])
+    allItems = getAllItemsFromDatabase()
+    context_lines = []
+    if userPastItems:
+        context_lines.append("User past items (name and ID):")
+        for name, item_id in userPastItems:
+            context_lines.append(f"- {name} (ID: {item_id})")
+    if allItems:
+        context_lines.append("")
+        context_lines.append("Store items (name, store, price, ID):")
+        for name, item_id, store_name, price in allItems:
+            price_display = str(price) if price is not None else ""
+            context_lines.append(f"- {name} | {store_name} | price: {price_display} | ID: {item_id}")
+    context_suffix = "\n\n" + "\n".join(context_lines) if context_lines else ""
+
+    if mode == "finalize":
+        final_messages = []
+        if context_lines:
+            context_text = "Use these item lists to match items by name to IDs, stores, and prices when constructing your JSON cart. Always copy the item names exactly as written when you fill in the JSON." + context_suffix
+            final_messages.append({"role": "system", "content": context_text})
+        convo_lines = []
+        for m in messages:
+            role = m["role"]
+            content = m["content"] or ""
+            if role == "user":
+                prefix = "User"
+            elif role == "assistant":
+                prefix = "Assistant"
+            else:
+                prefix = "Other"
+            convo_lines.append(f"{prefix}: {content}")
+        convo_text = "\n".join(convo_lines)
+        final_messages.append({
+            "role": "user",
+            "content": (
+                "Here is the recent conversation between the customer (User) and the assistant (Assistant) about their grocery order:\n\n"
+                + convo_text
+                + "\n\nUse the item lists provided earlier in this chat (user past items and store items) to choose exact items and IDs. "
+                + "Now respond with ONLY one JSON object in the exact format described in the system message. "
+                + "Do not include any explanation, comments, or text before or after the JSON. If you include anything other than the JSON object, it will break."
+            ),
+        })
+        resp = call_groq(
+            messages=final_messages,
+            temperature=0.2,
+            stream=False,
+            system_instructions=VOICE_ORDER_FINALIZE_INSTRUCTIONS,
+        )
+        data = resp.json()
+        raw = data["choices"][0]["message"]["content"].strip()
+        if not raw:
+            return JsonResponse({"success": False, "error": "Empty response from AI"}, status=502)
+        try:
+            cart_json = json.loads(raw)
+        except json.JSONDecodeError:
+            return JsonResponse({"success": False, "error": "AI did not return valid JSON", "raw": raw}, status=502)
+
+        apply_result = apply_voice_cart_items(user, cart_json)
+        if not apply_result.get("success"):
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": apply_result.get("error") or "Could not add items to your cart",
+                    "assistant": raw,
+                    "cart": cart_json,
+                },
+                status=400,
+            )
+
+        return JsonResponse(
+            {
+                "success": True,
+                "assistant": raw,
+                "cart": cart_json,
+                "order_id": apply_result.get("order_id"),
+            }
+        )
+
+    if context_lines:
+        context_text = "Use the following item lists when referring to items. Always copy the item name exactly as written when you write 'Selected option' or 'Other options'." + context_suffix
+        messages.insert(0, {"role": "system", "content": context_text})
+    resp = call_groq(
+        messages=messages,
+        temperature=0.6,
+        stream=False,
+        system_instructions=VOICE_ORDER_CHAT_INSTRUCTIONS,
+    )
+    data = resp.json()
+    assistant_msg = data["choices"][0]["message"]["content"].strip()
+    if not assistant_msg:
+        return JsonResponse({"success": False, "error": "Empty response from AI"}, status=502)
+    return JsonResponse({"success": True, "assistant": assistant_msg})
+
+def getAllItemsFromDatabase():
+    items_qs = Items.objects.using('gsharedb').select_related('store').values(
+        'id', 'name', 'store__name', 'price'
+    )
+
+    result = []
+    for row in items_qs:
+        result.append((row.get('name'), row.get('id'), row.get('store__name'), row.get('price')))
+
+    return result
