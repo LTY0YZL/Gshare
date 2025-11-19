@@ -15,3 +15,6 @@ boto3
 botocore
 Pillow
 django-storages
+google-generativeai
+google-genai
+celery
