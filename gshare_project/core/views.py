@@ -111,12 +111,20 @@ def get_order_for_delivery(delivery: Deliveries):
     except Orders.DoesNotExist:
         return None
 
-def get_delivery_for_order(order: Orders):
-    try:
-        delivery = Deliveries.objects.using('gsharedb').get(order=order)
-        return delivery
-    except Deliveries.DoesNotExist:
-        return None
+def get_delivery_for_order(order):
+    """
+    Return the most recent Delivery for the given order (or order_id).
+    If none exist, return None.
+    """
+    # Allow order to be either an Orders instance or an integer id
+    order_id = order.id if hasattr(order, "id") else order
+
+    return (
+        Deliveries.objects.using("gsharedb")
+        .filter(order=order_id)
+        .order_by("-id")      # latest delivery first; adjust if you have a better field
+        .first()
+    )
     
 def delivery_done(delivery: Deliveries):
     try:
