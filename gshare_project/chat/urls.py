@@ -3,10 +3,11 @@ from . import views
 
 urlpatterns = [
     path('', views.groups_page, name='groups_page'),  # Main chat groups page
+    path('history/<slug:room_slug>/', views.load_chat_history, name='chat_history'),
+    path('history/dm/<str:thread_id>/', views.load_chat_history, name='dm_chat_history'),
     path("autocomplete_usernames/", views.autocomplete_usernames, name="autocomplete_usernames"),
     path('create/', views.create_group, name='create_group'),  # Create a new chat group
     path('join/', views.join_group, name='join_group'),  # Join an existing chat group
     path('dm/<str:thread_id>/', views.direct_message, name='direct_message'),  # Direct message thread
-    path('<str:room_name>/', views.chat_room, name='chat_room'),  # Individual chat room
-    
+    path('<str:room_name>/', views.chat_room, name='chat_room'),  # Individual chat room   
 ]

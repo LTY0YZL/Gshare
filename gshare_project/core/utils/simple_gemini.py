@@ -6,10 +6,9 @@ import json
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from decimal import Decimal
+from django.db import connections
 
-
-
+from collections import defaultdict
 
 from google import genai
 
@@ -352,3 +351,128 @@ END_OPERATIONS
     _apply_operations_to_receipt(receipt, ops_raw)
 
     return natural_reply or "Okay, I’ve updated the receipt."
+
+client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+
+def suggest_matching_order(receipt, lines, candidate_orders):
+    """
+    Given a receipt + parsed lines + a list of candidate_orders,
+    ask Gemini which order (if any) best matches the receipt.
+
+    candidate_orders = [
+        {"id": ..., "status": "...", "store_id": ..., "created_at": "..."},
+        ...
+    ]
+
+    Returns: (best_order_id_or_None, explanation_str)
+    """
+
+    # ---- 1) Build JSON for receipt items -------------------------------
+    receipt_items = [
+        {
+            "name": l.name,
+            "quantity": l.quantity,
+            "unit_price": l.unit_price,
+            "total_price": l.total_price,
+        }
+        for l in lines
+    ]
+
+    # ---- 2) Load order item names/quantities via raw SQL ---------------
+    order_ids = [o["id"] for o in candidate_orders]
+    orders_items = defaultdict(list)  # order_id -> list of items
+
+    if order_ids:
+        with connections["gsharedb"].cursor() as cur:
+            # NOTE: this only *reads* from order_items and items
+            cur.execute(
+                """
+                SELECT oi.order_id, i.name, oi.quantity
+                FROM order_items AS oi
+                JOIN items AS i ON oi.item_id = i.id
+                WHERE oi.order_id IN %s
+                """,
+                [tuple(order_ids)],
+            )
+            for order_id, item_name, qty in cur.fetchall():
+                orders_items[order_id].append(
+                    {
+                        "name": item_name,
+                        "quantity": float(qty) if qty is not None else None,
+                    }
+                )
+
+    # Assemble candidate orders payload for Gemini
+    orders_payload = []
+    for o in candidate_orders:
+        oid = o["id"]
+        orders_payload.append(
+            {
+                "id": oid,
+                "status": o["status"],
+                "store_id": o["store_id"],
+                "created_at": o["created_at"],
+                "items": orders_items.get(oid, []),
+            }
+        )
+
+    payload = {
+        "receipt_id": receipt.id,
+        "receipt_items": receipt_items,
+        "candidate_orders": orders_payload,
+    }
+
+    # ---- 3) Ask Gemini for the best match ------------------------------
+    system_prompt = """
+You are helping match a grocery receipt to one of several delivery orders.
+
+You are given JSON with:
+- receipt_items: items parsed from the receipt
+- candidate_orders: each order has id, status, store_id, created_at, and items
+
+Your job:
+1. Decide which order (if any) best matches the receipt items.
+2. If no order is a good match, choose null.
+3. Return ONLY JSON, nothing else, in this format:
+
+{
+  "best_order_id": <number or null>,
+  "explanation": "short human explanation"
+}
+"""
+
+    prompt = system_prompt + "\n\nJSON data:\n" + json.dumps(
+        payload, ensure_ascii=False, indent=2
+    )
+
+    resp = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[prompt],
+    )
+
+    text = (resp.text or "").strip()
+
+    # ---- 4) Parse JSON from Gemini safely ------------------------------
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError:
+        # try to strip any extra text
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                result = json.loads(text[start : end + 1])
+            except Exception:
+                result = {}
+        else:
+            result = {}
+
+    best_order_id = result.get("best_order_id")
+    explanation = result.get("explanation") or "No explanation provided."
+
+    # Normalize: only accept numeric best_order_id
+    if not isinstance(best_order_id, (int, float)):
+        best_order_id = None
+
+    return best_order_id, explanation
