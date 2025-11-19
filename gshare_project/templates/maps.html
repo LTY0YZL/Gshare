@@ -21,7 +21,7 @@
 
             </div>
         </div>
-        <button id="shareBtn" class="fixed bottom-6 right-6 px-4 py-2 rounded-full shadow-lg bg-blue-600 text-white">
+        <button id="shareBtn" class="fixed bottom-6 left-6 px-4 py-2 rounded-full shadow-lg bg-blue-600 text-white">
             Start Sharing
         </button>
     </div>
@@ -111,6 +111,8 @@
         let storeLegPolyline = null;    // driver to store
         let profileLegPolyline = null;  // store to profile
         let directLegPolyline = null;   // driver TO profile WITHOUT STORE,  JUST FOR TEST
+
+        let myActiveMarker = null;
 
         function circleIcon(fill, stroke) {
             return {
@@ -424,7 +426,15 @@
                             const order = group.orders && group.orders.length > 0 ? group.orders[0] : null;
 
                             if (!order || !order.store_address) {
-                                console.warn('No store_address on order for this marker; cannot show store pin.');
+                                console.warn('No store_address on order for this marker; routing directly to profile.');
+
+                                activeStorePos = null;
+
+                                if (storeMarker) {
+                                    storeMarker.setMap(null);
+                                    storeMarker = null;
+                                }
+
                                 if (meLiveMarker) {
                                     updateRouteFromDriver(meLiveMarker.getPosition());
                                 }
@@ -456,11 +466,11 @@
                                         title: order.store_name ? `Store: ${order.store_name}` : 'Store',
                                         icon: {
                                             path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-                                                scale: 6,
-                                                fillColor: '#66ccff',
-                                                fillOpacity: 1,
-                                                strokeColor: '#cc9900ff',
-                                                strokeWeight: 2,
+                                            scale: 6,
+                                            fillColor: '#66ccff',
+                                            fillOpacity: 1,
+                                            strokeColor: '#cc9900ff',
+                                            strokeWeight: 2,
                                         },
                                     });
                                 } else {
@@ -487,6 +497,7 @@
                         );
 
                         if (hasMyActiveOrder) {
+                            myActiveMarker = marker; 
                             google.maps.event.trigger(marker, 'click');
                         }
                     } else {
@@ -609,6 +620,10 @@
             const map_popup = document.getElementById('map_popup');
             popup.classList.add('translate-x-full');
             map_popup.classList.remove('-translate-x-50');
+
+            if (myActiveMarker) {
+                google.maps.event.trigger(myActiveMarker, 'click');
+            }
         });
 
         console.log("end");
