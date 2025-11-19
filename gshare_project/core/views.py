@@ -21,7 +21,7 @@ from django.db.models import Avg, Count
 from django.http import JsonResponse
 from django.db import connection
 from django.core.files.storage import default_storage
-from core.utils.simple_gemini import scan_receipt, chat_about_receipt
+from core.utils.simple_gemini import scan_receipt, chat_about_receipt, suggest_matching_order
 import json
 import re
 import requests
@@ -1587,6 +1587,94 @@ def _apply_receipt_operations(receipt, operations):
                 meta=f,
             )
 
+@login_required
+@require_POST
+def receipt_match_orders_view(request, rid: int):
+    receipt = get_object_or_404(Receipt.objects.using("gsharedb"), pk=rid)
+
+    # 1) Load receipt lines from gsharedb
+    lines = list(
+        ReceiptLine.objects.using("gsharedb")
+        .filter(receipt=receipt)
+        .order_by("id")
+    )
+
+    if not lines:
+        ReceiptChatMessage.objects.create(
+            receipt_id=receipt.id,
+            role="assistant",
+            content=(
+                "I can't match this to an order yet, because there are no "
+                "parsed items on this receipt. Try scanning again or wait "
+                "for the items to finish processing."
+            ),
+        )
+        return redirect("receipt_detail", rid=receipt.id)
+
+    # 2) Candidate orders: orders that THIS USER is delivering
+    with connections["gsharedb"].cursor() as cur:
+        cur.execute(
+            """
+            SELECT o.id, o.status, o.store_id, o.order_date
+            FROM orders o
+            JOIN deliveries d ON d.order_id = o.id
+            WHERE d.delivery_person_id = %s
+              AND d.status IN ('accepted','delivering')
+            ORDER BY o.order_date DESC
+            LIMIT 10
+            """,
+            [receipt.uploader_id or 0],
+        )
+        rows = cur.fetchall()
+
+    candidate_orders = []
+    for oid, status, store_id, order_date in rows:
+        candidate_orders.append(
+            {
+                "id": oid,
+                "status": status,
+                "store_id": store_id,
+                "created_at": str(order_date),
+            }
+        )
+
+    if not candidate_orders:
+        ReceiptChatMessage.objects.create(
+            receipt_id=receipt.id,
+            role="assistant",
+            content=(
+                "You don't seem to have any active delivery orders I can "
+                "match this receipt to right now."
+            ),
+        )
+        return redirect("receipt_detail", rid=receipt.id)
+
+    # 3) Ask Gemini to pick the best order (helper does all item lookups)
+    try:
+        inferred_order_id, ai_reply = suggest_matching_order(
+            receipt=receipt,
+            lines=lines,
+            candidate_orders=candidate_orders,
+        )
+
+        if inferred_order_id:
+            receipt.inferred_order_id = inferred_order_id
+            receipt.save(using="gsharedb")
+
+        ReceiptChatMessage.objects.create(
+            receipt_id=receipt.id,
+            role="assistant",
+            content=ai_reply,
+        )
+
+    except Exception as e:
+        ReceiptChatMessage.objects.create(
+            receipt_id=receipt.id,
+            role="assistant",
+            content=f"Sorry, I couldn't match this receipt to an order: {e}",
+        )
+
+    return redirect("receipt_detail", rid=receipt.id)
 
 @login_required
 @require_POST
