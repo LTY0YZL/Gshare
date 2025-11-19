@@ -37,18 +37,25 @@ urlpatterns = [
     # path('cart/', views.cart, name='shoppingcart'),
     path('cart/add/<int:item_id>/<int:quantity>/', views.add_to_cart, name='add_to_cart'),
     path('change_order_status/<int:order_id>/<str:new_status>/', views.change_order_status_json, name='change_order_status_json'),
+    path('change_status_pending/<int:order_id>/', views.change_status_pending_json, name='change_status_pending_json'),
+
     path('checkout/', views.checkout, name='checkout'),
     path('shoppingcart/', views.shoppingcart, name='shoppingcart'),
     path('shoppingcart/cartItems/', views.cart_data, name='cart_items'),
     path('shoppingcart/groupItems/', views.group_data, name='group_items'),
     path('shoppingcart/placedItems/', views.placed_data, name='placed_items'),
     path('shoppingcart/inprogress/', views.inprogress_data, name='inprogress'),
+    path('shoppingcart/pending/', views.pending_orders, name='pending_orders'),
+    
+    path('update_delivery_person/<int:order_id>/', views.delivery_accepted_json, name='update_delivery_person'),
+    path('remove_delivery_person/<int:order_id>/', views.remove_delivery_json, name='remove_delivery_person'),
+    path('create_delivery/<int:order_id>/', views.create_delivery_json, name='create_delivery'),
     
     path('shoppingcart/<int:order_id>/', views.create_group_order_json, name='create_group_order_json'),  
     path('shoppingcart/add_user_to_group/<int:group>/', views.add_user_to_group_json, name='add_user_to_group_json'),
     path('shoppingcart/remove_user_from_group/<int:group>/', views.remove_user_from_group_json, name='remove_user_from_group_json'),
-    path('shoppingcart/updateItem/<int:item_id>/<int:quantity>/', views.add_to_cart, name='add_to_cart'),
-    path('shoppingcart/removeItem/<int:item_id>/', views.remove_from_cart, name="remove_item"),
+    path('shoppingcart/updateItem/<int:item_id>/<int:quantity>/', views.edit_order_items_json, name='update_item'),
+    path('shoppingcart/removeItem/<int:item_id>/<int:quantity>/', views.remove_from_cart, name="remove_item"),
     
     path("maps/maps-data/<str:min_lat>/<str:min_lng>/<str:max_lat>/<str:max_lng>/", views.maps_data, name="maps_data"),
     path('maps/people-data/<str:min_lat>/<str:min_lng>/<str:max_lat>/<str:max_lng>/', views.people_data, name='people_data'),

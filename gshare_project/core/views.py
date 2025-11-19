@@ -220,16 +220,41 @@ Returns:
     bool: True if the item quantity was successfully updated, False otherwise.
 """
 def Edit_order_items(order_id: int, item_id: int, new_quantity: int) -> bool:
+   
     try:
-        order_item = OrderItems.objects.using('gsharedb').get(order_id=order_id, item_id=item_id)
-        order_item.quantity = new_quantity
-        order_item.save(using='gsharedb')
+        with transaction.atomic(using="gsharedb"):
+            with connections["gsharedb"].cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE order_items
+                    SET quantity = %s
+                    WHERE order_id = %s AND item_id = %s
+                    """,
+                    [new_quantity, order_id, item_id],
+                )
+
+                if cur.rowcount == 0:
+                    return False
+
         return True
-    except OrderItems.DoesNotExist:
-        return False
+
     except Exception as e:
         print(f"Error updating order item: {e}")
         return False
+    
+def edit_order_items_json(request, item_id, quantity):
+    if request.method == 'POST':
+        user = get_user("email", request.user.email)
+        order = get_orders(user, "cart")
+        
+        if not order:
+            return JsonResponse({'success': False, 'error': 'No cart order found'})
+        
+        order_id = order[0].id
+        success = Edit_order_items(order_id, item_id, quantity)
+        return JsonResponse({'success': success})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
 """
 Retrieve all orders for a specific user from the 'gsharedb' database.
@@ -271,7 +296,7 @@ Return a queryset of Orders assigned to this delivery person
 with the given status.
 """
 def get_orders_by_delivery_person(delivery_person: Users, status: str):
-  
+
     return Deliveries.objects.using('gsharedb').filter(
         delivery_person=delivery_person,
         status=status,
@@ -360,7 +385,7 @@ def get_order_items_by_order_id(order_id: int):
 Change the status of an order in the 'gsharedb' database.
 Args:
     order_id (int): The ID of the order to be updated.
-    new_status (str): The new status to set for the order ('cart', 'placed', 'inprogress','delivered').
+    new_status (str): The new status to set for the order ('cart', 'placed', 'pending', 'inprogress','delivered').
     Returns:
     bool: True if the order status was successfully updated, False otherwise.
 """
@@ -380,6 +405,100 @@ def change_order_status_json(request, order_id, new_status):
     if request.method == 'POST':
         success = change_order_status(order_id, new_status)
         return JsonResponse({'success': success})
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+def update_status_order_pending(order: Orders):
+    try:
+        order.status = "pending"
+        order.save(using='gsharedb')
+        return True
+    except Exception as e:
+        print(f"Error updating order status or get order: {e}")
+        return False
+    
+def change_status_pending_json(request, order_id):
+    if request.method == 'POST':
+        success = update_status_order_pending(order_id)
+        return JsonResponse({'success': success})
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+def Create_delivery(order: Orders, delivery_person: Users):
+    try:
+        delivery = Deliveries.objects.using('gsharedb').create(
+            order=order,
+            delivery_person=delivery_person,
+            status='pending',
+            pickup_time=timezone.now() + timedelta(minutes=15),
+        )
+        return delivery
+    except IntegrityError as e:
+        print(f"Error creating delivery: {e}")
+        return None
+
+def get_delivery_for_order(order: Orders):
+    try:
+        delivery = Deliveries.objects.using('gsharedb').get(order=order)
+        return delivery
+    except Deliveries.DoesNotExist:
+        return None
+
+def delivery_done(delivery: Deliveries):
+    try:
+        delivery.status = 'accepted'
+        delivery.delivery_time = timezone.now()
+        delivery.save(using='gsharedb')
+        return True
+    except Exception as e:
+        print(f"Error updating delivery status: {e}")
+        return False
+    
+def reject_delivery(delivery: Deliveries):
+    try:
+        delivery.delete()
+        return True
+    except Exception as e:
+        print(f"Error deleting delivery: {e}")
+        return False
+    
+def get_order_for_delivery(delivery: Deliveries):
+    try:
+        order = Orders.objects.using('gsharedb').get(id=delivery.order.id)
+        return order
+    except Orders.DoesNotExist:
+        return None
+
+def remove_delivery_json(request, order_id):
+    if request.method == 'POST':
+        try:
+            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
+            success = reject_delivery(delivery)
+            return JsonResponse({'success': success})
+        except Deliveries.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+def create_delivery_json(request, order_id):
+    if request.method == 'POST':
+        try:
+            order = Orders.objects.using('gsharedb').get(id=order_id)
+            delivery_person = get_user("email", request.user.email)
+            print("delivery_person:", delivery_person)
+            delivery = Create_delivery(order, delivery_person)
+            if delivery:
+                return JsonResponse({'success': True, 'delivery_id': delivery.id})
+            else:
+                return JsonResponse({'success': False, 'error': 'Failed to create delivery'}, status=500)
+        except Orders.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+
+def delivery_accepted_json(request, order_id):
+    if request.method == 'POST':
+        try:
+            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
+            success = delivery_done(delivery)
+            return JsonResponse({'success': success})
+        except Deliveries.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
     
 """
@@ -690,7 +809,7 @@ def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500):
     print(f"Found {len(user_ids)} users in viewport")
 
     # Fetch orders for the users in the viewport
-    orders = Orders.objects.using('gsharedb').filter(user_id__in=user_ids, status="placed").select_related('user')
+    orders = Orders.objects.using('gsharedb').filter(user_id__in=user_ids, status__in=["placed", "pending"]).select_related('user')
 
     # Prepare the output
     orders_with_users = []
@@ -2079,8 +2198,8 @@ def placed_data(request):
         'orders': order_list
     })
     
-def inprogress_data(request):
-    print("inprogress data")
+def pending_orders(request):
+    print("pending orders")
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Unauthorized'}, status=401)
     profile = get_user("email", request.user.email)
@@ -2088,15 +2207,17 @@ def inprogress_data(request):
         print("no user")
         return JsonResponse({'error': 'Profile not found'}, status=404)
 
-    orders = get_orders(profile, 'inprogress')
+    orders = get_orders(profile, 'pending')
     print(orders)
     if not orders:
         return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
 
     order_list = []
-    
     for order in orders:
         items = get_order_items(order) if order else []
+        order_id = order.id
+        delivery = get_delivery_for_order(order)
+        print("delivery:", delivery)
         subtotal = 0
         items_with_totals = []
         for item in items:
@@ -2121,10 +2242,98 @@ def inprogress_data(request):
             'id': order.id,
             'summary': order_summary,
             'items': items_with_totals,
+            'delivery_person': delivery.delivery_person.name if delivery and delivery.delivery_person else None,
+            'delivery_person_id': delivery.delivery_person.id if delivery and delivery.delivery_person else None,
         })
     print(order_list)
     return JsonResponse({
         'orders': order_list
+    })
+    
+def inprogress_data(request):
+    print("inprogress data")
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    profile = get_user("email", request.user.email)
+    if not profile:
+        print("no user")
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    my_orders = get_orders(profile, 'inprogress')
+    print(my_orders)
+    if not my_orders:
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+
+    my_order_list = []
+    
+    for order in my_orders:
+        items = get_order_items(order) if order else []
+        if (items.__len__() == 0):
+            continue
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+        
+        tax = Decimal(calculate_tax(subtotal)) / 100
+        grand_total = round(subtotal + tax, 2)
+
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+        my_order_list.append({
+            'id': order.id,
+            'summary': order_summary,
+            'items': items_with_totals,
+        })
+        
+    my_deliveries = []
+    deliveries = get_orders_by_delivery_person(profile, 'inprogress')
+    print("deliveries:", deliveries)
+        
+    for order in deliveries:
+        print("order:", order)
+        items = get_order_items(order) if order else []
+        if(items.__len__() == 0):
+            continue
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+        
+        tax = Decimal(calculate_tax(subtotal)) / 100
+        grand_total = round(subtotal + tax, 2)
+
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+        my_deliveries.append({
+            'id': order.id,
+            'summary': order_summary,
+            'items': items_with_totals,
+        })
+    print(my_deliveries)
+    return JsonResponse({
+        'orders': my_order_list,
+        'deliveries': my_deliveries
     })
     
     
@@ -2209,7 +2418,7 @@ def cart_data(request):
             'id': item[1],  # item id
         })
         
-    tax = Decimal(calculate_tax(subtotal))  # Convert to dollars for display
+    tax = Decimal(calculate_tax(subtotal))/100  # Convert to dollars for display
     grand_total = round(subtotal + tax, 2)
 
     order_summary = {
@@ -2250,7 +2459,7 @@ def group_carts(request):
                 'total': total,
             })
             
-        tax = Decimal(calculate_tax(subtotal))  # Convert to dollars for display
+        tax = Decimal(calculate_tax(subtotal))/100  # Convert to dollars for display
         grand_total = round(subtotal + tax, 2)
 
         order_summary = {

@@ -4,6 +4,7 @@ import uuid
 import mimetypes
 from botocore.config import Config
 from django.conf import settings
+import uuid
 
 def get_s3_client():
     region = settings.AWS_S3_REGION_NAME
@@ -45,3 +46,23 @@ def presigned_url(key, expires=3600):
     return s3.generate_presigned_url(
         "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expires
     )
+
+# upload image for chat functionality
+def upload_image_to_aws(file, folder='chat', expire_seconds=3600):
+    s3_client = get_s3_client()
+    bucket, region = get_bucket_and_region()
+    folder = (folder or 'chat').strip('/')
+    key = f"{folder}/{uuid.uuid4()}_{file.name}"
+    s3_client.upload_fileobj(
+        file,
+        bucket,
+        key,
+        ExtraArgs={'ContentType': getattr(file, 'content_type', 'application/octet-stream')}
+    )
+    # generate presigned GET URL
+    url = s3_client.generate_presigned_url(
+        'get_object',
+        Params={'Bucket': bucket, 'Key': key},
+        ExpiresIn=expire_seconds
+    )
+    return url
