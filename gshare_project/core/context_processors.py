@@ -20,7 +20,8 @@ def scan_permission(request):
 
     try:
         # assuming auth User id == Users.id (this is what your other code does)
-        u = Users.objects.using("gsharedb").get(pk=user.id)
+        u = Users.objects.using("gsharedb").get(email=user.email)
+        
     except Users.DoesNotExist:
         return {"can_use_scan": False}
 
