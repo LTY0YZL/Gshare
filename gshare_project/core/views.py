@@ -995,6 +995,8 @@ def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500, viewer=Non
             'store_id': store.id if store else None,
             'store_name': store.name if store else "",
             'store_address': store.location if (store and store.location) else "",
+            'store_lat': float(store.latitude) if (store and store.latitude is not None) else None,
+            'store_lng': float(store.longitude) if (store and store.longitude is not None) else None,
         })
 
     return orders_with_users
@@ -1780,7 +1782,6 @@ Returns:
 """
 @login_required
 def add_to_cart(request, item_id, quantity=1):
-    
     print("Adding item to cart:", item_id)
     print("Quantity:", quantity)
 
@@ -1789,30 +1790,41 @@ def add_to_cart(request, item_id, quantity=1):
         messages.error(request, "Profile not found.")
         return redirect('cart')
 
-
-    # Grab item
+    # Grab item 
     try:
         item = Items.objects.using('gsharedb').get(id=item_id)
     except Items.DoesNotExist:
         messages.error(request, "Item not found.")
-        return redirect('cart') 
+        return redirect('cart')
+
+    active_store_id = (
+        request.session.get('kroger_store_id')  
+        or request.session.get('active_store_id') 
+    )
+
+    active_store = None
+    if active_store_id:
+        active_store = Stores.objects.using('gsharedb').filter(id=active_store_id).first()
 
     # Get or create cart
     order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
+
     if not order:
         order = Orders.objects.using('gsharedb').create(
             user=profile,
             status='cart',
             order_date=timezone.now(),
-            store=item.store,
+            store=active_store,                  
             total_amount=0,
-            delivery_address = profile.address
+            delivery_address=profile.address,
         )
+    else:
+        if active_store and (order.store_id != active_store.id):
+            order.store = active_store
+            order.save(using='gsharedb', update_fields=['store'])
 
-    # Upsert into order_items (composite PK table) and recompute total
     with transaction.atomic(using='gsharedb'):
         with connections['gsharedb'].cursor() as cur:
-            # Insert or bump quantity
             cur.execute(
                 """
                 INSERT INTO order_items (order_id, item_id, quantity, price)
@@ -1823,7 +1835,6 @@ def add_to_cart(request, item_id, quantity=1):
                 [order.id, item.id, quantity, str(item.price or 0)]
             )
 
-            # RECALC TOTAL from line items
             cur.execute(
                 """
                 SELECT COALESCE(SUM(quantity * price), 0)
@@ -1834,15 +1845,14 @@ def add_to_cart(request, item_id, quantity=1):
             )
             total = cur.fetchone()[0] or 0
 
-    # Update order fields using ORM
     order.total_amount = total
     order.order_date = timezone.now()
     order.save(using='gsharedb')
-    
-    # Always return JSON for AJAX
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == "application/json":
-        return JsonResponse({"success": True, "message": f"Added {item.name} to your cart."})
 
+    # AJAX response
+    if (request.headers.get('x-requested-with') == 'XMLHttpRequest'
+            or request.content_type == "application/json"):
+        return JsonResponse({"success": True, "message": f"Added {item.name} to your cart."})
 
     messages.success(request, f"Added {item.name} to your cart.")
     return redirect('cart')
@@ -2058,6 +2068,10 @@ def upsert_kroger_store_from_location(loc):
 
     parts = [p for p in [street, city, state, postal, country] if p]
     full_location = ", ".join(parts) if parts else None
+    
+    geo = loc.get("geolocation") or {}
+    lat = geo.get("latitude")
+    lng = geo.get("longitude")
 
     defaults = {
         "name": store_name,     
@@ -2067,6 +2081,9 @@ def upsert_kroger_store_from_location(loc):
         "postal_code": postal,
         "country": country,
         "location": full_location,
+        
+        "latitude": lat,
+        "longitude": lng,
     }
 
     store, created = Stores.objects.using('gsharedb').update_or_create(
@@ -2085,14 +2102,16 @@ def add_kroger_item_to_cart(request):
 
     product_name = (request.POST.get('product_name') or '').strip()
     product_price = request.POST.get('product_price')
+    image_url = None
 
-    if not product_name and request.content_type == 'application/json':
+    if request.content_type == 'application/json':
         try:
             body = json.loads(request.body or '{}')
             product_name = (body.get('product_name') or '').strip()
             product_price = body.get('product_price')
+            image_url = body.get('image_url')
         except Exception:
-            product_name, product_price = '', None
+            product_name, product_price, image_url = '', None, None
 
     if not product_name or product_price is None:
         messages.error(request, "Missing Kroger product data.")
@@ -2114,10 +2133,14 @@ def add_kroger_item_to_cart(request):
         messages.error(request, "Selected Kroger store not found. Please search again.")
         return redirect('cart')
 
+    defaults = {'price': price_dec, 'stock': 0}
+    if image_url:
+        defaults['image_url'] = image_url
+
     item, _ = Items.objects.using('gsharedb').update_or_create(
         name=product_name,
         store=kroger_store,
-        defaults={'price': price_dec, 'stock': 0}
+        defaults=defaults
     )
 
     return add_to_cart(request, item.id)
@@ -2155,6 +2178,12 @@ def save_kroger_results(request):
                   .get('price', {})
                   .get('regular')
             )
+            image_url = None
+            images = p.get('images', [])
+            if images:
+                sizes = images[0].get('sizes', [])
+                if sizes:
+                    image_url = sizes[0].get('url')
             if not name or regular is None:
                 continue
             price_dec = Decimal(str(regular))
@@ -2164,7 +2193,7 @@ def save_kroger_results(request):
         _, was_created = Items.objects.using('gsharedb').update_or_create(
             name=name,
             store=kroger_store,
-            defaults={'price': price_dec, 'stock': 0, 'description': name}
+            defaults={'price': price_dec, 'stock': 1, 'description': name, 'image_url': image_url,}
         )
         if was_created:
             created += 1
@@ -2304,6 +2333,9 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
             'store_id': order.get('store_id'),
             'store_name': order.get('store_name', ''),
             'store_address': order.get('store_address', ''),
+            
+            'store_lat': order.get('store_lat'),
+            'store_lng': order.get('store_lng'),
             
             'status': order['status'],        
             'driver_id': driver_id,           

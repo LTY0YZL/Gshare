@@ -30,6 +30,9 @@ class Stores(models.Model):
     postal_code = models.CharField(max_length=20, null=True, blank=True)
     country     = models.CharField(max_length=50, null=True, blank=True, default="US")
     location    = models.CharField(max_length=255, null=True, blank=True)
+    
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
     class Meta:
         managed = False
@@ -43,6 +46,8 @@ class Items(models.Model):
     stock = models.IntegerField(null=True, blank=True)
     
     description = models.TextField(null=True, blank=True)
+    
+    image_url = models.CharField(max_length=500, null=True, blank=True)
 
     class Meta:
         managed = False

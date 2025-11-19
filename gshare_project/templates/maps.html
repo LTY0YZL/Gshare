@@ -375,88 +375,104 @@
 
 
         function addMarkers(addressGroups) {
-
-            // ensure we have bounds on the map
             const bounds = map.getBounds();
-
             if (!bounds) {
                 console.warn("Map bounds not available yet.");
                 return;
             }
 
-            // Remove markers that are out of bounds
             for (const [address, marker] of Object.entries(markers)) {
                 if (!bounds.contains(marker.getPosition())) {
                     marker.setMap(null);
                     delete markers[address];
                 }
             }
-            // Add a marker for each address
+
             addressGroups.forEach(group => {
                 const address = group.address;
-
-                // Skip missing or invalid addresses
                 if (!address || address.trim().length < 5) {
                     console.warn("Skipping invalid address:", address);
                     return;
                 }
-
-                // Skip if marker already exists
                 if (markers[address]) return;
+                geocoder.geocode({ address }, (results, status) => {
+                    if (status !== 'OK') {
+                        console.error("Geocode failed:", status);
+                        return;
+                    }
 
-                // Geocode the address to get its location and add marker
-                geocoder.geocode({ 'address': address }, (results, status) => {
-                    if (status === 'OK') {
-                        const location = results[0].geometry.location;
+                    const location = results[0].geometry.location;
 
-                        const marker = new google.maps.Marker({
-                            map: map,
-                            position: location,
-                            title: `Orders at ${address}`
+                    const marker = new google.maps.Marker({
+                        map,
+                        position: location,
+                        title: `Orders at ${address}`,
+                    });
 
-                        });
+                    marker.addListener('click', () => {
+                        showPopup(group);
+                        setTimeout(() => shop.click(), 100);
 
-                        marker.addListener('click', () => {
-                            // open the side popup with order details
-                            showPopup(group);
-                            setTimeout(() => shop.click(), 100);
+                        profilePos = location;
 
-                            profilePos = location;
+                        const order = group.orders && group.orders.length > 0 ? group.orders[0] : null;
+                        if (!order) {
+                            console.warn('No order data for this marker.');
+                            return;
+                        }
 
-                            const order = group.orders && group.orders.length > 0 ? group.orders[0] : null;
+                        const rawLat = order.store_lat;
+                        const rawLng = order.store_lng;
+                        const lat = rawLat !== null && rawLat !== undefined ? parseFloat(rawLat) : NaN;
+                        const lng = rawLng !== null && rawLng !== undefined ? parseFloat(rawLng) : NaN;
 
-                            if (!order || !order.store_address) {
-                                console.warn('No store_address on order for this marker; routing directly to profile.');
+                        console.log('order', order);
+                        console.log('parsed store lat/lng:', lat, lng);
 
-                                activeStorePos = null;
+                        if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+                            activeStorePos = { lat, lng };
 
-                                if (storeMarker) {
-                                    storeMarker.setMap(null);
-                                    storeMarker = null;
-                                }
-
-                                if (meLiveMarker) {
-                                    updateRouteFromDriver(meLiveMarker.getPosition());
-                                }
-                                return;
+                            if (!storeMarker) {
+                                storeMarker = new google.maps.Marker({
+                                    map,
+                                    position: activeStorePos,
+                                    title: order.store_name ? `Store: ${order.store_name}` : 'Store',
+                                    icon: {
+                                        path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+                                        scale: 6,
+                                        fillColor: '#66ccff',
+                                        fillOpacity: 1,
+                                        strokeColor: '#cc9900ff',
+                                        strokeWeight: 2,
+                                    },
+                                });
+                            } else {
+                                storeMarker.setPosition(activeStorePos);
+                                storeMarker.setTitle(order.store_name ? `Store: ${order.store_name}` : 'Store');
+                                storeMarker.setMap(map);
                             }
 
+                            if (meLiveMarker) {
+                                updateRouteFromDriver(meLiveMarker.getPosition());
+                            }
+                            return; 
+                        }
+
+                        if (order.store_address) {
                             const geocodeRequest = {
                                 address: order.store_address,
                                 bounds: map.getBounds(),
                                 componentRestrictions: { country: 'US' },
                             };
 
-                            geocoder.geocode(geocodeRequest, (results, status) => {
-                                if (status !== 'OK' || !results[0]) {
-                                    console.warn('Store geocode failed:', status);
-                                    if (meLiveMarker) {
-                                        updateRouteFromDriver(meLiveMarker.getPosition());
-                                    }
+                            geocoder.geocode(geocodeRequest, (results2, status2) => {
+                                if (status2 !== 'OK' || !results2[0]) {
+                                    console.warn('Store geocode failed:', status2);
+                                    if (meLiveMarker) updateRouteFromDriver(meLiveMarker.getPosition());
                                     return;
-                                }       
+                                }
 
-                                const storeLoc = results[0].geometry.location;
+                                const storeLoc = results2[0].geometry.location;
                                 activeStorePos = storeLoc;
 
                                 if (!storeMarker) {
@@ -479,29 +495,35 @@
                                     storeMarker.setMap(map);
                                 }
 
-                                console.log('activeStorePos set:', activeStorePos.toString());
-                                console.log('profilePos set:', profilePos.toString());
-
                                 if (meLiveMarker) {
                                     updateRouteFromDriver(meLiveMarker.getPosition());
                                 }
                             });
-                        });
+                        } else {
+                            console.warn('No store info for this order; routing directly to profile.');
+                            activeStorePos = null;
 
-                        // store the user marker
-                        markers[address] = marker;
+                            if (storeMarker) {
+                                storeMarker.setMap(null);
+                                storeMarker = null;
+                            }
 
-                        const hasMyActiveOrder = group.orders.some(o =>
-                            o.status === 'inprogress' &&
-                            (o.user_id === CURRENT_VIEWER_ID || o.driver_id === CURRENT_VIEWER_ID)
-                        );
-
-                        if (hasMyActiveOrder) {
-                            myActiveMarker = marker; 
-                            google.maps.event.trigger(marker, 'click');
+                            if (meLiveMarker) {
+                                updateRouteFromDriver(meLiveMarker.getPosition());
+                            }
                         }
-                    } else {
-                        console.error("Geocode failed:", status);
+                    });
+
+                    markers[address] = marker;
+
+                    const hasMyActiveOrder = group.orders.some(o =>
+                        o.status === 'inprogress' &&
+                        (o.user_id === CURRENT_VIEWER_ID || o.driver_id === CURRENT_VIEWER_ID)
+                    );
+
+                    if (hasMyActiveOrder) {
+                        myActiveMarker = marker;
+                        google.maps.event.trigger(marker, 'click');
                     }
                 });
             });
