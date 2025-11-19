@@ -210,6 +210,52 @@
         .btn-secondary:hover {
             background: #f3f4f6;
         }
+
+        /* Container for input + arrow */
+        .chat-input-row {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            position: relative;
+        }
+
+        /* Rounded input field */
+        .chat-input-field {
+            width: 100%;
+            padding: 10px 45px 10px 16px; /* Right padding to avoid overlap */
+            border: 1px solid #d1d5db;
+            border-radius: 9999px;
+            outline: none;
+            font-size: 0.9rem;
+            transition: box-shadow 0.2s ease;
+        }
+
+        .chat-input-field:focus {
+            box-shadow: 0 0 0 2px #3b82f6;
+        }
+
+        /* Arrow button */
+        .chat-send-btn {
+            position: absolute;
+            right: 6px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #22c55e;
+            color: white;
+            font-size: 15px;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .chat-send-btn:hover {
+            background-color: #16a34a;
+        }
+
     </style>
 </head>
 
@@ -306,9 +352,24 @@
             <button type="submit"
                     aria-label="Send message"
                     class="chat-send-btn">
-                ↑
+                ➤
             </button>
         </form>
+
+        <!-- Match Orders button -->
+        <form method="post"
+            action="{% url 'receipt_match_orders' receipt.id %}"
+            class="mt-2 flex justify-end">
+            {% csrf_token %}
+            <button
+                type="submit"
+                class="inline-flex items-center px-3 py-1.5 rounded-md border border-gray-300
+                    text-xs font-medium text-gray-700 bg-white hover:bg-gray-100"
+            >
+                🔍 Match Orders
+            </button>
+        </form>
+
     </div>
 
     <div class="footer-actions">
