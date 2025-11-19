@@ -23,15 +23,15 @@ def get_active_orders_for_driver(driver_user_id: int):
     with connections["gsharedb"].cursor() as cur:
         cur.execute(
             """
-            SELECT o.id, o.status
-            FROM orders o
-            WHERE o.delivery_user_id = %s
-              AND o.status IN ('placed', 'ready_for_delivery', 'delivering')
-            ORDER BY o.id DESC
+            SELECT d.order_id, d.status
+            FROM deliveries d
+            WHERE d.delivery_person_id = %s
+            ORDER BY d.id DESC
             """,
             [driver_user_id],
         )
         rows = cur.fetchall()
+        print(rows)
 
         orders = [{"id": r[0], "status": r[1], "items": []} for r in rows]
         if not orders:
