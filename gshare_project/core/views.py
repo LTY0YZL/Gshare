@@ -20,6 +20,8 @@ from django.db.models import Q
 from django.db.models import Avg, Count
 from django.http import JsonResponse
 from django.db import connection
+from django.core.files.storage import default_storage
+from core.utils.simple_gemini import scan_receipt, chat_about_receipt
 import json
 import re
 import requests
@@ -28,6 +30,17 @@ from urllib.parse import urlencode
 from . import kroger_api
 import stripe
 from datetime import timedelta
+import io, os, mimetypes
+from uuid import uuid4
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseNotAllowed
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.utils.text import get_valid_filename
+from .models import UploadedImage
+from core.utils.aws_s3 import get_s3_client, get_bucket_and_region
+from .tasks import parse_receipt_task
+from .utils.aws_s3 import upload_file_like, presigned_url
+from django.views.decorators.http import require_POST
 from chat.models import ChatGroup
 from groqai.groq_proxy import call_groq
 from groqai.instructions import VOICE_ORDER_CHAT_INSTRUCTIONS, VOICE_ORDER_FINALIZE_INSTRUCTIONS
@@ -36,7 +49,8 @@ from core.models import (
     Stores, Items,
     Orders, OrderItems,
     Deliveries, Feedback, GroupOrders, GroupMembers,
-    RecurringCart, RecurringCartItem
+    RecurringCart, RecurringCartItem, ProductImage,
+    Receipt, ReceiptLine, ReceiptChatMessage
 )
 
 """helper functions"""
@@ -69,6 +83,59 @@ def get_most_recent_order(user: Users, delivery_person: Users, status: str):
         return order
     except Orders.DoesNotExist:
         return None
+    
+def Create_delivery(order: Orders, delivery_person: Users):
+    try:
+        delivery = Deliveries.objects.using('gsharedb').create(
+            order=order,
+            delivery_person=delivery_person,
+            status='pending',
+            pickup_time=timezone.now() + timedelta(minutes=15),
+        )
+        return delivery
+    except IntegrityError as e:
+        print(f"Error creating delivery: {e}")
+        return None
+    
+def reject_delivery(delivery: Deliveries):
+    try:
+        delivery.delete()
+        return True
+    except Exception as e:
+        print(f"Error deleting delivery: {e}")
+        return False
+    
+def get_order_for_delivery(delivery: Deliveries):
+    try:
+        order = Orders.objects.using('gsharedb').get(id=delivery.order.id)
+        return order
+    except Orders.DoesNotExist:
+        return None
+
+def get_delivery_for_order(order):
+    """
+    Return the most recent Delivery for the given order (or order_id).
+    If none exist, return None.
+    """
+    # Allow order to be either an Orders instance or an integer id
+    order_id = order.id if hasattr(order, "id") else order
+
+    return (
+        Deliveries.objects.using("gsharedb")
+        .filter(order=order_id)
+        .order_by("-id")      # latest delivery first; adjust if you have a better field
+        .first()
+    )
+    
+def delivery_done(delivery: Deliveries):
+    try:
+        delivery.status = 'delivered'
+        delivery.delivery_time = timezone.now()
+        delivery.save(using='gsharedb')
+        return True
+    except Exception as e:
+        print(f"Error updating delivery status: {e}")
+        return False
 
 """
 Retrieve a user from the 'gsharedb' database based on a specific field and value.
@@ -99,6 +166,20 @@ def edit_user(user_email: str, field: str, value: str):
         return None
     except Exception as e:
         print(f"Error updating user: {e}")
+        return None
+    
+def get_store_for_order(order: Orders):
+    try:
+        store = Stores.objects.using('gsharedb').get(id=order.store.id)
+        return store
+    except Stores.DoesNotExist:
+        return None
+    
+def get_store_from_item(item: Items):
+    try:
+        store = Stores.objects.using('gsharedb').get(id=item.store.id)
+        return store
+    except Stores.DoesNotExist:
         return None
 
 """
@@ -148,16 +229,41 @@ Returns:
     bool: True if the item quantity was successfully updated, False otherwise.
 """
 def Edit_order_items(order_id: int, item_id: int, new_quantity: int) -> bool:
+   
     try:
-        order_item = OrderItems.objects.using('gsharedb').get(order_id=order_id, item_id=item_id)
-        order_item.quantity = new_quantity
-        order_item.save(using='gsharedb')
+        with transaction.atomic(using="gsharedb"):
+            with connections["gsharedb"].cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE order_items
+                    SET quantity = %s
+                    WHERE order_id = %s AND item_id = %s
+                    """,
+                    [new_quantity, order_id, item_id],
+                )
+
+                if cur.rowcount == 0:
+                    return False
+
         return True
-    except OrderItems.DoesNotExist:
-        return False
+
     except Exception as e:
         print(f"Error updating order item: {e}")
         return False
+    
+def edit_order_items_json(request, item_id, quantity):
+    if request.method == 'POST':
+        user = get_user("email", request.user.email)
+        order = get_orders(user, "cart")
+        
+        if not order:
+            return JsonResponse({'success': False, 'error': 'No cart order found'})
+        
+        order_id = order[0].id
+        success = Edit_order_items(order_id, item_id, quantity)
+        return JsonResponse({'success': success})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
 """
 Retrieve all orders for a specific user from the 'gsharedb' database.
@@ -194,6 +300,18 @@ def get_orders_by_status(order_status: str):
         return []
     return orders
 
+
+"""
+Return a queryset of Orders assigned to this delivery person
+with the given status.
+"""
+def get_orders_by_delivery_person(delivery_person: Users, status: str):
+
+    return Deliveries.objects.using('gsharedb').filter(
+        delivery_person=delivery_person,
+        status=status,
+    ).distinct()
+
 def get_most_recent_order(user: Users, delivery_person: Users, status: str):
     try:
         Delivery = Deliveries.objects.using('gsharedb').filter(delivery_person=delivery_person, status=status)
@@ -204,6 +322,19 @@ def get_most_recent_order(user: Users, delivery_person: Users, status: str):
 
     except Orders.DoesNotExist:
         return None
+
+
+def update_status_order_accepting(order: Orders):
+    try:
+        order.status = "accepting"
+        order.save(using='gsharedb')
+        user = (Deliveries.objects.using('gsharedb').get(order=order)).delivery_person
+        return user
+    except Exception as e:
+        print(f"Error updating order status or get order: {e}")
+        return False
+    
+
 
 """
 Retrieve all items in a specific order from the 'gsharedb' database.
@@ -264,7 +395,7 @@ def get_order_items_by_order_id(order_id: int):
 Change the status of an order in the 'gsharedb' database.
 Args:
     order_id (int): The ID of the order to be updated.
-    new_status (str): The new status to set for the order ('cart', 'placed', 'inprogress','delivered').
+    new_status (str): The new status to set for the order ('cart', 'placed', 'pending', 'inprogress','delivered').
     Returns:
     bool: True if the order status was successfully updated, False otherwise.
 """
@@ -337,6 +468,194 @@ def change_order_status_json(request, order_id, new_status):
         except Exception as e:
             print("Error in change_order_status_json:", e)
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+def update_status_order_pending(order: Orders):
+    try:
+        order.status = "pending"
+        order.save(using='gsharedb')
+        return True
+    except Exception as e:
+        print(f"Error updating order status or get order: {e}")
+        return False
+    
+def change_status_pending_json(request, order_id):
+    if request.method == 'POST':
+        success = update_status_order_pending(order_id)
+        return JsonResponse({'success': success})
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+def Create_delivery(order: Orders, delivery_person: Users):
+    try:
+        delivery = Deliveries.objects.using('gsharedb').create(
+            order=order,
+            delivery_person=delivery_person,
+            status='pending',
+            pickup_time=timezone.now() + timedelta(minutes=15),
+        )
+        return delivery
+    except IntegrityError as e:
+        print(f"Error creating delivery: {e}")
+        return None
+
+def get_delivery_for_order(order: Orders):
+    try:
+        delivery = Deliveries.objects.using('gsharedb').get(order=order)
+        return delivery
+    except Deliveries.DoesNotExist:
+        return None
+
+def delivery_done(delivery: Deliveries):
+    try:
+        delivery.status = 'accepted'
+        delivery.delivery_time = timezone.now()
+        delivery.save(using='gsharedb')
+        return True
+    except Exception as e:
+        print(f"Error updating delivery status: {e}")
+        return False
+    
+def reject_delivery(delivery: Deliveries):
+    try:
+        delivery.delete()
+        return True
+    except Exception as e:
+        print(f"Error deleting delivery: {e}")
+        return False
+    
+def get_order_for_delivery(delivery: Deliveries):
+    try:
+        order = Orders.objects.using('gsharedb').get(id=delivery.order.id)
+        return order
+    except Orders.DoesNotExist:
+        return None
+
+def remove_delivery_json(request, order_id):
+    if request.method == 'POST':
+        try:
+            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
+            success = reject_delivery(delivery)
+            return JsonResponse({'success': success})
+        except Deliveries.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+def create_delivery_json(request, order_id):
+    if request.method == 'POST':
+        try:
+            order = Orders.objects.using('gsharedb').get(id=order_id)
+            delivery_person = get_user("email", request.user.email)
+            print("delivery_person:", delivery_person)
+            delivery = Create_delivery(order, delivery_person)
+            if delivery:
+                return JsonResponse({'success': True, 'delivery_id': delivery.id})
+            else:
+                return JsonResponse({'success': False, 'error': 'Failed to create delivery'}, status=500)
+        except Orders.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+
+def delivery_accepted_json(request, order_id):
+    if request.method == 'POST':
+        try:
+            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
+            success = delivery_done(delivery)
+            return JsonResponse({'success': success})
+        except Deliveries.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+def update_status_order_pending(order: Orders):
+    try:
+        order.status = "pending"
+        order.save(using='gsharedb')
+        return True
+    except Exception as e:
+        print(f"Error updating order status or get order: {e}")
+        return False
+    
+def change_status_pending_json(request, order_id):
+    if request.method == 'POST':
+        success = update_status_order_pending(order_id)
+        return JsonResponse({'success': success})
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+def Create_delivery(order: Orders, delivery_person: Users):
+    try:
+        delivery = Deliveries.objects.using('gsharedb').create(
+            order=order,
+            delivery_person=delivery_person,
+            status='pending',
+            pickup_time=timezone.now() + timedelta(minutes=15),
+        )
+        return delivery
+    except IntegrityError as e:
+        print(f"Error creating delivery: {e}")
+        return None
+
+def get_delivery_for_order(order: Orders):
+    try:
+        delivery = Deliveries.objects.using('gsharedb').get(order=order)
+        return delivery
+    except Deliveries.DoesNotExist:
+        return None
+
+def delivery_done(delivery: Deliveries):
+    try:
+        delivery.status = 'accepted'
+        delivery.delivery_time = timezone.now()
+        delivery.save(using='gsharedb')
+        return True
+    except Exception as e:
+        print(f"Error updating delivery status: {e}")
+        return False
+    
+def reject_delivery(delivery: Deliveries):
+    try:
+        delivery.delete()
+        return True
+    except Exception as e:
+        print(f"Error deleting delivery: {e}")
+        return False
+    
+def get_order_for_delivery(delivery: Deliveries):
+    try:
+        order = Orders.objects.using('gsharedb').get(id=delivery.order.id)
+        return order
+    except Orders.DoesNotExist:
+        return None
+
+def remove_delivery_json(request, order_id):
+    if request.method == 'POST':
+        try:
+            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
+            success = reject_delivery(delivery)
+            return JsonResponse({'success': success})
+        except Deliveries.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+def create_delivery_json(request, order_id):
+    if request.method == 'POST':
+        try:
+            order = Orders.objects.using('gsharedb').get(id=order_id)
+            delivery_person = get_user("email", request.user.email)
+            print("delivery_person:", delivery_person)
+            delivery = Create_delivery(order, delivery_person)
+            if delivery:
+                return JsonResponse({'success': True, 'delivery_id': delivery.id})
+            else:
+                return JsonResponse({'success': False, 'error': 'Failed to create delivery'}, status=500)
+        except Orders.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+
+def delivery_accepted_json(request, order_id):
+    if request.method == 'POST':
+        try:
+            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
+            success = delivery_done(delivery)
+            return JsonResponse({'success': success})
+        except Deliveries.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
     
 """
@@ -706,6 +1025,248 @@ def _users_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500, exclude_id
         r["latitude"]  = float(r["latitude"])
     return rows
 
+"""image functions"""
+@csrf_exempt  # if you're posting from a non-CSRF context; otherwise keep CSRF
+def upload_image(request):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if "file" not in request.FILES:
+        return HttpResponseBadRequest("Missing 'file' in form-data.")
+
+    file = request.FILES["file"]
+    original_name = get_valid_filename(file.name)
+    content_type = (
+        file.content_type
+        or mimetypes.guess_type(original_name)[0]
+        or "application/octet-stream"
+    )
+
+    # Build a unique S3 key
+    key = f"uploads/{uuid4().hex}_{original_name}"
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    try:
+        # Upload the file to S3
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=file.read(),
+            ContentType=content_type,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"S3 upload failed: {e}"}, status=500)
+
+    # Save record directly into gsharedb
+    img = UploadedImage.objects.using("gsharedb").create(
+        key=key,
+        content_type=content_type,
+        original_name=original_name,
+    )
+
+    # Canonical object URL (may require public ACL if used directly)
+    object_url = f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
+
+    try:
+        presigned_url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=3600,  # 1 hour
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "id": img.id,
+            "key": key,
+            "content_type": content_type,
+            "object_url": object_url,
+            "presigned_url": presigned_url,
+        },
+        status=201,
+    )
+
+
+def get_image_url(request, image_id):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+
+    try:
+        # Retrieve record directly from gsharedb
+        img = UploadedImage.objects.using("gsharedb").get(pk=image_id)
+    except UploadedImage.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "Not found"}, status=404)
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+    object_url = f"https://{bucket}.s3.{region}.amazonaws.com/{img.key}"
+
+    try:
+        presigned_url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": img.key},
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "id": img.id,
+            "key": img.key,
+            "object_url": object_url,
+            "presigned_url": presigned_url,
+        }
+    )
+
+
+def upload_user_avatar(request, user_id: int):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if "file" not in request.FILES:
+        return HttpResponseBadRequest("Missing 'file' in form-data.")
+
+    file = request.FILES["file"]
+    original_name = get_valid_filename(file.name)
+    content_type = file.content_type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+    key = f"avatars/{user_id}/{uuid4().hex}_{original_name}"
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=file.read(),
+            ContentType=content_type,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"S3 upload failed: {e}"}, status=500)
+
+    # Save the key on the user in gsharedb
+    try:
+        Users.objects.using("gsharedb").filter(pk=user_id).update(image_key=key)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"DB update failed: {e}"}, status=500)
+
+    # Return a presigned URL to preview immediately
+    try:
+        presigned = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse({
+        "ok": True,
+        "user_id": user_id,
+        "image_key": key,
+        "preview_url": presigned,
+    }, status=201)
+
+
+def get_user_avatar_url(request, user_id: int):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+
+    try:
+        user = Users.objects.using("gsharedb").get(pk=user_id)
+    except Users.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "User not found"}, status=404)
+
+    if not user.image_key:
+        # Optional: return a default image (S3 key) or None
+        return JsonResponse({"ok": True, "user_id": user_id, "image_key": None, "url": None})
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    try:
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": user.image_key},
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+
+    return JsonResponse({"ok": True, "user_id": user_id, "image_key": user.image_key, "url": url})
+
+def upload_user_avatar_helper(user_id: int, uploaded_file) -> dict:
+    """
+    Upload a new avatar to S3 for the given user, store the S3 key on users.image_key (gsharedb),
+    and return {ok, key, url} where url is a presigned GET URL.
+    """
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+
+    original_name = get_valid_filename(uploaded_file.name)
+    content_type = uploaded_file.content_type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+
+    # Build new key: avatars/<user_id>/<uuid>_<filename>
+    new_key = f"avatars/{user_id}/{uuid4().hex}_{original_name}"
+
+    # Read old key (if any) before updating
+    user = Users.objects.using("gsharedb").only("image_key").get(pk=user_id)
+    old_key = user.image_key
+
+    # Upload to S3
+    s3.put_object(
+        Bucket=bucket,
+        Key=new_key,
+        Body=uploaded_file.read(),
+        ContentType=content_type,
+    )
+
+    # Persist the new key
+    Users.objects.using("gsharedb").filter(pk=user_id).update(image_key=new_key)
+
+    # Optional: cleanup old object to avoid orphans
+    if old_key and old_key != new_key:
+        try:
+            s3.delete_object(Bucket=bucket, Key=old_key)
+        except Exception:
+            pass
+
+    # Build presigned URL
+    url = s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": new_key},
+        ExpiresIn=3600,
+    )
+
+    return {"ok": True, "key": new_key, "url": url}
+
+
+def get_user_avatar_url_helper(user_id: int) -> str | None:
+    """
+    Return a presigned GET URL for the user's current avatar, or None if not set.
+    """
+    try:
+        user = Users.objects.using("gsharedb").only("image_key").get(pk=user_id)
+    except Users.DoesNotExist:
+        return None
+
+    if not user.image_key:
+        return None
+
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+    return s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": user.image_key},
+        ExpiresIn=3600,
+    )
+
 
 """Main functions"""
 
@@ -781,7 +1342,7 @@ def signup_view(request):
         auth_login(request, auth_user)
         return redirect('home')
     
-    return render(request, 'signup.html')
+    return render(request, 'login.html')
 
 
 def logout_view(request):
@@ -844,114 +1405,328 @@ def updateProfile(profile, data, files):
     return True
 
 @login_required
-def userprofile(request):
+def receipt_upload_view(request):
+    if request.method == "POST":
+        uploaded = request.FILES.get("receipt_image")
+        if not uploaded:
+            messages.error(request, "Please choose an image.")
+            return redirect("receipt_upload")
 
+        # gsharedb user row
+        g_user = Users.objects.using("gsharedb").get(email=request.user.email)
+
+        s3 = get_s3_client()
+        bucket, region = get_bucket_and_region()
+
+        original_name = get_valid_filename(uploaded.name)
+        key = f"receipts/{g_user.id}/{uuid4().hex}_{original_name}"
+
+        # Upload to S3
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=uploaded.read(),
+            ContentType=uploaded.content_type or "image/jpeg",
+        )
+
+        # Create Receipt in gsharedb
+        receipt = Receipt.objects.using("gsharedb").create(
+            uploader=g_user,
+            s3_bucket=bucket,
+            s3_key=key,
+            status="pending",
+        )
+
+        # FASTEST: do scan synchronously right here (may take a few seconds)
+        try:
+            scan_receipt(receipt.id)
+        except Exception as e:
+            receipt.status = "error"
+            receipt.error = str(e)
+            receipt.save(using="gsharedb")
+
+        return redirect("receipt_detail", rid=receipt.id)
+
+    return render(request, "deliveries/receipt_upload.html")
+
+
+
+@login_required
+def receipt_detail_view(request, rid: int):
+    # Receipt from gsharedb
+    receipt = get_object_or_404(Receipt.objects.using("gsharedb"), pk=rid)
+
+    # lines from gsharedb
+    lines = (
+        ReceiptLine.objects.using("gsharedb")
+        .filter(receipt=receipt)
+        .order_by("id")
+    )
+
+    chat_messages = (
+        ReceiptChatMessage.objects
+        .filter(receipt_id=receipt.id)
+        .order_by("created_at", "id")
+    )
+
+    image_url = None
+    if getattr(receipt, "s3_bucket", None) and getattr(receipt, "s3_key", None):
+        try:
+            image_url = presigned_url(receipt.s3_bucket, receipt.s3_key)
+        except Exception:
+            image_url = None
+
+    return render(
+        request,
+        "deliveries/receipt_detail.html",
+        {
+            "receipt": receipt,
+            "lines": lines,
+            "chat_messages": chat_messages,
+            "image_url": image_url,
+        },
+    )
+
+def _apply_receipt_operations(receipt, operations):
+    """
+    Apply Gemini's operations to ReceiptLine objects in gsharedb.
+    operations is a list of dicts with keys:
+      - op: "update" | "add" | "delete"
+      - target_name: str or None
+      - fields: dict with optional keys name, quantity, unit_price, total_price
+    """
+    qs = ReceiptLine.objects.using("gsharedb").filter(receipt=receipt)
+
+    def find_line_by_name(name: str):
+        # exact (case-insensitive) first
+        q = qs.filter(name__iexact=name)
+        if q.exists():
+            return q.first()
+        # fallback: contains
+        q = qs.filter(name__icontains=name)
+        return q.first() if q.exists() else None
+
+    for op in operations:
+        kind = (op.get("op") or "").lower()
+        target_name = op.get("target_name")
+        fields = op.get("fields") or {}
+
+        if kind == "update":
+            if not target_name:
+                continue
+            line = find_line_by_name(target_name)
+            if not line:
+                continue
+
+            new_name = fields.get("name")
+            if new_name:
+                line.name = new_name
+
+            if "quantity" in fields:
+                try:
+                    line.quantity = float(fields["quantity"])
+                except (TypeError, ValueError):
+                    pass
+
+            if "unit_price" in fields:
+                try:
+                    line.unit_price = float(fields["unit_price"])
+                except (TypeError, ValueError):
+                    pass
+
+            if "total_price" in fields:
+                try:
+                    line.total_price = float(fields["total_price"])
+                except (TypeError, ValueError):
+                    pass
+
+            # optionally keep a copy of everything in meta
+            line.meta = fields
+            line.save(using="gsharedb")
+
+        elif kind == "delete":
+            if not target_name:
+                continue
+            line = find_line_by_name(target_name)
+            if line:
+                line.delete(using="gsharedb")
+
+        elif kind == "add":
+            f = fields
+            name = f.get("name")
+            if not name:
+                continue
+
+            qty = f.get("quantity", 1)
+            unit_price = f.get("unit_price")
+            total_price = f.get("total_price")
+
+            try:
+                qty = float(qty)
+            except (TypeError, ValueError):
+                qty = 1
+
+            if unit_price is not None:
+                try:
+                    unit_price = float(unit_price)
+                except (TypeError, ValueError):
+                    unit_price = None
+
+            if total_price is not None:
+                try:
+                    total_price = float(total_price)
+                except (TypeError, ValueError):
+                    total_price = None
+
+            ReceiptLine.objects.using("gsharedb").create(
+                receipt=receipt,
+                name=name[:256],
+                quantity=qty,
+                unit_price=unit_price,
+                total_price=total_price,
+                meta=f,
+            )
+
+
+@login_required
+@require_POST
+def receipt_chat_view(request, rid: int):
+    receipt = get_object_or_404(Receipt.objects.using("gsharedb"), pk=rid)
+    user_message = (request.POST.get("message") or "").strip()
+
+    if not user_message:
+        return redirect("receipt_detail", rid=receipt.id)
+
+    # Load prior chat (user + assistant) from default DB
+    history_qs = ReceiptChatMessage.objects.filter(
+        receipt_id=receipt.id
+    ).order_by("created_at", "id")
+
+    history = [
+        (m.role, m.content)
+        for m in history_qs
+        if m.role in ("user", "assistant")
+    ]
+
+    # Save user message
+    ReceiptChatMessage.objects.create(
+        receipt_id=receipt.id,
+        role="user",
+        content=user_message,
+    )
+
+    # Call Gemini – it will:
+    #  - answer the user
+    #  - apply any operations to ReceiptLine inside chat_about_receipt
+    try:
+        reply_text = chat_about_receipt(
+            receipt,
+            history + [("user", user_message)],
+            user_message,
+        )
+    except Exception as e:
+        reply_text = f"Sorry, I had an error talking to the AI: {e}"
+
+    # Save assistant reply
+    ReceiptChatMessage.objects.create(
+        receipt_id=receipt.id,
+        role="assistant",
+        content=reply_text,
+    )
+
+    # When you redirect back, receipt_detail_view will reload the updated lines
+    return redirect("receipt_detail", rid=receipt.id)
+
+@login_required
+def userprofile(request):
     user_email = request.user.email
     if not user_email:
         messages.error(request, 'No email associated with your account')
         return redirect('home')
-        
-    profile = get_user("email", user_email)
+
+    profile = get_user("email", user_email)  # your existing helper
     getItemNamesForUser(profile, ['cart'])
     if not profile:
         messages.error(request, 'User profile not found')
         return redirect('login')
-    
+
     errors = []
-    
+
     if request.method == 'POST':
 
         if 'save_description' in request.POST:
             if 'description' in request.POST:
-                    profile.description = request.POST.get('description', '').strip()
-                    print(profile.description)
-
+                profile.description = request.POST.get('description', '').strip()
             profile.save(using='gsharedb')
             messages.success(request, 'About Me updated!')
             return redirect('profile')
 
         if 'save_profile' in request.POST:
             try:
-                if 'name' in request.POST:
-                    profile.name = request.POST['name']
-                
-                if 'email' in request.POST and request.POST['email'] != profile.email:
-                    if Users.objects.using('gsharedb').filter(email=request.POST['email']).exists():
-                        errors.append({
-                            'message': 'This email is already in use',
-                            'is_success': False
-                        })
-                    else:
-                        profile.email = request.POST['email']
-                
-                if 'phone' in request.POST:
-                    profile.phone = request.POST['phone']
-                
-                if 'address' in request.POST:
-                    address = request.POST['address']
+                with transaction.atomic(using='gsharedb'):
+                    # ---- Profile fields ----
+                    if 'name' in request.POST:
+                        profile.name = request.POST['name']
 
-                    profile.address = address
-                    print(f"Updated profile address to {address}")
+                    if 'email' in request.POST and request.POST['email'] != profile.email:
+                        if Users.objects.using('gsharedb').filter(email=request.POST['email']).exists():
+                            errors.append({'message': 'This email is already in use', 'is_success': False})
+                        else:
+                            profile.email = request.POST['email']
 
-                    lat, lng = geoLoc(address)
-                    print(f"Geocoded {address} to lat={lat}, lng={lng}")
+                    if 'phone' in request.POST:
+                        profile.phone = request.POST['phone']
 
-                    profile.address = address
-                    print(f"Updated profile address to {address}")
+                    if 'address' in request.POST:
+                        address = request.POST['address']
+                        profile.address = address
+                        lat, lng = geoLoc(address)  # your existing geocoder
+                        profile.latitude = lat
+                        profile.longitude = lng
 
-                    profile.latitude = lat
-                    profile.longitude = lng
+                    # Save the base profile first
+                    profile.save(using='gsharedb')
 
-                    print(f"Updated profile address to {address}, lat={profile.latitude}, lng={profile.longitude}")
-                                
+                    # ---- Avatar upload via helper ----
+                    uploaded = request.FILES.get('profile_picture')
+                    if uploaded:
+                        res = upload_user_avatar_helper(profile.id, uploaded)
+                        if not res.get("ok"):
+                            raise RuntimeError("Avatar upload failed")
 
-
-                if 'profile_picture' in request.FILES:
-                    profile_picture = request.FILES.get('profile_picture')
-                    if profile_picture:
-                        profile.profile_picture = profile_picture
-                
-                # Save the profile
-                profile.save(using='gsharedb')
-                
-                # Update the auth user's email if it was changed
+                # Sync Django auth email if changed
                 if 'email' in request.POST and request.user.email != request.POST['email']:
                     request.user.email = request.POST['email']
                     request.user.save()
-                
+
                 messages.success(request, 'Profile updated successfully!')
                 return redirect('profile')
-                
+
             except Exception as e:
-                errors.append({
-                    'message': f'Error updating profile: {str(e)}',
-                    'is_success': False
-                })
-        
+                errors.append({'message': f'Error updating profile: {str(e)}', 'is_success': False})
+
         elif 'change_password' in request.POST:
             currentPassword = request.POST.get('current_password', '')
             newPassword1 = request.POST.get('new_password1', '')
             newPassword2 = request.POST.get('new_password2', '')
-            
-            isValid, errorMessage = validatePasswordChange(
-                request, currentPassword, newPassword1, newPassword2
-            )
-            
+            isValid, errorMessage = validatePasswordChange(request, currentPassword, newPassword1, newPassword2)
             if isValid:
                 handlePasswordChange(request, newPassword1)
                 messages.success(request, 'Your password was successfully updated!')
             else:
                 messages.error(request, errorMessage)
-            
             return redirect('profile')
-    
+
+    # ----- Ratings (unchanged) -----
     Feedback, avg_rating = get_user_ratings(profile.id)
     review_count = Feedback.count() if Feedback else 0
-
     avg = float(avg_rating or 0)
-    stars_full = max(0, min(5, int(round(avg))))  
+    stars_full = max(0, min(5, int(round(avg))))
     stars_text = '★' * stars_full + '☆' * (5 - stars_full)
-        
+
+    # ----- Presigned URL for avatar via helper -----
+    avatar_url = get_user_avatar_url_helper(profile.id)
+
     return render(request, "profile.html", {
         'user': profile,
         'errors': errors,
@@ -960,6 +1735,7 @@ def userprofile(request):
         'avg_rating': avg,
         'review_count': review_count,
         'stars_text': stars_text,
+        'avatar_url': avatar_url,
     })
 
 @login_required
@@ -1676,8 +2452,8 @@ def placed_data(request):
         'orders': order_list
     })
     
-def inprogress_data(request):
-    print("inprogress data")
+def pending_orders(request):
+    print("pending orders")
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Unauthorized'}, status=401)
     profile = get_user("email", request.user.email)
@@ -1685,15 +2461,17 @@ def inprogress_data(request):
         print("no user")
         return JsonResponse({'error': 'Profile not found'}, status=404)
 
-    orders = get_orders(profile, 'inprogress')
+    orders = get_orders(profile, 'pending')
     print(orders)
     if not orders:
         return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
 
     order_list = []
-    
     for order in orders:
         items = get_order_items(order) if order else []
+        order_id = order.id
+        delivery = get_delivery_for_order(order)
+        print("delivery:", delivery)
         subtotal = 0
         items_with_totals = []
         for item in items:
@@ -1718,10 +2496,98 @@ def inprogress_data(request):
             'id': order.id,
             'summary': order_summary,
             'items': items_with_totals,
+            'delivery_person': delivery.delivery_person.name if delivery and delivery.delivery_person else None,
+            'delivery_person_id': delivery.delivery_person.id if delivery and delivery.delivery_person else None,
         })
     print(order_list)
     return JsonResponse({
         'orders': order_list
+    })
+    
+def inprogress_data(request):
+    print("inprogress data")
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    profile = get_user("email", request.user.email)
+    if not profile:
+        print("no user")
+        return JsonResponse({'error': 'Profile not found'}, status=404)
+
+    my_orders = get_orders(profile, 'inprogress')
+    print(my_orders)
+    if not my_orders:
+        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+
+    my_order_list = []
+    
+    for order in my_orders:
+        items = get_order_items(order) if order else []
+        if (items.__len__() == 0):
+            continue
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+        
+        tax = Decimal(calculate_tax(subtotal)) / 100
+        grand_total = round(subtotal + tax, 2)
+
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+        my_order_list.append({
+            'id': order.id,
+            'summary': order_summary,
+            'items': items_with_totals,
+        })
+        
+    my_deliveries = []
+    deliveries = get_orders_by_delivery_person(profile, 'inprogress')
+    print("deliveries:", deliveries)
+        
+    for order in deliveries:
+        print("order:", order)
+        items = get_order_items(order) if order else []
+        if(items.__len__() == 0):
+            continue
+        subtotal = 0
+        items_with_totals = []
+        for item in items:
+            total = item[2] * item[5]  # quantity * price
+            subtotal += total
+            items_with_totals.append({
+                'name': item[4],  # item name
+                'quantity': item[2],
+                'price': item[5],  # item price
+                'total': total,
+            })
+        
+        tax = Decimal(calculate_tax(subtotal)) / 100
+        grand_total = round(subtotal + tax, 2)
+
+        order_summary = {
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': grand_total,
+        }
+        my_deliveries.append({
+            'id': order.id,
+            'summary': order_summary,
+            'items': items_with_totals,
+        })
+    print(my_deliveries)
+    return JsonResponse({
+        'orders': my_order_list,
+        'deliveries': my_deliveries
     })
     
     
@@ -1806,7 +2672,7 @@ def cart_data(request):
             'id': item[1],  # item id
         })
         
-    tax = Decimal(calculate_tax(subtotal))  # Convert to dollars for display
+    tax = Decimal(calculate_tax(subtotal))/100  # Convert to dollars for display
     grand_total = round(subtotal + tax, 2)
 
     order_summary = {
@@ -1847,7 +2713,7 @@ def group_carts(request):
                 'total': total,
             })
             
-        tax = Decimal(calculate_tax(subtotal))  # Convert to dollars for display
+        tax = Decimal(calculate_tax(subtotal))/100  # Convert to dollars for display
         grand_total = round(subtotal + tax, 2)
 
         order_summary = {

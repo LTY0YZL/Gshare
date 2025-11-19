@@ -134,16 +134,21 @@
         </div> {% endcomment %}
         <div name="Items_list" class="grid gap-4 mt-8">
             {% for item in page_obj %}
-                <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg active:scale-95 transition-all duration-150 active:bg-gray-300" 
-                onclick="handleItemClick(this, {{item.id}} )">
-                    <div class="text-lg font-bold">{{ item.name }}</div>
-                    <div class="text-gray-700">Price: ${{ item.price }}</div>
-                    <div class="text-gray-700">Store: {{ item.store.name }}</div>
-                    <div class="text-gray-700">Stock: {{ item.stock }}</div>
-                    <div>
-                        <input type="number" name="item_ammount" value="1" min="1" max="{{ item.stock }}" class="w-16 px-2 py-1 border border-gray-300 rounded-lg">
-                    </div>
+            <div class="item-card grid grid-cols-4 border border-gray-300 rounded-lg p-4 shadow-md items-center bg-white hover:bg-blue-500 hover:shadow-lg transition-all duration-150" 
+                onclick="handleItemClick(event, this, {{ item.id }})">
+
+                <div class="text-lg font-bold">{{ item.name }}</div>
+                <div class="text-gray-700">Price: ${{ item.price }}</div>
+                <div class="text-gray-700">Store: {{ item.store.name }}</div>
+
+                <div>
+                    <input type="number" 
+                        name="item_quantity"
+                        value="1"
+                        min="1"
+                        class="w-16 px-2 py-1 border border-gray-300 rounded-lg">
                 </div>
+            </div>
             {% empty %}
                 {% comment %} {% if store_filter != 'Kroger' %} {% endcomment %}
                     <p class="text-center text-gray-500">No items match your criteria.</p>
@@ -222,40 +227,52 @@
         cursor: pointer; /* Change cursor to pointer on hover */
     }
 
-    .item-card:active {
-        background-color: #e5e7eb;        /* darker gray on click */
-        transform: scale(0.98);           /* slight press effect */
+    .item-card.active-press {
+        background-color: #e5e7eb; /* darker gray on click */
+        transform: scale(0.98);      /* slight press effect */
+        transition: transform 0.1s, background-color 0.1s;
     }
 </style>
 <script>
     const csrf_token = "{{ csrf_token }}";
-    function handleItemClick(element, item_id) {
-        const ammountInput = element.querySelector('input[name="item_ammount"]');
-        const itemAmmount = ammountInput ? ammountInput.value : 1;
+    function handleItemClick(event, element, item_id) {
+        if (event.target.closest('input[name="item_quantity"]')) {
+            return;
+        }
 
-        fetch(`/cart/add/${item_id}/${itemAmmount}/`, {
+        const qtyInput = element.querySelector('input[name="item_quantity"]');
+        const qty = qtyInput ? parseInt(qtyInput.value) : 1;
+
+        fetch(`/cart/add/${item_id}/${qty}/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrf_token
-            },
-            {% comment %} body: JSON.stringify({ 'item_ammount': itemAmmount }) {% endcomment %}
-        })
-        .then(response => {
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-                return response.json();
-            } else {
-                throw new Error("Not authenticated or not found");
             }
         })
+        .then(response => response.json())
         .then(data => {
-            console.log(data);
+            console.log("Added to cart:", data);
         })
-        .catch(error => {
-            console.error('Error:', error);
-        });
+        .catch(error => console.error("Error:", error));
     }
+
+    document.querySelectorAll('.item-card').forEach(card => {
+        const input = card.querySelector('input');
+
+        card.addEventListener('mousedown', e => {
+            if (!e.target.closest('input')) {
+                card.classList.add('active-press');
+            }
+        });
+
+        card.addEventListener('mouseup', () => card.classList.remove('active-press'));
+        card.addEventListener('mouseleave', () => card.classList.remove('active-press'));
+
+        if (input) {
+            input.addEventListener('mousedown', e => e.stopPropagation());
+        }
+    });
     {% comment %} (function(){
     const select = document.getElementById('StoresSelect');
     const hidden = document.getElementById('store_filter');

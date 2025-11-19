@@ -1,5 +1,7 @@
 from django.db import models
+from django.utils import timezone
 from django.core.validators import MaxValueValidator, MinValueValidator
+import os
 
 
 class Users(models.Model):
@@ -12,6 +14,7 @@ class Users(models.Model):
     latitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
     longitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, db_index=True)
     username = models.CharField(max_length=50, db_column='usernames', unique=True)
+    image_key = models.CharField(max_length=512, null=True, blank=True)
     #area_code = models.IntegerField(db_column = 'addressCode',max_length=10, null=True, blank=True)
 
     class Meta:
@@ -168,3 +171,107 @@ class RecurringCartItem(models.Model):
         
     def __str__(self):
         return f"{self.quantity} x {self.item.name}"
+    
+
+class ProductImage(models.Model):
+    user = models.OneToOneField(Users,on_delete=models.CASCADE,related_name="profile_image",db_constraint=False, null=True, blank=True,  )  # set to True if you control the users table & want an FK constraint
+    image = models.ImageField(upload_to="products/")        # stored in S3, path saved in DB
+    file_name = models.CharField(max_length=255, blank=True) # keep original/base name
+    alt_text = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        # Auto-fill file_name from uploaded file/key if not provided
+        if self.image and not self.file_name:
+            self.file_name = os.path.basename(self.image.name)
+        super().save(*args, **kwargs)
+
+    class Meta:
+        managed = False
+        db_table = 'core_productimage'
+
+    def __str__(self):
+        return self.file_name or self.image.name
+    
+class UploadedImage(models.Model):
+    key = models.CharField(max_length=512, unique=True)      
+    content_type = models.CharField(max_length=128, blank=True)
+    original_name = models.CharField(max_length=256, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "uploaded_image"  
+        managed = False
+        
+    def __str__(self):
+        return self.key
+    
+class Receipt(models.Model):
+    id = models.BigAutoField(primary_key=True)
+
+    uploader = models.ForeignKey(
+        'Users',
+        models.DO_NOTHING,
+        db_column='uploader_id',
+        null=True,
+        blank=True,
+    )
+
+    s3_bucket = models.CharField(max_length=128)
+    s3_key = models.CharField(max_length=512)
+    uploaded_at = models.DateTimeField(default=timezone.now)
+    status = models.CharField(max_length=20, default='pending')
+    error = models.TextField(blank=True, default='')
+    gemini_json = models.JSONField(null=True, blank=True)
+    inferred_order_id = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'core_receipt'   # matches your existing table
+        managed = False
+
+    def __str__(self):
+        return f"Receipt #{self.id}"
+
+
+class ReceiptLine(models.Model):
+    # FK to the receipt row
+    receipt = models.ForeignKey(
+        Receipt,
+        related_name='lines',
+        on_delete=models.DO_NOTHING,
+        db_column='receipt_id',   # <- matches the column in receipt_line
+    )
+    name = models.CharField(max_length=256)
+    quantity = models.FloatField(default=1)
+    unit_price = models.FloatField(null=True, blank=True)
+    total_price = models.FloatField(null=True, blank=True)
+    meta = models.JSONField(null=True, blank=True)  # brand, code, etc.
+
+    class Meta:
+        db_table = 'core_receiptline'
+        managed = False
+
+    def __str__(self):
+        return f"{self.name} (receipt {self.receipt_id})"
+
+
+class ReceiptChatMessage(models.Model):
+    receipt = models.ForeignKey(
+        Receipt,
+        related_name='chat',
+        on_delete=models.DO_NOTHING,
+        db_column='receipt_id',   # <- matches the column in receipt_chat_message
+    )
+    role = models.CharField(
+        max_length=10,
+        choices=[('user', 'user'), ('assistant', 'assistant'), ('system', 'system')],
+    )
+    content = models.TextField()
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'core_receiptchatmessage'
+        managed = False
+
+    def __str__(self):
+        return f"{self.role}: {self.content[:40]}"

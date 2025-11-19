@@ -1,15 +1,15 @@
-{% load tailwind_cli%}
-
+{% load tailwind_cli %}
 {% load static %}
 {% tailwind_css %}
-<header class=" {% if navbar_bg_color %}bg-[{{ navbar_bg_color }}] bg-white text-black  {% else %}bg-[#150931] text-white  {% endif %}">
-    <nav class="nav flex-1 flex items-center justify-between space-x-4" >
-        <div class="flex items-center xpace-x-6">
-            <!-- <a href="{% url 'cart' %}"><img src="{% static 'media/Three_lines_menu.png' %}" class="md:ml-2 mr-4 w-12 h-12" ></a> -->
 
+<header class="{% if navbar_bg_color %}bg-[{{ navbar_bg_color }}] bg-white text-black{% else %}bg-[#150931] text-white{% endif %}">
+    <nav class="nav flex-1 flex items-center justify-between space-x-4">
+
+        <div class="flex items-center space-x-6">
             <a href="/">
-                <img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo w-12 h-12 rounded-full md: mr-4">
+                <img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo w-12 h-12 rounded-full">
             </a>
+
             <div class="flex items-center space-x-6 md:ml-10">
                 <!-- <a href="/">Home</a> -->
                 <a href="{% url 'cart' %}">Stores</a>
@@ -18,23 +18,133 @@
                 <a href="{% url 'groups_page' %}">Groups</a>
                 <a href="{% url 'order_history' %}">Orders</a>
                 <a href="{% url 'aboutus' %}">About</a>
+
+                {# Scan behaviour #}
+                {% if can_use_scan %}
+                    <a href="{% url 'receipt_upload' %}" class="nav-link">
+                        Scan
+                    </a>
+                {% else %}
+                    <button
+                        type="button"
+                        class="nav-link opacity-60 cursor-not-allowed"
+                        onclick="openScanInfoModal()"
+                    >
+                        Scan
+                    </button>
+                {% endif %}
             </div>
+
         </div>
-        
+
         <div class="flex items-center space-x-4">
             {% if request.user.is_authenticated %}
                 <div class="flex items-center">
                     <a href="{% url 'profile' %}" class="hover:underline">
                         {{ request.user.name|default:request.user.get_full_name|default:request.user.username }}
                     </a>
-                    <span style="padding: 0rem 1rem 0rem 1rem;" class="text-gray-400">|</span>
-                    <a style="padding-right: 1rem;" href="{% url 'logout' %}" class="hover:underline">Log out</a>
+                    <span class="text-gray-400 px-4">|</span>
+                    <a href="{% url 'logout' %}" class="hover:underline">Log out</a>
                 </div>
             {% else %}
                 <div class="flex items-center space-x-4">
-                    <a style="padding-right: 1rem;" href="{% url 'login' %}" class="hover:underline">Log in</a>
+                    <a href="{% url 'login' %}" class="hover:underline">Log in</a>
                 </div>
             {% endif %}
         </div>
+
     </nav>
 </header>
+
+<div id="scan-info-modal"
+     class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-lg max-w-md w-[90%] p-6 text-gray-800">
+        <h2 class="text-lg font-semibold mb-3">Scan is currently unavailable</h2>
+        <p class="mb-4 text-sm">
+            You can only use the <strong>Scan</strong> feature when you’re actively
+            delivering at least one order. Once you accept a delivery, this button
+            will become available.
+        </p>
+        <div class="flex justify-end">
+            <button
+                type="button"
+                class="px-4 py-2 rounded-lg bg-[#150931] text-white hover:bg-[#26134a]"
+                onclick="closeScanInfoModal()"
+            >
+                Got it
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openScanInfoModal() {
+        const modal = document.getElementById("scan-info-modal");
+        if (modal) {
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+    }
+
+    function closeScanInfoModal() {
+        const modal = document.getElementById("scan-info-modal");
+        if (modal) {
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+        }
+    }
+</script>
+
+{% if not has_active_delivery %}
+<!-- Modal shown when Scan is clicked but user has no active delivery -->
+<div id="scan-locked-modal"
+     class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6 text-gray-800">
+        <h2 class="text-lg font-semibold mb-2">
+            Scan is only for active deliveries
+        </h2>
+        <p class="text-sm text-gray-600 mb-4">
+            You don’t currently have an active delivery.  
+            Accept or start a delivery first, then you’ll be able to scan receipts.
+        </p>
+
+        <div class="flex justify-end space-x-3">
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-100"
+                data-close-scan-modal
+            >
+                OK
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const btn = document.getElementById("scan-locked-btn");
+    const modal = document.getElementById("scan-locked-modal");
+    const closeBtns = document.querySelectorAll("[data-close-scan-modal]");
+
+    if (!btn || !modal) return;
+
+    btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        modal.classList.remove("hidden");
+    });
+
+    closeBtns.forEach(el => {
+        el.addEventListener("click", () => {
+            modal.classList.add("hidden");
+        });
+    });
+
+    // Optional: click outside modal to close
+    modal.addEventListener("click", function (e) {
+        if (e.target === modal) {
+            modal.classList.add("hidden");
+        }
+    });
+});
+</script>
+{% endif %}

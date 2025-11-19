@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Receipt #{{ receipt.id }}</title>
+
+    <style>
+        .page-wrapper {
+            max-width: 1100px;
+            margin: 2.5rem auto 4rem auto;
+            padding: 0 1.5rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: #e5e7eb;
+        }
+        .status-badge.done    { background: #dcfce7; color: #166534; }
+        .status-badge.pending { background: #fef3c7; color: #92400e; }
+        .status-badge.processing { background: #e0f2fe; color: #075985; }
+
+        .timeline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 1.5rem 0 2rem 0;
+        }
+        .timeline-step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+        .timeline-step:not(:last-child)::after {
+            content: "";
+            position: absolute;
+            top: 14px;
+            right: -50%;
+            width: 100%;
+            height: 3px;
+            background: #e5e7eb;
+            z-index: 0;
+        }
+        .timeline-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            margin: 0 auto 0.25rem auto;
+            background: #e5e7eb;
+            border: 2px solid #9ca3af;
+            position: relative;
+            z-index: 1;
+        }
+        .timeline-step.active .timeline-dot {
+            background: #2563eb;
+            border-color: #2563eb;
+        }
+        .timeline-step.active {
+            color: #111827;
+            font-weight: 600;
+        }
+
+        .section-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1.5rem;
+            background: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        }
+        .section-title {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            text-align: left;
+        }
+
+        .image-box {
+            width: 100%;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+        .image-box img {
+            display: block;
+            width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+            background: #f9fafb;
+        }
+
+        .items-list {
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        .item-row {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .item-row:last-child {
+            border-bottom: none;
+        }
+        .item-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .item-meta {
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .flex-2col {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .flex-2col > .col {
+            flex: 1 1 300px;
+        }
+
+        /* Chat styles */
+        .chat-box {
+            max-height: 260px;
+            overflow-y: auto;
+            padding: 0.5rem;
+            border-radius: 0.75rem;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            margin-bottom: 0.75rem;
+        }
+        .chat-row {
+            display: flex;
+            margin: 0.35rem 0;
+        }
+        .chat-row.user {
+            justify-content: flex-end;
+        }
+        .chat-row.assistant {
+            justify-content: flex-start;
+        }
+        .chat-bubble {
+            max-width: 75%;
+            padding: 0.45rem 0.7rem;
+            border-radius: 0.9rem;
+            font-size: 0.9rem;
+            line-height: 1.35;
+        }
+        .chat-bubble.user {
+            background: #2563eb;
+            color: #ffffff;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .chat-bubble.assistant {
+            background: #e5e7eb;
+            color: #111827;
+            border-bottom-left-radius: 0.25rem;
+        }
+        .chat-empty {
+            font-size: 0.85rem;
+            color: #9ca3af;
+            text-align: center;
+            padding: 0.5rem 0;
+        }
+
+        .chat-form textarea {
+            width: 100%;
+            min-height: 70px;
+            resize: vertical;
+            padding: 0.6rem 0.75rem;
+            border-radius: 0.65rem;
+            border: 1px solid #d1d5db;
+            font-size: 0.95rem;
+            margin-bottom: 0.5rem;
+        }
+        .chat-form button {
+            display: block;
+            width: 100%;
+            padding: 0.55rem 0.75rem;
+            border-radius: 0.65rem;
+            border: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            background: #2563eb;
+            color: #ffffff;
+        }
+        .chat-form button:hover {
+            background: #1d4ed8;
+        }
+
+        .footer-actions {
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+        .btn-secondary {
+            display: inline-block;
+            padding: 0.45rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #d1d5db;
+            background: #ffffff;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .btn-secondary:hover {
+            background: #f3f4f6;
+        }
+    </style>
+</head>
+
+{% include "navbar.html" %}
+
+<body class="desgin">
+<div class="page-wrapper">
+
+    <h1 style="text-align:center; font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem;">
+        Receipt #{{ receipt.id }}
+    </h1>
+    <p style="text-align:center; margin-bottom: 0.5rem;">
+        Status:
+        <span class="status-badge {{ receipt.status }}">
+            {{ receipt.status|default:"pending" }}
+        </span>
+    </p>
+
+    <div class="timeline">
+        <div class="timeline-step active">
+            <div class="timeline-dot"></div>
+            <div>Uploaded</div>
+        </div>
+        <div class="timeline-step {% if receipt.status in 'processing done' %}active{% endif %}">
+            <div class="timeline-dot"></div>
+            <div>Scanning</div>
+        </div>
+        <div class="timeline-step {% if receipt.status == 'done' %}active{% endif %}">
+            <div class="timeline-dot"></div>
+            <div>Finished</div>
+        </div>
+    </div>
+
+
+    <div class="section-card">
+        <div class="section-title">Extracted Items</div>
+
+        {% if lines %}
+            <div class="items-list">
+                {% for line in lines %}
+                    <div class="item-row">
+                        <div class="item-name">{{ line.name }}</div>
+                        <div class="item-meta">
+                            Qty: {{ line.quantity|floatformat:-2 }}
+                            {% if line.unit_price %} — Unit: ${{ line.unit_price|floatformat:2 }}{% endif %}
+                            {% if line.total_price %} — Total: ${{ line.total_price|floatformat:2 }}{% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p style="color:#6b7280; font-size:0.9rem;">
+                We haven’t parsed any items yet. If you just uploaded this receipt,
+                wait a few seconds and refresh.
+            </p>
+        {% endif %}
+    </div>
+
+    <div class="section-card">
+        <h2 class="section-title">Chat with AI</h2>
+
+        <!-- Chat history -->
+        <div class="chat-messages">
+            {% for msg in chat_messages %}
+                {% if msg.role == "user" %}
+                    <div class="chat-bubble chat-bubble-user">
+                        {{ msg.content }}
+                    </div>
+                {% else %}
+                    <div class="chat-bubble chat-bubble-assistant">
+                        {{ msg.content }}
+                    </div>
+                {% endif %}
+            {% empty %}
+                <p class="chat-empty">
+                    Ask the AI to correct items, change quantities, or remove things from the list.
+                </p>
+            {% endfor %}
+        </div>
+
+        <!-- Input row: iMessage-style pill + green arrow -->
+        <form id="chat-form"
+            method="post"
+            action="{% url 'receipt_chat' receipt.id %}"
+            class="chat-input-row">
+            {% csrf_token %}
+            <input id="chat-input"
+                name="message"
+                type="text"
+                placeholder="Text Message"
+                autocomplete="off"
+                class="chat-input-field" />
+
+            <button type="submit"
+                    aria-label="Send message"
+                    class="chat-send-btn">
+                ↑
+            </button>
+        </form>
+    </div>
+
+    <div class="footer-actions">
+        <a href="{% url 'receipt_upload' %}" class="btn-secondary">
+            Upload another receipt
+        </a>
+    </div>
+</div>
+
+<style>
+    .chat-messages {
+        max-height: 260px;
+        overflow-y: auto;
+        padding: 0.5rem 0;
+    }
+
+    .chat-bubble {
+        display: inline-block;
+        padding: 0.4rem 0.8rem;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        margin: 0.2rem 0;
+        max-width: 70%;
+        word-wrap: break-word;
+    }
+
+    .chat-bubble-user {
+        background: #2563eb;
+        color: #fff;
+        margin-left: auto;
+        display: block;
+    }
+
+    .chat-bubble-assistant {
+        background: #f3f4f6;
+        color: #111827;
+        margin-right: auto;
+        display: block;
+    }
+
+    .chat-empty {
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+
+    /* iMessage-style input row */
+    .chat-input-row {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin-top: 0.75rem;
+    }
+
+    .chat-input-field {
+        flex: 1;
+        border-radius: 999px;
+        border: 1px solid #d4d4d4;
+        padding: 0.4rem 0.8rem;
+        font-size: 0.9rem;
+        outline: none;
+        background: #ffffff;
+    }
+
+    .chat-input-field:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+    }
+
+    .chat-send-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: none;
+        background: #22c55e; /* green */
+        color: #ffffff;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .chat-send-btn:hover {
+        background: #16a34a;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('chat-form');
+    const input = document.getElementById('chat-input');
+
+    if (!form || !input) return;
+
+    // Prevent sending empty messages
+    form.addEventListener('submit', function (e) {
+        if (!input.value.trim()) {
+            e.preventDefault();
+        }
+    });
+
+    // Enter key already submits in a single-line input, so no extra
+    // handler is strictly needed. This just ensures it works even
+    // if the browser behavior changes.
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            // no Shift+Enter behavior since it's single-line
+            if (!input.value.trim()) {
+                e.preventDefault();
+            }
+        }
+    });
+});
+</script>
+
+</body>
+</html>
