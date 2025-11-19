@@ -8,6 +8,12 @@ from django.http import JsonResponse
 from django.contrib.auth.models import User
 from django.views.decorators.http import require_GET
 
+from django.http import JsonResponse
+from .models import Message, ChatGroup
+from core.utils.aws_s3 import presigned_url
+
+
+
 # Create your views here.
 @login_required
 def groups_page(request):
@@ -130,6 +136,21 @@ def autocomplete_usernames(request):
         users = User.objects.filter(username__icontains=query)[:10]
         results = list(users.values_list("username", flat=True))
     return JsonResponse(results, safe=False)
+
+def load_chat_history(request, room_slug):
+    messages = Message.objects.filter(group__slug=room_slug).order_by('timestamp')
+    data = []
+    print(messages)
+
+    for m in messages:
+        data.append({
+            'username': m.sender.username,
+            'message': m.content,
+            'timestamp': m.timestamp.isoformat(),
+            'image_url': presigned_url(m.image) if m.image else None
+        })
+
+    return JsonResponse({'messages': data})
 
         
 

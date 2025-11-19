@@ -168,7 +168,6 @@
     let isTyping = false;
     let unreadNotifications = [];
 
-    window.onload = () => chatLog.scrollTop = chatLog.scrollHeight;
 
     // load notifications on page load
     window.addEventListener('load', () => {
@@ -241,17 +240,7 @@
         const data = JSON.parse(e.data);
 
         if (data.type === 'message') {
-            const messageDiv = document.createElement('div');
-            const isSelf = data.username === username;
-            messageDiv.className = `max-w-[70%] px-4 py-2 rounded-2xl break-words text-sm leading-snug ${
-                isSelf ? 'bg-blue-600 text-white self-end' : 'bg-gray-300 text-gray-900 self-start'
-            }`;
-            messageDiv.innerHTML = `<span class='font-semibold'>${data.username}:</span> ${data.message}`;
-
-            if (data.image_url) {
-                messageDiv.innerHTML += `<br><img src="${data.image_url}" alt="Image" class="max-w-xs rounded-lg mt-2">`;
-            }
-            chatLog.appendChild(messageDiv);
+            renderMessage(data);
             chatLog.scrollTop = chatLog.scrollHeight;
 
             removeTypingIndicator(data.username);
@@ -265,7 +254,8 @@
           const timeStr = now.getHours().toString().padStart(2, '0') + ':' + 
                           now.getMinutes().toString().padStart(2, '0');
           notificationDiv.innerHTML = `
-            <p class="text-gray-200>${data.title}</p>
+            <p class="text-gray-200">${data.title}</p>
+            <p class="text-gray-300">${data.body}</p>
             <p class="text-xs text-gray-400 mt-1">${timeStr}</p>
             `;
           notificationList.insertBefore(notificationDiv, notificationList.firstChild);
@@ -402,6 +392,45 @@
         const badge = document.getElementById('notification-badge');
         badge.textContent = '0';
     });
+
+
+    async function loadHistory() {
+      let url;
+
+      {% if thread %}
+          url = `/groups/history/dm/{{ thread.id }}/`;
+      {% else %}
+          url = `/groups/history/${roomName}/`;
+      {% endif %}
+      console.log(url);
+
+      const res = await fetch(url);
+      const data = await res.json();
+      data.messages.forEach(msg => renderMessage(msg));
+    }
+
+    function renderMessage(msg) {
+      const messageDiv = document.createElement('div');
+      const isSelf = msg.username === username;
+
+      messageDiv.className = `max-w-[70%] px-4 py-2 rounded-2xl break-words text-sm leading-snug ${
+          isSelf ? 'bg-blue-600 text-white self-end' : 'bg-gray-300 text-gray-900 self-start'
+      }`;
+
+      messageDiv.innerHTML = `<span class='font-semibold'>${msg.username}:</span> ${msg.message}`;
+
+      if (msg.image_url) {
+          messageDiv.innerHTML += `<br><img src="${msg.image_url}" class="max-w-xs rounded-lg mt-2">`;
+      }
+
+      chatLog.appendChild(messageDiv);
+  }
+
+    window.addEventListener("load", async () => {
+      await loadHistory();
+      chatLog.scrollTop = chatLog.scrollHeight;
+  });
+
   </script>
 </body>
 </html>
