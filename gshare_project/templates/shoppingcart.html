@@ -901,6 +901,7 @@
             if (data.success) {
                 console.log("removed item");
                 display('cart');
+                window.location.reload();
             } else {
                 console.error(data.error);
             }
