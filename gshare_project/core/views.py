@@ -3167,8 +3167,8 @@ def paymentsCheckout(request, order_id):
             ## KEEP ABOVE ONLY ONCE PAYMENTS ARE IN LIVE MODE, THIS WONT WORK IN TEST MODE
             customer_email=request.user.email,  # helps with tax and receipts
             
-            success_url=f"http://www.gshare.me/payment_success/{order.id}/", # should do this if success: # consider moving this to webhook on payment success
-            cancel_url=f"http://www.gshare.me/payments/{order.id}",
+            success_url=f"https://www.gshare.me/payment_success/{order.id}/", # should do this if success: # consider moving this to webhook on payment success
+            cancel_url=f"https://www.gshare.me/payments/{order.id}",
         )
         print("Session URL: " + checkoutSession.url)
         return redirect(checkoutSession.url)
