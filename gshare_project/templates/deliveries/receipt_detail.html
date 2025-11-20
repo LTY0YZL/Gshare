@@ -369,6 +369,20 @@
                 🔍 Match Orders
             </button>
         </form>
+
+        {% if receipt.inferred_order_id %}
+            <form method="post"
+                action="{% url 'receipt_confirm_delivery' receipt.id %}"
+                style="margin-top: 0.75rem; text-align: right;">
+                {% csrf_token %}
+                <button type="submit"
+                        class="inline-flex items-center px-3 py-1.5 rounded-md
+                                bg-green-600 text-white text-xs font-medium hover:bg-green-700">
+                    ✅ Confirm match & mark delivered
+                </button>
+            </form>
+        {% endif %}
+
     </div>
 
     <div class="footer-actions">

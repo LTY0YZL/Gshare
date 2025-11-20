@@ -1685,12 +1685,10 @@ def receipt_chat_view(request, rid: int):
     user_message = (request.POST.get("message") or "").strip()
 
     if not user_message:
-        # For normal POST, just redirect back
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return JsonResponse({"ok": False, "error": "Empty message"}, status=400)
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse({"reply": ""})
         return redirect("receipt_detail", rid=receipt.id)
 
-    # Load prior chat (user + assistant) from default DB
     history_qs = ReceiptChatMessage.objects.filter(
         receipt_id=receipt.id
     ).order_by("created_at", "id")
@@ -1701,14 +1699,13 @@ def receipt_chat_view(request, rid: int):
         if m.role in ("user", "assistant")
     ]
 
-    # Save user message
+    # save user msg
     ReceiptChatMessage.objects.create(
         receipt_id=receipt.id,
         role="user",
         content=user_message,
     )
 
-    # Call Gemini (which also updates lines)
     try:
         reply_text = chat_about_receipt(
             receipt,
@@ -1718,23 +1715,83 @@ def receipt_chat_view(request, rid: int):
     except Exception as e:
         reply_text = f"Sorry, I had an error talking to the AI: {e}"
 
-    # Save assistant reply
+    # save assistant msg
     ReceiptChatMessage.objects.create(
         receipt_id=receipt.id,
         role="assistant",
         content=reply_text,
     )
 
-    # If this is an AJAX request, return JSON so JS can update the chat
-    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        return JsonResponse(
-            {
-                "ok": True,
-                "reply": reply_text,
-            }
+    # AJAX request → JSON
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse({"reply": reply_text})
+
+    # normal form post → redirect
+    return redirect("receipt_detail", rid=receipt.id)
+
+
+@login_required
+@require_POST
+def receipt_confirm_delivery(request, rid: int):
+    """
+    Called when the user clicks '✅ Confirm match & mark delivered'.
+    Uses receipt.inferred_order_id and marks that delivery as completed.
+    """
+    if request.method != "POST":
+        return redirect("receipt_detail", rid=rid)
+
+    # Receipt lives in gsharedb
+    receipt = get_object_or_404(Receipt.objects.using("gsharedb"), pk=rid)
+
+    if not receipt.inferred_order_id:
+        # nothing to confirm
+        ReceiptChatMessage.objects.create(
+            receipt_id=receipt.id,
+            role="assistant",
+            content="I don't have a matched order to confirm yet.",
+        )
+        return redirect("receipt_detail", rid=receipt.id)
+
+    order_id = receipt.inferred_order_id
+
+    # Wrap DB updates in a transaction on gsharedb
+    with transaction.atomic(using="gsharedb"):
+        # 1) Update the order status (if you want)
+        try:
+            order = Orders.objects.using("gsharedb").get(pk=order_id)
+            order.status = "delivered"   # or "completed", whatever you use
+            order.save(using="gsharedb")
+        except Orders.DoesNotExist:
+            order = None
+
+        # 2) Update the corresponding delivery row for this driver
+        delivery_qs = Deliveries.objects.using("gsharedb").filter(
+            order_id=order_id,
         )
 
-    # Fallback: normal non-AJAX behaviour
+        # if you want to restrict to the current driver:
+        # driver_user_id = request.user.id  # depends how you map auth user -> Users
+        # delivery_qs = delivery_qs.filter(delivery_person_id=driver_user_id)
+
+        delivery = delivery_qs.first()
+        if delivery:
+            delivery.status = "delivered"     # or "completed"
+            delivery.delivery_time = timezone.now()
+            delivery.save(using="gsharedb")
+
+    # 3) Add a chat message summarizing what happened
+    msg_parts = ["I've marked the delivery as completed"]
+    if order:
+        msg_parts.append(f"for order #{order.id}.")
+    else:
+        msg_parts.append("(but I couldn't find the order record).")
+
+    ReceiptChatMessage.objects.create(
+        receipt_id=receipt.id,
+        role="assistant",
+        content=" ".join(msg_parts),
+    )
+
     return redirect("receipt_detail", rid=receipt.id)
 
 @login_required
