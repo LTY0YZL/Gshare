@@ -31,7 +31,7 @@
                 </div>
                 <div style="width: 100%; display: flex; justify-content: center; align-items: center; flex-shrink: 0;">
             
-                    <form action="{% url 'paymentscheckout' %}" method="post">
+                    <form action="{% url 'paymentscheckout' orderID %}" method="post">
 
                         {% csrf_token %}
                         <button style="border: 1px solid darkblue; padding: 8px; max-width: 15vw; align-self: center; background-color: #3A97D4; color: aliceblue;">Confirm Payments</button>

@@ -7,6 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stores_cart</title>
     {% tailwind_css %}
+    <link rel="stylesheet" href="{% static 'css/shoppingcart.css' %}?v={% now 'U' %}">
 </head>
 {% include "navbar.html" %}
 <body>
@@ -27,125 +28,78 @@
     <div id="tab-pending" class="tab-content hidden"></div>
 
     
-    <div id="tab-cart" class="tab-content grid grid-cols-2 h-screen gap-4 p-4">
-        <div class="col-span-1 bg-white">
+    <div id="tab-cart" class="tab-content cart-grid">
+        <div class="items-column">
             {% for item in items %}
-                <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                    <div class="flex flex-row">
-                        <div class="flex flex-col">
-                            <h2 class="text-xl font-bold mb-2 pl-8">{{ item.name }}</h2>
-                            <div flex flex-row>
-                                <p class="mb-1 pl-32">Quantity: {{ item.quantity }}</p>
-                                <input type="number" name="item_amount" value="{{item.quantity}}" min="1" class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
-                                <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
-                                onclick="updateItemNum(this, {{ item.id }}, this.previousElementSibling.value)">
-                                    Update
-                                </button>
-                            </div>
-                            <p class="mb-1 pl-32">Price: ${{ item.price }}</p>
-                            <p class="mb-1 pl-32">Total: ${{ item.total }}</p>
+                <div class="item-card">
+                    <div class="item-header">
+                        <h2 class="item-title">{{ item.name }}</h2>
+                        <button class="btn-outline" onclick="removeItem({{ item.id }}, {{item.quantity}})">Remove</button>
+                    </div>
+                    <div class="item-details">
+                        <div class="item-row">
+                            <span class="item-label">Quantity:</span>
+                            <input type="number" name="item_amount" value="{{item.quantity}}" min="1" class="qty-input">
+                            <button class="btn-secondary" onclick="updateItemNum(this, {{ item.id }}, this.previousElementSibling.value)">Update</button>
                         </div>
-                        <button class="ml-auto self-center">
-                            <a class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
-                            onclick="removeItem({{ item.id }}, {{item.quantity}})">Remove item</a>
-                        </button>
+                        <div class="item-row">
+                            <span class="item-label">Price:</span>
+                            <span class="item-value">${{ item.price }}</span>
+                        </div>
+                        <div class="item-row">
+                            <span class="item-label">Total:</span>
+                            <span class="item-value">${{ item.total }}</span>
+                        </div>
                     </div>
                 </div>
             {% empty %}
-            <p class="p-4">Your cart is empty.</p>
+            <p class="empty-state">Your cart is empty.</p>
             {% endfor %}
         </div>
-        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
-            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-            <p class="mb-2">Subtotal: ${{ order.subtotal }}</p>
-            <p class="mb-2">Tax: ${{ order.tax }}</p>
-            <p class="mb-4 font-bold">Total: ${{ order.total }}</p>
-            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-            onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Publish Order</button>
-            <input type="text" id="group_password" name="group_password" placeholder="Enter group password" class="w-full p-2 border border-gray-300 rounded-lg bg-white text-black mt-4 mb-4">
-            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-            onclick="createGroup({{ id|default:'null' }})">
-                    Create Group For my Cart
-            </button>
-            <!-- Trigger button -->
-            <p>Join an existing group by clicking the button</p>
-            <button
-                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
-                onclick="openPopup()">
-                Join Group Order
-            </button>
+        <div class="summary-column">
+            <div class="summary-card">
+                <h2 class="summary-title">Order Summary</h2>
+                <div class="summary-row"><span>Subtotal:</span><span>${{ order.subtotal }}</span></div>
+                <div class="summary-row"><span>Tax:</span><span>${{ order.tax }}</span></div>
+                <div class="summary-total"><span>Total:</span><span>${{ order.total }}</span></div>
+                
+                <button class="btn-primary" onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Publish Order</button>
+                
+                <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
+                    <input type="text" id="group_password" name="group_password" placeholder="Enter group password" class="input-field">
+                    <button class="btn-secondary" style="width:100%" onclick="createGroup({{ id|default:'null' }})">Create Group For my Cart</button>
+                </div>
+
+                <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
+                    <p style="margin-bottom: 12px; font-weight: 600;">Join an existing group</p>
+                    <button class="btn-secondary" style="width:100%" onclick="openPopup()">Join Group Order</button>
+                </div>
+            </div>
         </div>
 
         <!-- Popup Modal -->
-        <div id="popupModal"
-            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-            <div class="bg-white p-6 rounded-2xl shadow-lg w-96">
-                <h2 class="text-2xl font-bold mb-4">Enter Details</h2>
+        <div id="popupModal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <h2 class="modal-title">Enter Details</h2>
                 <form id="popupForm" onsubmit="submitPopup(event, 'cart')">
                     <div class="mb-3">
                         <label class="block font-semibold mb-1">Group Id</label>
-                        <input type="text" id="GroupId" name="GroupId"
-                            class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
-                            required>
+                        <input type="text" id="GroupId" name="GroupId" class="input-field" required>
                     </div>
                     <div class="mb-3">
                         <label class="block font-semibold mb-1">Password</label>
-                        <input type="text" id="Password" name="Password"
-                            class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
-                            required>
+                        <input type="text" id="Password" name="Password" class="input-field" required>
                     </div>
-                    <div class="flex justify-end space-x-2 mt-4">
-                        <button type="button"
-                                class="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400"
-                                onclick="closePopup()">
-                            Cancel
-                        </button>
-                        <button type="submit"
-                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                            Submit
-                        </button>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-outline" onclick="closePopup()">Cancel</button>
+                        <button type="submit" class="btn-primary" style="width: auto; margin-bottom: 0;">Submit</button>
                     </div>
                 </form>
             </div>
         </div>
-
-
-
     </div>
 </body>
-<style>
-    .tabsList {
-    display: flex;
-    justify-content: center;
-    background-color: #DBEAFE; /* Tailwind blue-100 */
-    border-bottom: 2px solid #93C5FD; /* Tailwind blue-300 */
-    padding: 0.5rem;
-    gap: 0.5rem;
-    }
 
-    .tabButton {
-    background-color: #60A5FA; /* Tailwind blue-400 */
-    color: white;
-    padding: 0.5rem 1.25rem;
-    font-weight: 600;
-    border-radius: 0.5rem 0.5rem 0 0;
-    border: none;
-    cursor: pointer;
-    transition: all 0.2s ease-in-out;
-    }
-
-    .tabButton:hover {
-    background-color: #3B82F6; /* Tailwind blue-500 */
-    transform: translateY(-1px);
-    }
-
-    .tabButton.active {
-    background-color: #2563EB; /* Tailwind blue-600 */
-    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.15);
-    transform: translateY(-2px);
-    }
-    
-</style>
 <script>
     function display(tabName, btn) {
         console.log("display() called with tabName:", tabName, "btn:", btn);
@@ -208,7 +162,7 @@
             const orders = Array.isArray(data) ? data : (Array.isArray(data.orders) ? data.orders : []);
 
             if (orders.length === 0) {
-                tab.innerHTML = `<p class='p-4'>You have no group orders.</p>`;
+                tab.innerHTML = `<p class='empty-state'>You have no group orders.</p>`;
                 return;
             }
 
@@ -222,29 +176,34 @@
                 const total = Number(summary.total) || 0;
                 const orderId = order.id || 'null';
 
-                html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
-
-                html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
+                html += `<div class="cart-grid">`;
 
                 // Left column — Items
-                html += `<div class="col-span-1 bg-white">`;
+                html += `<div class="items-column">`;
                 if (items.length === 0) {
-                    html += `<p class="p-4">No items for this group order.</p>`;
+                    html += `<p class="empty-state">No items for this group order.</p>`;
                 } else {
                     items.forEach(item => {
                         const qty = Number(item.quantity) || 0;
                         const price = Number(item.price) || 0;
                         const totalItem = Number(item.total) || (qty * price);
                         html += `
-                        <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                            <div class="flex flex-row">
-                                <div class="flex flex-col">
-                                    <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                    <div class="flex flex-row">
-                                        <p class="mb-1 pl-32">Quantity: ${qty}</p>
-                                    </div>
-                                    <p class="mb-1 pl-32">Price: $${price.toFixed(2)}</p>
-                                    <p class="mb-1 pl-32 font-bold">Total: $${totalItem.toFixed(2)}</p>
+                        <div class="item-card">
+                            <div class="item-header">
+                                <h2 class="item-title">${item.name}</h2>
+                            </div>
+                            <div class="item-details">
+                                <div class="item-row">
+                                    <span class="item-label">Quantity:</span>
+                                    <span class="item-value">${qty}</span>
+                                </div>
+                                <div class="item-row">
+                                    <span class="item-label">Price:</span>
+                                    <span class="item-value">$${price.toFixed(2)}</span>
+                                </div>
+                                <div class="item-row">
+                                    <span class="item-label">Total:</span>
+                                    <span class="item-value">$${totalItem.toFixed(2)}</span>
                                 </div>
                             </div>
                         </div>`;
@@ -252,55 +211,42 @@
                 }
                 html += `</div>`;
 
-                html += `</div>`; // end order container
-
-
                 // Right column — Summary + Popup trigger
                 html += `
-                <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
-                    <h2 class="text-2xl font-bold mb-4">Group Order Summary</h2>
-                    <p class="mb-2">Subtotal: $${subtotal.toFixed(2)}</p>
-                    <p class="mb-2">Tax: $${tax.toFixed(2)}</p>
-                    <p class="mb-4 font-bold">Total: $${total.toFixed(2)}</p>
-                    <p>Join an existing group by clicking the button</p>
-                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
-                            onclick="openPopup('group')">
-                        Leave Group Order
-                    </button>
-                </div>
+                <div class="summary-column">
+                    <div class="summary-card">
+                        <h2 class="summary-title">Group Order Summary</h2>
+                        <div class="summary-row"><span>Subtotal:</span><span>$${subtotal.toFixed(2)}</span></div>
+                        <div class="summary-row"><span>Tax:</span><span>$${tax.toFixed(2)}</span></div>
+                        <div class="summary-total"><span>Total:</span><span>$${total.toFixed(2)}</span></div>
+                        
+                        <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
+                            <button class="btn-danger" style="width:100%" onclick="openPopup('group')">Leave Group Order</button>
+                        </div>
+                    </div>
                 </div>`;
+                
+                html += `</div>`; // end cart-grid
             });
 
             // Add popup modal once
             html += `
             <!-- Popup Modal -->
-            <div id="popupModal"
-                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-                <div class="bg-white p-6 rounded-2xl shadow-lg w-96">
-                    <h2 class="text-2xl font-bold mb-4">Leave Group</h2>
+            <div id="popupModal" class="modal-overlay hidden">
+                <div class="modal-content">
+                    <h2 class="modal-title">Leave Group</h2>
                     <form id="popupForm" onsubmit="submitPopup(event, 'group')">
                         <div class="mb-3">
                             <label class="block font-semibold mb-1">Group ID</label>
-                            <input type="text" id="GroupId" name="GroupId"
-                                class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
-                                required>
+                            <input type="text" id="GroupId" name="GroupId" class="input-field" required>
                         </div>
                         <div class="mb-3">
                             <label class="block font-semibold mb-1">Password</label>
-                            <input type="text" id="Password" name="Password"
-                                class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
-                                required>
+                            <input type="text" id="Password" name="Password" class="input-field" required>
                         </div>
-                        <div class="flex justify-end space-x-2 mt-4">
-                            <button type="button"
-                                    class="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400"
-                                    onclick="closePopup()">
-                                Cancel
-                            </button>
-                            <button type="submit"
-                                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                                Submit
-                            </button>
+                        <div class="modal-actions">
+                            <button type="button" class="btn-outline" onclick="closePopup()">Cancel</button>
+                            <button type="submit" class="btn-primary" style="width: auto; margin-bottom: 0;">Submit</button>
                         </div>
                     </form>
                 </div>
@@ -311,7 +257,7 @@
         .catch(err => {
             console.error('Error retrieving group cart:', err);
             const tab = document.getElementById("tab-group");
-            tab.innerHTML = `<p class="p-4">Error loading group orders.</p>`;
+            tab.innerHTML = `<p class="empty-state">Error loading group orders.</p>`;
         });
 }
 
@@ -330,7 +276,7 @@
                 const orders = Array.isArray(data) ? data : (Array.isArray(data.orders) ? data.orders : []);
 
                 if (orders.length === 0) {
-                    tab.innerHTML = `<p class='p-4'>You have no placed orders.</p>`;
+                    tab.innerHTML = `<p class='empty-state'>You have no placed orders.</p>`;
                     return;
                 }
 
@@ -343,31 +289,34 @@
                     const total = Number(summary.total) || 0;
                     const orderId = order.id || 'null';
 
-                    html += `<div class="bg-gray-100 shadow-md rounded-lg p-4 mb-6">`; // <-- light gray background + shadow + padding
+                    html += `<div class="cart-grid" style="margin-bottom: 40px; border-bottom: 1px solid #E5E7EB; padding-bottom: 24px;">`;
 
-                    html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
-
-                    // left column - items (same style as displayCart)
-                    html += `<div class="col-span-1">`;
+                    // left column - items
+                    html += `<div class="items-column">`;
                     if (items.length === 0) {
-                        html += `<p class="p-4">No items for this order.</p>`;
+                        html += `<p class="empty-state">No items for this order.</p>`;
                     } else {
                         items.forEach(item => {
                             const itemQty = Number(item.quantity) || 0;
                             const itemPrice = Number(item.price) || 0;
                             const itemTotal = Number(item.total) || (itemQty * itemPrice);
                             html += `
-                            <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                                <div class="flex flex-row">
-                                    <div class="flex flex-col">
-                                        <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                        {% comment %} <div flex flex-row> {% endcomment %}
-                                            <p class="mb-1 pl-32">Quantity: ${itemQty}</p>
-                                            {% comment %} <input type="number" name="item_amount" value="${itemQty}" min="1"
-                                                class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black"> {% endcomment %}
-                                        {% comment %} </div> {% endcomment %}
-                                        <p class="mb-1 pl-32">Price: $${itemPrice.toFixed(2)}</p>
-                                        <p class="mb-1 pl-32"><b>Total: $${itemTotal.toFixed(2)}</b></p>
+                            <div class="item-card">
+                                <div class="item-header">
+                                    <h2 class="item-title">${item.name}</h2>
+                                </div>
+                                <div class="item-details">
+                                    <div class="item-row">
+                                        <span class="item-label">Quantity:</span>
+                                        <span class="item-value">${itemQty}</span>
+                                    </div>
+                                    <div class="item-row">
+                                        <span class="item-label">Price:</span>
+                                        <span class="item-value">$${itemPrice.toFixed(2)}</span>
+                                    </div>
+                                    <div class="item-row">
+                                        <span class="item-label">Total:</span>
+                                        <span class="item-value">$${itemTotal.toFixed(2)}</span>
                                     </div>
                                 </div>
                             </div>`;
@@ -375,18 +324,18 @@
                     }
                     html += `</div>`; // end left column
 
-                    // right column - summary (same style as displayCart)
+                    // right column - summary
                     html += `
-                    <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
-                        <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                        <p class="mb-2">Subtotal: $${subtotal.toFixed(2)}</p>
-                        <p class="mb-2">Tax: $${tax.toFixed(2)}</p>
-                        <p class="mb-4 font-bold">Total: $${total.toFixed(2)}</p>
+                    <div class="summary-column">
+                        <div class="summary-card">
+                            <h2 class="summary-title">Order Summary</h2>
+                            <div class="summary-row"><span>Subtotal:</span><span>$${subtotal.toFixed(2)}</span></div>
+                            <div class="summary-row"><span>Tax:</span><span>$${tax.toFixed(2)}</span></div>
+                            <div class="summary-total"><span>Total:</span><span>$${total.toFixed(2)}</span></div>
+                        </div>
                     </div>`;
 
-                    html += `</div>`; // end order grid
-
-                    html += `</div>`; // end order container
+                    html += `</div>`; // end cart-grid
 
                 });
 
@@ -395,7 +344,7 @@
             .catch(err => {
                 console.error('Error retrieving placed orders:', err);
                 const tab = document.getElementById("tab-placed");
-                tab.innerHTML = `<p class="p-4">Error loading placed orders.</p>`;
+                tab.innerHTML = `<p class="empty-state">Error loading placed orders.</p>`;
             });
         }
 
@@ -413,9 +362,9 @@
                 const deliveries = Array.isArray(data) ? data : (Array.isArray(data.deliveries) ? data.deliveries : []);
                 console.log(orders);
 
-                if (orders.length === 0) {
+                if (orders.length === 0 && deliveries.length === 0) {
                     console.log("no orders found");
-                    tab.innerHTML = `<p class='p-4'>You have no placed orders.</p>`;
+                    tab.innerHTML = `<p class='empty-state'>You have no orders in progress.</p>`;
                     return;
                 }
 
@@ -429,31 +378,34 @@
                     const total = Number(summary.total) || 0;
                     const orderId = order.id || 'null';
 
-                    html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
+                    html += `<div class="cart-grid" style="margin-bottom: 40px; border-bottom: 1px solid #E5E7EB; padding-bottom: 24px;">`;
 
-                    html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
-
-                    // left column - items (same style as displayCart)
-                    html += `<div class="col-span-1 bg-white">`;
+                    // left column - items
+                    html += `<div class="items-column">`;
                     if (items.length === 0) {
-                        html += `<p class="p-4">No items for this order.</p>`;
+                        html += `<p class="empty-state">No items for this order.</p>`;
                     } else {
                         items.forEach(item => {
                             const itemQty = Number(item.quantity) || 0;
                             const itemPrice = Number(item.price) || 0;
                             const itemTotal = Number(item.total) || (itemQty * itemPrice);
                             html += `
-                            <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                                <div class="flex flex-row">
-                                    <div class="flex flex-col">
-                                        <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                        <div flex flex-row>
-                                            <p class="mb-1 pl-32">Quantity: ${itemQty}</p>
-                                            <input type="number" name="item_amount" value="${itemQty}" min="1"
-                                                class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
-                                        </div>
-                                        <p class="mb-1 pl-32">Price: $${itemPrice.toFixed(2)}</p>
-                                        <p class="mb-1 pl-32"><b>Total: $${itemTotal.toFixed(2)}</b></p>
+                            <div class="item-card">
+                                <div class="item-header">
+                                    <h2 class="item-title">${item.name}</h2>
+                                </div>
+                                <div class="item-details">
+                                    <div class="item-row">
+                                        <span class="item-label">Quantity:</span>
+                                        <span class="item-value">${itemQty}</span>
+                                    </div>
+                                    <div class="item-row">
+                                        <span class="item-label">Price:</span>
+                                        <span class="item-value">$${itemPrice.toFixed(2)}</span>
+                                    </div>
+                                    <div class="item-row">
+                                        <span class="item-label">Total:</span>
+                                        <span class="item-value">$${itemTotal.toFixed(2)}</span>
                                     </div>
                                 </div>
                             </div>`;
@@ -461,23 +413,22 @@
                     }
                     html += `</div>`; // end left column
 
-                    // right column - summary (same style as displayCart)
+                    // right column - summary
                     html += `
-                    <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
-                        <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                        <p class="mb-2">Subtotal: $${subtotal.toFixed(2)}</p>
-                        <p class="mb-2">Tax: $${tax.toFixed(2)}</p>
-                        <p class="mb-4 font-bold">Total: $${total.toFixed(2)}</p>
-                        <form action="{% url 'payments' %}" method="get">
-                            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                                Checkout
-                            </button>
-                        </form>
+                    <div class="summary-column">
+                        <div class="summary-card">
+                            <h2 class="summary-title">Order Summary</h2>
+                            <div class="summary-row"><span>Subtotal:</span><span>$${subtotal.toFixed(2)}</span></div>
+                            <div class="summary-row"><span>Tax:</span><span>$${tax.toFixed(2)}</span></div>
+                            <div class="summary-total"><span>Total:</span><span>$${total.toFixed(2)}</span></div>
+                            <form action="/payments/${orderId}/" method="get">
+                                
+                                <button type="submit" class="btn-primary">Checkout</button>
+                            </form>
+                        </div>
                     </div>`;
 
-                    html += `</div>`; // end order grid
-
-                    html += `</div>`; // end order container
+                    html += `</div>`; // end cart-grid
                 });
 
                 deliveries.forEach(delivery => {
@@ -486,33 +437,36 @@
                     const subtotal = Number(summary.subtotal) || 0;
                     const tax = Number(summary.tax) || 0;
                     const total = Number(summary.total) || 0;
-                    const orderId = order.id || 'null';
+                    const orderId = delivery.id || 'null';
 
-                    html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
+                    html += `<div class="cart-grid" style="margin-bottom: 40px; border-bottom: 1px solid #E5E7EB; padding-bottom: 24px;">`;
 
-                    html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
-
-                    // left column - items (same style as displayCart)
-                    html += `<div class="col-span-1 bg-white">`;
+                    // left column - items
+                    html += `<div class="items-column">`;
                     if (items.length === 0) {
-                        html += `<p class="p-4">No items for this order.</p>`;
+                        html += `<p class="empty-state">No items for this order.</p>`;
                     } else {
                         items.forEach(item => {
                             const itemQty = Number(item.quantity) || 0;
                             const itemPrice = Number(item.price) || 0;
                             const itemTotal = Number(item.total) || (itemQty * itemPrice);
                             html += `
-                            <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                                <div class="flex flex-row">
-                                    <div class="flex flex-col">
-                                        <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                        <div flex flex-row>
-                                            <p class="mb-1 pl-32">Quantity: ${itemQty}</p>
-                                            <input type="number" name="item_amount" value="${itemQty}" min="1"
-                                                class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
-                                        </div>
-                                        <p class="mb-1 pl-32">Price: $${itemPrice.toFixed(2)}</p>
-                                        <p class="mb-1 pl-32"><b>Total: $${itemTotal.toFixed(2)}</b></p>
+                            <div class="item-card">
+                                <div class="item-header">
+                                    <h2 class="item-title">${item.name}</h2>
+                                </div>
+                                <div class="item-details">
+                                    <div class="item-row">
+                                        <span class="item-label">Quantity:</span>
+                                        <span class="item-value">${itemQty}</span>
+                                    </div>
+                                    <div class="item-row">
+                                        <span class="item-label">Price:</span>
+                                        <span class="item-value">$${itemPrice.toFixed(2)}</span>
+                                    </div>
+                                    <div class="item-row">
+                                        <span class="item-label">Total:</span>
+                                        <span class="item-value">$${itemTotal.toFixed(2)}</span>
                                     </div>
                                 </div>
                             </div>`;
@@ -520,31 +474,29 @@
                     }
                     html += `</div>`; // end left column
 
-                    // right column - summary (same style as displayCart)
+                    // right column - summary
                     html += `
-                    <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
-                        <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                        <p class="mb-2">Subtotal: $${subtotal.toFixed(2)}</p>
-                        <p class="mb-2">Tax: $${tax.toFixed(2)}</p>
-                        <p class="mb-4 font-bold">Total: $${total.toFixed(2)}</p>
-                        <form action="{% url 'payments' %}" method="get">
-                            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                                Checkout
-                            </button>
-                        </form>
+                    <div class="summary-column">
+                        <div class="summary-card">
+                            <h2 class="summary-title">Order Summary</h2>
+                            <div class="summary-row"><span>Subtotal:</span><span>$${subtotal.toFixed(2)}</span></div>
+                            <div class="summary-row"><span>Tax:</span><span>$${tax.toFixed(2)}</span></div>
+                            <div class="summary-total"><span>Total:</span><span>$${total.toFixed(2)}</span></div>
+                            <form action="/payments/${orderId}" method="get">
+                                <button type="submit" class="btn-primary">Checkout</button>
+                            </form>
+                        </div>
                     </div>`;
 
-                    html += `</div>`; // end order grid
-
-                    html += `</div>`; // end order container
+                    html += `</div>`; // end cart-grid
                 });
 
                 tab.innerHTML = html;
             })
             .catch(err => {
                 console.error('Error retrieving placed orders:', err);
-                const tab = document.getElementById("tab-placed");
-                tab.innerHTML = `<p class="p-4">Error loading placed orders.</p>`;
+                const tab = document.getElementById("tab-inprogress");
+                tab.innerHTML = `<p class="empty-state">Error loading orders in progress.</p>`;
             });
         }
 
@@ -561,7 +513,7 @@
                 const orders = Array.isArray(data) ? data : (Array.isArray(data.orders) ? data.orders : []);
 
                 if (orders.length === 0) {
-                    tab.innerHTML = `<p class='p-4'>You have no placed orders.</p>`;
+                    tab.innerHTML = `<p class='empty-state'>You have no pending orders.</p>`;
                     return;
                 }
 
@@ -577,31 +529,34 @@
                     const delivery_person_id = order.delivery_person_id || 'null';
                     console.log(delivery_person);
 
-                    html += `<div class="bg-gray-100 shadow-md rounded-lg p-4 mb-6">`; // <-- light gray background + shadow + padding
+                    html += `<div class="cart-grid" style="margin-bottom: 40px; border-bottom: 1px solid #E5E7EB; padding-bottom: 24px;">`;
 
-                    html += `<div class="grid grid-cols-2 gap-4 p-4 mb-6">`;
-
-                    // left column - items (same style as displayCart)
-                    html += `<div class="col-span-1">`;
+                    // left column - items
+                    html += `<div class="items-column">`;
                     if (items.length === 0) {
-                        html += `<p class="p-4">No items for this order.</p>`;
+                        html += `<p class="empty-state">No items for this order.</p>`;
                     } else {
                         items.forEach(item => {
                             const itemQty = Number(item.quantity) || 0;
                             const itemPrice = Number(item.price) || 0;
                             const itemTotal = Number(item.total) || (itemQty * itemPrice);
                             html += `
-                            <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                                <div class="flex flex-row">
-                                    <div class="flex flex-col">
-                                        <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                        {% comment %} <div flex flex-row> {% endcomment %}
-                                            <p class="mb-1 pl-32">Quantity: ${itemQty}</p>
-                                            {% comment %} <input type="number" name="item_amount" value="${itemQty}" min="1"
-                                                class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black"> {% endcomment %}
-                                        {% comment %} </div> {% endcomment %}
-                                        <p class="mb-1 pl-32">Price: $${itemPrice.toFixed(2)}</p>
-                                        <p class="mb-1 pl-32"><b>Total: $${itemTotal.toFixed(2)}</b></p>
+                            <div class="item-card">
+                                <div class="item-header">
+                                    <h2 class="item-title">${item.name}</h2>
+                                </div>
+                                <div class="item-details">
+                                    <div class="item-row">
+                                        <span class="item-label">Quantity:</span>
+                                        <span class="item-value">${itemQty}</span>
+                                    </div>
+                                    <div class="item-row">
+                                        <span class="item-label">Price:</span>
+                                        <span class="item-value">$${itemPrice.toFixed(2)}</span>
+                                    </div>
+                                    <div class="item-row">
+                                        <span class="item-label">Total:</span>
+                                        <span class="item-value">$${itemTotal.toFixed(2)}</span>
                                     </div>
                                 </div>
                             </div>`;
@@ -609,31 +564,28 @@
                     }
                     html += `</div>`; // end left column
 
-                    // right column - summary (same style as displayCart)
+                    // right column - summary
                     html += `
-                    <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
-                        <h2 class="text-2xl font-bold mb-4">Delivery Person</h2>
-                        <div class="mb-4 p-4 bg-white rounded-lg shadow-md">
-                            <a href="/profile/${delivery_person_id}/" class="no-underline hover:underline">
-                                <p class="font-semibold">${delivery_person}</p>
-                            </a>
-                            {% comment %} add 2 buttons for accepting or declining if declined it sets order status to placed if accepted it goes to inprogress {% endcomment %}
-                            <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 mr-2"
-                            onclick="updateDelivery(${orderId}, 'inprogress', true)">
-                                Accept Order
-                            </button>
-                            <button class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600"
-                            onclick="updateDelivery(${orderId}, 'placed', false)">
-                                Decline Order
-                            </button>
-                            
+                    <div class="summary-column">
+                        <div class="summary-card">
+                            <h2 class="summary-title">Delivery Person</h2>
+                            <div style="margin-bottom: 16px; padding: 12px; background-color: #FFFFFF; border-radius: 6px; border: 1px solid #E5E7EB;">
+                                <a href="/profile/${delivery_person_id}/" style="text-decoration: none; color: #1F2937;">
+                                    <p style="font-weight: 600; margin: 0;">${delivery_person}</p>
+                                </a>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn-primary" style="margin-bottom: 0;" onclick="updateDelivery(${orderId}, 'inprogress', true)">
+                                    Accept Order
+                                </button>
+                                <button class="btn-danger" onclick="updateDelivery(${orderId}, 'placed', false)">
+                                    Decline Order
+                                </button>
+                            </div>
                         </div>
-
                     </div>`;
 
-                    html += `</div>`; // end order grid
-
-                    html += `</div>`; // end order container
+                    html += `</div>`; // end cart-grid
 
                 });
 
@@ -641,8 +593,8 @@
             })
             .catch(err => {
                 console.error('Error retrieving placed orders:', err);
-                const tab = document.getElementById("tab-placed");
-                tab.innerHTML = `<p class="p-4">Error loading placed orders.</p>`;
+                const tab = document.getElementById("tab-pending");
+                tab.innerHTML = `<p class="empty-state">Error loading pending orders.</p>`;
             });
         }
 
@@ -657,112 +609,80 @@
                 const tab = document.getElementById("tab-cart");
 
                 if (!data.items || data.items.length === 0) {
-                    tab.innerHTML = `<p class='p-4'>Your cart is empty.</p>
-                    </div>
-                        <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-full">
-                            <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                            <p class="mb-2">Subtotal: $0</p>
-                            <p class="mb-2">Tax: $0</p>
-                            <p class="mb-4 font-bold">Total: $0</p>
-
-                        </div>
-                    </div>`;
+                    tab.innerHTML = `<p class='empty-state'>Your cart is empty.</p>`;
                     return;
                 }
 
-                let html = `
-                <div class="col-span-1 bg-white">
-                `;
+                let html = `<div class="items-column">`;
 
                 data.items.forEach(item => {
                     html += `
-                    <div class="p-4 border-b border-gray-300 bg-blue-100 shadow-md mb-8">
-                        <div class="flex flex-row">
-                            <div class="flex flex-col">
-                                <h2 class="text-xl font-bold mb-2 pl-8">${item.name}</h2>
-                                <div flex flex-row>
-                                    <p class="mb-1 pl-32">Quantity: ${item.quantity}</p>
-                                    <input type="number" name="item_amount" value="${item.quantity}" min="1"
-                                        class="w-16 p-1 border border-gray-300 rounded-lg bg-white text-black">
-                                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 ml-2 shadow-md"
-                                            onclick="updateItemNum(this, ${item.id}, this.previousElementSibling.value)">
-                                        Update
-                                    </button>
-                                </div>
-                                <p class="mb-1 pl-32">Price: $${item.price}</p>
-                                <p class="mb-1 pl-32"><b>Total: $${item.total}</b></p>
+                    <div class="item-card">
+                        <div class="item-header">
+                            <h2 class="item-title">${item.name}</h2>
+                            <button class="btn-outline" onclick="removeItem(${item.id}); return false;">Remove</button>
+                        </div>
+                        <div class="item-details">
+                            <div class="item-row">
+                                <span class="item-label">Quantity:</span>
+                                <input type="number" value="${item.quantity}" min="1" class="qty-input">
+                                <button class="btn-secondary" onclick="updateItemNum(this, ${item.id}, this.previousElementSibling.value)">Update</button>
                             </div>
-                            <button class="ml-auto self-center">
-                                <a href="#" class="bg-blue-500 px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
-                                onclick="removeItem(${item.id}); return false;">
-                                Remove item
-                                </a>
-                            </button>
+                            <div class="item-row">
+                                <span class="item-label">Price:</span>
+                                <span class="item-value">$${item.price}</span>
+                            </div>
+                            <div class="item-row">
+                                <span class="item-label">Total:</span>
+                                <span class="item-value">$${item.total}</span>
+                            </div>
                         </div>
                     </div>`;
                 });
 
                 html += `
                 </div>
-                <div class="col-span-1 bg-neutral-200 p-4 shadow-md place-self-center w-1/2">
-                    <h2 class="text-2xl font-bold mb-4">Order Summary</h2>
-                    <p class="mb-2">Subtotal: $${Number(data.order.subtotal).toFixed(2)}</p>
-                    <p class="mb-2">Tax: $${Number(data.order.tax).toFixed(2)}</p>
-                    <p class="mb-4 font-bold">Total: $${Number(data.order.total).toFixed(2)}</p>
-                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-                            onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">
-                        Publish Order
-                    </button>
-                    <input type="text" id="group_password" name="group_password" placeholder="Enter group password"
-                            class="w-full p-2 border border-gray-300 rounded-lg bg-white text-black mt-4 mb-4">
-                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-                            onclick="createGroup({{ id|default:'null' }})">
-                        Create Group For my Cart
-                    </button>
-                    <p class="pt-4 text-2xl font-bold mb-4">Join an existing group by clicking the button</p>
-                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 shadow-md"
-                            onclick="openPopup()">
-                        Join Group Order
-                    </button>
-                </div>
+                <div class="summary-column">
+                    <div class="summary-card">
+                        <h2 class="summary-title">Order Summary</h2>
+                        <div class="summary-row"><span>Subtotal:</span><span>$${Number(data.order.subtotal).toFixed(2)}</span></div>
+                        <div class="summary-row"><span>Tax:</span><span>$${Number(data.order.tax).toFixed(2)}</span></div>
+                        <div class="summary-total"><span>Total:</span><span>$${Number(data.order.total).toFixed(2)}</span></div>
+                        
+                        <button class="btn-primary" onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">Publish Order</button>
+                        
+                        <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
+                            <input type="text" id="group_password" placeholder="Enter group password" class="input-field">
+                            <button class="btn-secondary" style="width:100%" onclick="createGroup({{ id|default:'null' }})">Create Group For my Cart</button>
+                        </div>
 
-                <!-- Popup Modal -->
-                <div id="popupModal"
-                    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-                    <div class="bg-white p-6 rounded-2xl shadow-lg w-96">
-                        <h2 class="text-2xl font-bold mb-4">Enter Details</h2>
-                        <form id="popupForm" onsubmit="submitPopup(event, 'cart')">
-                            <div class="mb-3">
-                                <label class="block font-semibold mb-1">Group Id</label>
-                                <input type="text" id="GroupId" name="GroupId"
-                                    class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
-                                    required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="block font-semibold mb-1">Password</label>
-                                <input type="text" id="Password" name="Password"
-                                    class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-400"
-                                    required>
-                            </div>
-                            <div class="flex justify-end space-x-2 mt-4">
-                                <button type="button"
-                                        class="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400"
-                                        onclick="closePopup()">
-                                    Cancel
-                                </button>
-                                <button type="submit"
-                                        class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                                    Submit
-                                </button>
-                            </div>
-                        </form>
+                        <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
+                            <p style="margin-bottom: 12px; font-weight: 600;">Join an existing group</p>
+                            <button class="btn-secondary" style="width:100%" onclick="openPopup()">Join Group Order</button>
+                        </div>
                     </div>
                 </div>
 
-
-
-    </div>
-                `;
+                <!-- Popup Modal -->
+                <div id="popupModal" class="modal-overlay hidden">
+                    <div class="modal-content">
+                        <h2 class="modal-title">Enter Details</h2>
+                        <form id="popupForm" onsubmit="submitPopup(event, 'cart')">
+                            <div class="mb-3">
+                                <label class="block font-semibold mb-1">Group Id</label>
+                                <input type="text" id="GroupId" name="GroupId" class="input-field" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="block font-semibold mb-1">Password</label>
+                                <input type="text" id="Password" name="Password" class="input-field" required>
+                            </div>
+                            <div class="modal-actions">
+                                <button type="button" class="btn-outline" onclick="closePopup()">Cancel</button>
+                                <button type="submit" class="btn-primary" style="width: auto; margin-bottom: 0;">Submit</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>`;
 
                 tab.innerHTML = html;
 
@@ -1023,8 +943,4 @@
             console.error('Error updating item quantity', err)
         });
     }
-
-
-
-    
 </script>

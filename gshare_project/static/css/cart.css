@@ -266,9 +266,11 @@
     .filter-select,
     .filter-input {
         border-radius: 6px;
-        border: 1px solid #D1D5DB;
+        border: 1px solid #F3F4F6;
         padding: 8px 10px;
-        font-size: 0.95rem;
+        font-size: 1rem;
+        font-family: 'Inter', sans-serif;
+        color: #1F2937;
         width: 100%;
         box-sizing: border-box;
     }
@@ -361,45 +363,6 @@
         transform: scale(0.98);      /* slight press effect */
         transition: transform 0.1s, background-color 0.1s;
     }
-
-    /* Pagination Styling */
-    .pagination-wrapper {
-        display: flex;
-        justify-content: center;
-        margin-top: 32px;
-        margin-bottom: 32px;
-    }
-
-    .pagination {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-    }
-
-    .page-link {
-        padding: 8px 16px;
-        border: 1px solid #D1D5DB;
-        border-radius: 6px;
-        text-decoration: none;
-        color: #374151;
-        background-color: #FFFFFF;
-        transition: all 0.2s;
-        font-weight: 500;
-    }
-
-    .page-link:hover {
-        background-color: #F3F4F6;
-        border-color: #9CA3AF;
-    }
-
-    .page-link-current {
-        padding: 8px 16px;
-        border: 1px solid #10B981;
-        border-radius: 6px;
-        background-color: #10B981;
-        color: #FFFFFF;
-        font-weight: 600;
-    }
 </style>
 <script>
     const csrf_token = "{{ csrf_token }}";
@@ -419,7 +382,7 @@
             }
         })
         .then(response => response.json())
-        .then(data => {
+        .then data => {
             console.log("Added to cart:", data);
         })
         .catch(error => console.error("Error:", error));

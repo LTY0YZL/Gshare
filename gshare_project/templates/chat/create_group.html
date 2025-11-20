@@ -1,51 +1,52 @@
 {% load tailwind_cli%}
 <!DOCTYPE html>
+{% load static %}
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Group</title>
     {% tailwind_css %}
+    <link rel="stylesheet" href="{% static 'css/create_group.css' %}?v={% now 'U' %}">
 </head>
 <body>
     {% include "navbar.html" %}
-    <div class="grid grid-cols-[1fr_5fr] h-screen">
+    <div class="create-group-layout">
 
-        <aside class="col-span-1 bg-blue-900/90 p-4">
-            <h2 class="text-2xl font-bold mb-4">Direct Messages</h2>
-            <ul class="mb-4">
-                <li class="mb-2">
-                    <a href="" class="text-black-500 hover:bg-orange-400">DM's</a>
+        <aside class="groups-sidebar">
+            <h2 class="sidebar-section-title">Direct Messages</h2>
+            <ul class="sidebar-list">
+                <li>
+                    <a href="#" class="sidebar-link">DM's</a>
                 </li>
             </ul>
-            <h2 class="text-2xl font-bold mb-4">Groups</h2>
-            <ul>
+            <h2 class="sidebar-section-title">Groups</h2>
+            <ul class="sidebar-list" style="flex: 1;">
                 {% for group in groups %}
-                    <li class="mb-2">
-                        <a href="{% url 'chat_room' group.slug %}" class="text-black-500 hover:bg-orange-400">{{ group.name }}</a>
+                    <li>
+                        <a href="{% url 'chat_room' group.slug %}" class="sidebar-link">{{ group.name }}</a>
                     </li>
                 {% empty %}
-                    <p>You are not part of any groups.</p>
+                    <p class="empty-state-text">You are not part of any groups.</p>
                 {% endfor %}
             </ul>
 
         </aside>
 
-        <div class="col-span-1 bg-neutral-100 flex flex-col h-screen p-8">
-            <h1 class="text-4xl flex justify-center mr-16">Create a New Group</h1>
-            <form method="post">
-                {% csrf_token %}
-                <div class="flex justify-center p-12 mt-32 mr-32">
-                    <label for="group_name" class="px-2 text-3xl mt-1">Group Name:</label>
-                    <input type="text" id="group_name" class="border border-gray-500 rounded-xl h-10 px-4 mt-1 text-2xl w-88" name="group_name" required placeholder="Enter group name">
-                    <button type="submit" class="border border-gray-500 bg-blue-500 rounded-xl p-1 ml-4 mt-1 h-10 text-2xl hover:shadow-lg hover:bg-blue-600">Create</button>
-                </div>
-            </form>
-            {% comment %} Here add a way to ender a user ID, then when you create a group here, it will automatically add those users {% endcomment %}
-            <div>
+        <div class="create-group-main">
+            <div class="create-group-card">
+                <h1 class="page-title">Create a New Group</h1>
+                <form method="post" class="create-form">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        <label for="group_name" class="form-label">Group Name</label>
+                        <input type="text" id="group_name" class="form-input" name="group_name" required placeholder="Enter group name">
+                    </div>
+                    <button type="submit" class="submit-button">Create Group</button>
+                </form>
                 
+                <a href="{% url 'groups_page' %}" class="back-link">Back to Groups</a>
             </div>
-            <a href="{% url 'groups_page' %}">Back to Groups</a>
         </div>
     </div>
 </body>
