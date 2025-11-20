@@ -2362,6 +2362,7 @@ import random
 def estimate_order_time(user_address, store_address, num_items, api_key):
     
     drive_info = drive_time(user_address, store_address, api_key)
+    print(f"drive info: {drive_info}")
     if not drive_info:
         return None
     
@@ -2371,6 +2372,7 @@ def estimate_order_time(user_address, store_address, num_items, api_key):
     shopping_time = num_items * 1.5
     
     total_time = round_trip + shopping_time
+    print(f"total time: {total_time}")
     
     variation = random.uniform(0.9, 1.1)
     total_time *= variation
@@ -2384,10 +2386,15 @@ def estimate_order_time(user_address, store_address, num_items, api_key):
     }
     
 def drive_time(user_address, store_address, api_key):
-    url = f"https://maps.googleapis.com/maps/api/distancematrix/json?origins={user_address}&destination={store_address}&key={api_key}"
+    print(f"api info: {api_key}")
+    url = f"https://maps.googleapis.com/maps/api/distancematrix/json?origins={user_address}&destinations={store_address}&key={api_key}"
     
-    response = response.get(url)
+    print(f"user_address info: {user_address}")
+
+    print(f"store_address info: {store_address}")
+    response = requests.get(url)
     data = response.json()
+    print(f"data info: {data}")
     
     if data["status"] == "OK":
         element = data['rows'][0]["elements"][0]
@@ -2403,6 +2410,7 @@ def drive_time(user_address, store_address, api_key):
                 "duration_value": duration_value,
             }
     return None
+
     
 def maps_data(request, min_lat, min_lng, max_lat, max_lng):
     
@@ -2994,9 +3002,9 @@ def getUserProfile(request, userID):
 
 
 @login_required
-def payments(request):
+def payments(request, order_id):
     user = get_user("email", request.user.email)
-    order = get_orders(user, "inprogress").first()
+    order = get_object_or_404(Orders.objects.using('gsharedb'), pk=order_id)
     print("order here: " + str(order))
     orders = []
     members = []
@@ -3075,17 +3083,37 @@ def payments(request):
     context = {
         'carts_in_group': carts_in_group,
         'members_payments': members_payments,
+        'orderID': order_id,
     }
     return render(request, "paymentsPage.html", context)
 
 @login_required
-def paymentsCheckout(request):
+def paymentsCheckout(request, order_id):
     # change order status to placed upon successful payment
+    
+    orders = []
+    order = get_object_or_404(Orders.objects.using('gsharedb'), pk=order_id)
+    delivery = get_delivery_for_order(order)
+    dperson = delivery.delivery_person
+    userAddress = dperson.address
+
+    dropOffLocation = order.delivery_address
+
+    orderSize = len(get_order_items(order))
+
+    store = "455 S 500 E SLC UT"
+    # api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+    from django.conf import settings
+
+    api_key = settings.GOOGLE_MAPS_API_KEY
+    deliveryCost = pickup_price(userAddress, dropOffLocation, orderSize, store, api_key)["total_cost"]
+    print(f'delivery cost: {deliveryCost}')
     try:
         stripe.api_key = settings.STRIPE_SECRET_KEY
         profile = get_user("email", request.user.email)
         try:
-            orders = get_orders(profile, "inprogress")
+            
+            orders.append(order)
             if not orders:
                 messages.error(request, "No items in the cart to checkout.")
                 return redirect('cart')
@@ -3124,6 +3152,20 @@ def paymentsCheckout(request):
                 'quantity': 1,
             })
 
+        subtotal_cents = int(deliveryCost * 100)
+        print(f"subtotal cents: {subtotal_cents}")
+        del_cents = int(round(subtotal_cents * Decimal('0.07')))
+        print(f"del_cents cents: {del_cents}")
+
+        itemObjects.append({
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {'name': 'Delivery Fees'},
+                    'unit_amount': subtotal_cents,
+                },
+                'quantity': 1,
+            })
+
          # ABOVE IS fallback for tax: add a manual 7% tax line (when not using Automatic Tax)
 
         # Replace the old Session.create(...) with Automatic Tax + address collection
@@ -3145,11 +3187,13 @@ def paymentsCheckout(request):
         return redirect(checkoutSession.url)
     except stripe.error.StripeError as e:
         messages.error(request, f"Payment error: {e.user_message}")
-        return redirect('payments')
+        messages.error(request, f"Payment error: {e.user_message}")
+        return redirect('payments', order_id=order.id)
     except Exception as e:
         print(f"A serious error occurred: {e}. We have been notified.")
         messages.error(request, "An unexpected error occurred. Please try again.")
-        return redirect('payments')  # Added return
+        return redirect('payments', order_id=order.id)  # Added return
+
 
 
 def createGroupForShoppingCart(request, order_id):
