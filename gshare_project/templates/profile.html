@@ -27,7 +27,7 @@
                         style="width: 8rem; height: 8rem; margin-top: 1.5rem; margin-bottom: 1rem; overflow: hidden;
                                 border-radius: 50%; border: 2px solid #e5e7eb; display:block; cursor:pointer;">
                     <img id="avatarPreview"
-                        src="{{ avatar_url|default:'' }}"
+                        src="{% if avatar_url %}{{ avatar_url }}{% else %}{% static 'media/user.png' %}{% endif %}"
                         alt="avatar"
                         style="width:100%; height:100%; object-fit:cover;">
                 </label>
