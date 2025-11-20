@@ -2886,7 +2886,6 @@ def group_carts(request):
 
 @login_required
 def shoppingcart(request):
-    # return render(request, "shoppingcart.html")
 
     user = request.user
     profile = get_user("email", user.email)
@@ -2903,9 +2902,6 @@ def shoppingcart(request):
             },
             'id': None,
         })
-    # print(len(order))
-    # print(order[0].total_amount)
-    # print(order[0].id if order else "No order")
 
     items = get_order_items(order[0]) if order[0] else []
     subtotal = 0
@@ -2930,20 +2926,12 @@ def shoppingcart(request):
         'tax': tax,
         'total': grand_total,
     }
-    # print(order[0].id if order else "No order")
-    # for item in items:
-    #     totals.append(item[2] * item[5])  # quantity * price
-    # print(items)
 
-    # print(items)
     return render(request, "shoppingcart.html", {
         'items': items_with_totals,
         'order': order_summary,
         'id': order[0].id if order else None,
-        # 'order': order[0],
-        # 'items': items,
-        # 'items': items,
-        # 'totals': totals,
+
     })
 
 @login_required
@@ -3150,8 +3138,8 @@ def paymentsCheckout(request):
             ## KEEP ABOVE ONLY ONCE PAYMENTS ARE IN LIVE MODE, THIS WONT WORK IN TEST MODE
             customer_email=request.user.email,  # helps with tax and receipts
             
-            success_url=f"http://www.gshare.me/payment_success/{order.id}/", # should do this if success: # consider moving this to webhook on payment success
-            cancel_url="http://www.gshare.me/cart/payments",
+            success_url=f"https://www.gshare.me/payment_success/{order.id}/", # should do this if success: # consider moving this to webhook on payment success
+            cancel_url=f"https://www.gshare.me/payments/{order.id}",
         )
         print("Session URL: " + checkoutSession.url)
         return redirect(checkoutSession.url)

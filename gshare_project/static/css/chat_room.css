@@ -102,14 +102,16 @@ body {
 }
 
 .message-bubble {
-    max-width: 70%;
+    max-width: 40%;
     padding: 8px 16px;
     border-radius: 16px;
     word-break: break-word;
     font-size: 0.95rem;
     line-height: 1.5;
     white-space: normal;
-    overflow: hidden; /* Prevent content from spilling out */
+    display: inline-block; /* Let height expand naturally */
+    background-color: #f0f0f0; /* Example background */
+    margin: 4px 0;
 }
 
 @media (max-width: 768px) {

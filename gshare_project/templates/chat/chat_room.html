@@ -51,9 +51,9 @@
         {% for message in messages %}
           <div class="message-bubble {% if message.sender.username == user.username %}message-self{% else %}message-other{% endif %}">
             <span class="message-sender">{{ message.sender.username }}:</span> {{ message.content }}
-            {% if message.image %}
-              <br><img src="{{ message.image }}" alt="Image" class="message-image">
-            {% endif %}
+              {% if message.image_url %}
+                <br><img src="{{ message.image_url }}" alt="Image" class="message-image">
+              {% endif %}
           </div>
         {% endfor %}
       </div>
@@ -145,11 +145,12 @@
     const roomName = "{{ room_name }}";
     const username = "{{ user.username }}";
 
-    {% if thread %}
-    const chatSocket = new WebSocket('ws://' + window.location.host + '/ws/chat/dm/' + '{{ thread.id }}' + '/');
-    {% else %}
-    const chatSocket = new WebSocket('ws://' + window.location.host + '/ws/chat/' + roomName + '/');
-    {% endif %}
+  const ws_scheme = window.location.protocol === "https:" ? "wss" : "ws";
+
+  const chatSocket = new WebSocket(
+      ws_scheme + "://" + window.location.host +
+      "{% if thread %}/ws/chat/dm/{{ thread.id }}/{% else %}/ws/chat/{{ room_name }}/{% endif %}"
+  );
 
     const chatLog = document.querySelector('#chat-log');
     let selectedImage = null;
@@ -410,6 +411,57 @@
         const badge = document.getElementById('notification-badge');
         badge.textContent = '0';
     });
+
+  {% comment %} async function loadHistory() {
+      chatLog.innerHTML = ''; // clear existing messages
+      let url;
+      {% if thread %}
+          url = "/groups/history/dm/{{ thread.id }}/";
+      {% else %}
+          url = `/groups/history/${roomName}/`;
+      {% endif %}
+      const res = await fetch(url);
+      const data = await res.json();
+      data.messages.forEach(msg => renderMessage(msg));
+  } {% endcomment %}
+
+
+  function renderMessage(msg) {
+    const messageDiv = document.createElement('div');
+    const isSelf = msg.username === username;
+
+    messageDiv.className = `message-bubble ${isSelf ? 'message-self' : 'message-other'}`;
+    
+    // Message text
+    const textSpan = document.createElement('span');
+    textSpan.className = 'message-sender';
+    textSpan.textContent = `${msg.username}: `;
+    messageDiv.appendChild(textSpan);
+    
+    const contentText = document.createTextNode(msg.message || '');
+    messageDiv.appendChild(contentText);
+
+    // Message image
+    if (msg.image_url) {
+        const br = document.createElement('br');
+        const img = document.createElement('img');
+        img.src = msg.image_url;
+        img.className = 'message-image';
+        messageDiv.appendChild(br);
+        messageDiv.appendChild(img);
+    }
+
+    chatLog.appendChild(messageDiv);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+
+
+  window.addEventListener("load", async () => {
+      {% comment %} await loadHistory(); {% endcomment %}
+      chatLog.scrollTop = chatLog.scrollHeight;
+  });
+
   </script>
 </body>
 </html>

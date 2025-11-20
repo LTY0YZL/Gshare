@@ -43,15 +43,17 @@ def chat_room(request, room_name):
     try:
         room = ChatGroup.objects.get(slug=room_name)
         chat_messages = room.messages.all().order_by('timestamp')
+        
+        # Add presigned URLs
+        for msg in chat_messages:
+            msg.image_url = presigned_url(msg.image) if msg.image else None
+
         user_groups = ChatGroup.objects.filter(members=request.user)
         members = room.members.all()
-        
         unread_notifications = request.user.notifications.filter(is_read=False)
-        
         unread_notifications.update(is_read=True)
-        
+
         DMs = DirectMessageThread.objects.filter(participants=request.user)
-        # for each DM, get the other participant
         dm_list = [
             {
                 "id": dm.id,
@@ -59,11 +61,21 @@ def chat_room(request, room_name):
             }
             for dm in DMs
         ]
-        # show all the other users in the DM's then display all the DM's
-        return render(request, 'chat/chat_room.html', {'room_name': room_name, 'room_code': room.group_code, 'messages': chat_messages, 'groups': user_groups, 'members': members, 'dm_list':dm_list, 'user': request.user, 'notifications': unread_notifications})
+
+        return render(request, 'chat/chat_room.html', {
+            'room_name': room_name,
+            'room_code': room.group_code,
+            'messages': chat_messages,
+            'groups': user_groups,
+            'members': members,
+            'dm_list': dm_list,
+            'user': request.user,
+            'notifications': unread_notifications
+        })
     except ChatGroup.DoesNotExist:
         messages.error(request, "Chat room does not exist.")
         return redirect('groups_page')
+
 
 @login_required
 def create_group(request):
@@ -109,7 +121,8 @@ def direct_message(request, thread_id):
         return redirect('groups_page')
     else:
         messages_qs = Message.objects.filter(thread=thread).order_by('timestamp')
-        
+        for msg in messages_qs:
+            msg.image_url = presigned_url(msg.image) if msg.image else None        
         other_user = thread.participants.exclude(id=request.user.id).first()
         user_groups = ChatGroup.objects.filter(members=request.user)
         DMs = DirectMessageThread.objects.filter(participants=request.user)
@@ -137,20 +150,31 @@ def autocomplete_usernames(request):
         results = list(users.values_list("username", flat=True))
     return JsonResponse(results, safe=False)
 
-def load_chat_history(request, room_slug):
-    messages = Message.objects.filter(group__slug=room_slug).order_by('timestamp')
-    data = []
-    print(messages)
+from django.http import JsonResponse
+from .models import Message, ChatGroup, DirectMessageThread
 
-    for m in messages:
-        data.append({
-            'username': m.sender.username,
-            'message': m.content,
-            'timestamp': m.timestamp.isoformat(),
-            'image_url': presigned_url(m.image) if m.image else None
+# views.py
+def load_chat_history(request, room_slug=None, thread_id=None):
+    messages = []
+    if room_slug:
+        group = ChatGroup.objects.get(slug=room_slug)
+        msgs = group.messages.order_by('timestamp')
+    elif thread_id:
+        thread = DirectMessageThread.objects.get(id=thread_id)
+        msgs = thread.messages.order_by('created_at')
+
+    for msg in msgs:
+        image_url = presigned_url(msg.image) if msg.image else None
+        messages.append({
+            'id': msg.id,
+            'username': msg.sender.username,
+            'message': msg.content,
+            'image_url': image_url
         })
 
-    return JsonResponse({'messages': data})
+    return JsonResponse({'messages': messages})
+
+
 
         
 
