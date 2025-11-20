@@ -2869,7 +2869,6 @@ def group_carts(request):
 
 @login_required
 def shoppingcart(request):
-    # return render(request, "shoppingcart.html")
 
     user = request.user
     profile = get_user("email", user.email)
@@ -2886,9 +2885,6 @@ def shoppingcart(request):
             },
             'id': None,
         })
-    # print(len(order))
-    # print(order[0].total_amount)
-    # print(order[0].id if order else "No order")
 
     items = get_order_items(order[0]) if order[0] else []
     subtotal = 0
@@ -2913,20 +2909,12 @@ def shoppingcart(request):
         'tax': tax,
         'total': grand_total,
     }
-    # print(order[0].id if order else "No order")
-    # for item in items:
-    #     totals.append(item[2] * item[5])  # quantity * price
-    # print(items)
 
-    # print(items)
     return render(request, "shoppingcart.html", {
         'items': items_with_totals,
         'order': order_summary,
         'id': order[0].id if order else None,
-        # 'order': order[0],
-        # 'items': items,
-        # 'items': items,
-        # 'totals': totals,
+
     })
 
 @login_required
