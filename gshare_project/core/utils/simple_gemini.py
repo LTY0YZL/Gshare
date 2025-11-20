@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.db import connections
 
 from collections import defaultdict
+from typing import List, Dict, Tuple, Optional
 
 from google import genai
 
@@ -362,20 +363,15 @@ END_OPERATIONS
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
-def suggest_matching_order(receipt, lines, candidate_orders):
+def suggest_matching_order(*, receipt, lines, candidate_orders):
     """
-    Given a receipt + parsed lines + a list of candidate_orders,
-    ask Gemini which order (if any) best matches the receipt.
+    Ask Gemini which delivery order(s) best match this receipt.
 
-    candidate_orders = [
-        {"id": ..., "status": "...", "store_id": ..., "created_at": "..."},
-        ...
-    ]
-
-    Returns: (best_order_id_or_None, explanation_str)
+    It will ONLY ask the driver to confirm when the receipt contains
+    ALL the items of an order (receipt is a superset of that order).
     """
 
-    # ---- 1) Build JSON for receipt items -------------------------------
+    # --- Build receipt items summary ---
     receipt_items = [
         {
             "name": l.name,
@@ -386,72 +382,86 @@ def suggest_matching_order(receipt, lines, candidate_orders):
         for l in lines
     ]
 
-    # ---- 2) Load order item names/quantities via raw SQL ---------------
-    order_ids = [o["id"] for o in candidate_orders]
-    orders_items = defaultdict(list)  # order_id -> list of items
-
-    if order_ids:
-        with connections["gsharedb"].cursor() as cur:
-            # NOTE: this only *reads* from order_items and items
+    # --- Load line items for each candidate order via raw SQL (since order_items has composite PK) ---
+    orders_info = []
+    with connections["gsharedb"].cursor() as cur:
+        for order in candidate_orders:
+            oid = order["id"]
             cur.execute(
                 """
-                SELECT oi.order_id, i.name, oi.quantity
-                FROM order_items AS oi
-                JOIN items AS i ON oi.item_id = i.id
-                WHERE oi.order_id IN %s
+                SELECT i.name, oi.quantity, oi.price
+                FROM order_items oi
+                JOIN items i ON oi.item_id = i.id
+                WHERE oi.order_id = %s
                 """,
-                [tuple(order_ids)],
+                [oid],
             )
-            for order_id, item_name, qty in cur.fetchall():
-                orders_items[order_id].append(
-                    {
-                        "name": item_name,
-                        "quantity": float(qty) if qty is not None else None,
-                    }
-                )
+            row_items = [
+                {"name": r[0], "quantity": float(r[1] or 0), "price": float(r[2] or 0)}
+                for r in cur.fetchall()
+            ]
+            o = dict(order)  # copy
+            o["items"] = row_items
+            orders_info.append(o)
 
-    # Assemble candidate orders payload for Gemini
-    orders_payload = []
-    for o in candidate_orders:
-        oid = o["id"]
-        orders_payload.append(
-            {
-                "id": oid,
-                "status": o["status"],
-                "store_id": o["store_id"],
-                "created_at": o["created_at"],
-                "items": orders_items.get(oid, []),
-            }
-        )
+    # --- Prompt: define FULL match vs PARTIAL and when to ask user ---
+    prompt = f"""
+You are helping a grocery delivery driver match a scanned receipt to the
+delivery orders they are currently responsible for.
 
-    payload = {
-        "receipt_id": receipt.id,
-        "receipt_items": receipt_items,
-        "candidate_orders": orders_payload,
-    }
+RECEIPT ITEMS (parsed from the image):
+{json.dumps(receipt_items, indent=2)}
 
-    # ---- 3) Ask Gemini for the best match ------------------------------
-    system_prompt = """
-You are helping match a grocery receipt to one of several delivery orders.
+CANDIDATE DELIVERY ORDERS (what the driver might be delivering):
+{json.dumps(orders_info, indent=2)}
 
-You are given JSON with:
-- receipt_items: items parsed from the receipt
-- candidate_orders: each order has id, status, store_id, created_at, and items
+DEFINITIONS (VERY IMPORTANT):
 
-Your job:
-1. Decide which order (if any) best matches the receipt items.
-2. If no order is a good match, choose null.
-3. Return ONLY JSON, nothing else, in this format:
+- Normalize item names sensibly (ignore case, small spelling differences).
+- A receipt **FULLY MATCHES** an order if:
+    - For every item in the order, there is a corresponding item on the receipt
+      with quantity >= that of the order.
+    - Extra items on the receipt are allowed.
+- A **PARTIAL MATCH** is when some items overlap but **at least one** order item
+  is missing or has too low a quantity.
 
-{
-  "best_order_id": <number or null>,
-  "explanation": "short human explanation"
-}
+YOUR JOB:
+
+1. Determine which orders (if any) are FULL MATCHES.
+2. Optionally, list orders that are only PARTIAL MATCHES.
+3. Decide a confidence score between 0.0 and 1.0 that reflects how sure you are
+   about the best full match (if any).
+
+USER-FACING RULES:
+
+- If there is at least one FULL MATCH:
+    - In your natural-language reply, clearly say which order IDs are full matches.
+    - Politely ASK the driver to confirm before anything is marked delivered.
+      Example: "The receipt fully covers order #215. Do you want to confirm
+      this match?"
+- If there are NO full matches (only partial or none):
+    - DO NOT ask to confirm or mark anything delivered.
+    - Just explain briefly that no order is fully covered by the receipt.
+      You may mention partial matches by order id.
+
+OUTPUT FORMAT:
+
+Respond with **NO code fences** and include exactly one JSON block between the
+markers BEGIN and END:
+
+BEGIN
+{{
+  "full_matches": [215, 233],      // order IDs that are fully covered by the receipt
+  "partial_matches": [210],        // optional list of partial matches
+  "confidence": 0.87,              // confidence that the best full match is correct
+  "natural_reply": "What you say to the driver in plain English."
+}}
+END
+
+- "full_matches" and "partial_matches" must always exist (use [] if none).
+- "natural_reply" is what will be shown directly in chat.
+- Do not include any other text outside BEGIN/END.
 """
-
-    prompt = system_prompt + "\n\nJSON data:\n" + json.dumps(
-        payload, ensure_ascii=False, indent=2
-    )
 
     resp = client.models.generate_content(
         model="gemini-2.0-flash",
@@ -460,26 +470,57 @@ Your job:
 
     text = (resp.text or "").strip()
 
-    # ---- 4) Parse JSON from Gemini safely ------------------------------
+    # --- Extract JSON between BEGIN/END ---
+    start = text.find("BEGIN")
+    end = text.find("END")
+
+    # Fallback: if markers missing, treat whole text as explanation
+    if start == -1 or end == -1 or end <= start:
+        return None, text
+
+    json_block = text[start + len("BEGIN"):end].strip()
+
+    # safety: strip stray backticks if Gemini ever adds them
+    json_block = json_block.strip().strip("`")
+    if json_block.lower().startswith("json"):
+        json_block = json_block[4:].strip()
+
     try:
-        result = json.loads(text)
-    except json.JSONDecodeError:
-        # try to strip any extra text
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            try:
-                result = json.loads(text[start : end + 1])
-            except Exception:
-                result = {}
+        data = json.loads(json_block)
+    except Exception:
+        # If parsing fails, just return raw text
+        return None, text
+
+    full_matches = data.get("full_matches") or []
+    partial_matches = data.get("partial_matches") or []
+    confidence = float(data.get("confidence") or 0.0)
+    natural_reply = (data.get("natural_reply") or "").strip()
+
+    inferred_order_id = None
+
+    # ONLY when there is a full match do we propose an order id
+    # (status is still changed later by your confirm view).
+    if full_matches:
+        # choose the first full match as suggested id
+        inferred_order_id = int(full_matches[0])
+
+    # If Gemini forgot to provide a user-facing reply, synthesize one
+    if not natural_reply:
+        if inferred_order_id:
+            natural_reply = (
+                f"The receipt fully covers order #{inferred_order_id}. "
+                f"Do you want to confirm this match?"
+            )
+        elif partial_matches:
+            natural_reply = (
+                "I couldn't find any order that is fully covered by this receipt, "
+                "but there are partial overlaps with these orders: "
+                + ", ".join(str(o) for o in partial_matches)
+                + "."
+            )
         else:
-            result = {}
+            natural_reply = (
+                "I couldn't find any delivery order that clearly matches this receipt."
+            )
 
-    best_order_id = result.get("best_order_id")
-    explanation = result.get("explanation") or "No explanation provided."
-
-    # Normalize: only accept numeric best_order_id
-    if not isinstance(best_order_id, (int, float)):
-        best_order_id = None
-
-    return best_order_id, explanation
+    return inferred_order_id, natural_reply

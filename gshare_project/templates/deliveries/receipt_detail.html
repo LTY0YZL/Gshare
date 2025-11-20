@@ -364,23 +364,24 @@
             {% csrf_token %}
             <button
                 type="submit"
-                class="inline-flex items-center px-3 py-1.5 rounded-md border border-gray-300
-                    text-xs font-medium text-gray-700 bg-white hover:bg-gray-100">
+                class="inline-flex items-center px-5 py-3 rounded-lg border border-gray-300
+                    text-sm font-semibold text-gray-700 bg-white hover:bg-gray-100 shadow-sm">
                 🔍 Match Orders
             </button>
         </form>
 
         {% if receipt.inferred_order_id %}
-            <form method="post"
-                action="{% url 'receipt_confirm_delivery' receipt.id %}"
-                style="margin-top: 0.75rem; text-align: right;">
-                {% csrf_token %}
-                <button type="submit"
-                        class="inline-flex items-center px-3 py-1.5 rounded-md
-                                bg-green-600 text-white text-xs font-medium hover:bg-green-700">
-                    ✅ Confirm match & mark delivered
-                </button>
-            </form>
+        <form method="post"
+            action="{% url 'receipt_confirm_delivery' receipt.id %}"
+            class="mt-3 text-right">
+            {% csrf_token %}
+            <button 
+                type="submit"
+                class="inline-flex items-center px-5 py-3 rounded-lg border border-gray-300
+                    text-sm font-semibold text-gray-700 bg-white hover:bg-gray-100 shadow-sm">
+                ✅ Confirm match & mark delivered
+            </button>
+        </form>
         {% endif %}
 
     </div>
@@ -470,6 +471,48 @@
         background: #16a34a;
     }
 </style>
+
+<style>
+.confirm-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.75rem;
+}
+
+.confirm-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 999px;
+
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border: none;
+
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+
+    transition: transform 0.15s ease, background 0.2s ease;
+}
+
+.confirm-btn:hover {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    transform: translateY(-1px);
+}
+
+.confirm-btn:active {
+    transform: scale(0.97);
+}
+
+.confirm-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+</style>
+
 
 <script>
 (function() {

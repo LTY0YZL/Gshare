@@ -995,8 +995,6 @@ def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500, viewer=Non
             'store_id': store.id if store else None,
             'store_name': store.name if store else "",
             'store_address': store.location if (store and store.location) else "",
-            'store_lat': float(store.latitude) if (store and store.latitude is not None) else None,
-            'store_lng': float(store.longitude) if (store and store.longitude is not None) else None,
         })
 
     return orders_with_users
@@ -1594,7 +1592,7 @@ def _apply_receipt_operations(receipt, operations):
 def receipt_match_orders_view(request, rid: int):
     receipt = get_object_or_404(Receipt.objects.using("gsharedb"), pk=rid)
 
-    # 1) Load receipt lines from gsharedb
+    # 1) Load receipt items
     lines = list(
         ReceiptLine.objects.using("gsharedb")
         .filter(receipt=receipt)
@@ -1607,51 +1605,69 @@ def receipt_match_orders_view(request, rid: int):
             role="assistant",
             content=(
                 "I can't match this to an order yet, because there are no "
-                "parsed items on this receipt. Try scanning again or wait "
-                "for the items to finish processing."
+                "parsed items on this receipt."
             ),
         )
         return redirect("receipt_detail", rid=receipt.id)
 
-    # 2) Candidate orders: orders that THIS USER is delivering
+    driver_user_id = receipt.uploader_id or 0  # or however you identify the driver
+
+    candidate_orders = []
+
+    # 2) Get active delivery orders for this driver (orders + deliveries)
     with connections["gsharedb"].cursor() as cur:
         cur.execute(
             """
             SELECT o.id, o.status, o.store_id, o.order_date
-            FROM orders o
-            JOIN deliveries d ON d.order_id = o.id
+            FROM deliveries d
+            JOIN orders o ON d.order_id = o.id
             WHERE d.delivery_person_id = %s
-              AND d.status IN ('accepted','delivering')
+              AND d.status IN ('accepted', 'inprogress', 'delivering')   -- adjust to your statuses
             ORDER BY o.order_date DESC
             LIMIT 10
             """,
-            [receipt.uploader_id or 0],
+            [driver_user_id],
         )
-        rows = cur.fetchall()
+        order_rows = cur.fetchall()
 
-    candidate_orders = []
-    for oid, status, store_id, order_date in rows:
+    if not order_rows:
+        ReceiptChatMessage.objects.create(
+            receipt_id=receipt.id,
+            role="assistant",
+            content="You don’t seem to have any active delivery orders I can match this receipt to right now.",
+        )
+        return redirect("receipt_detail", rid=receipt.id)
+
+    # 3) For each order, pull items via raw SQL (avoids composite-PK ORM issues)
+    for oid, status, store_id, order_date in order_rows:
+        with connections["gsharedb"].cursor() as cur:
+            cur.execute(
+                """
+                SELECT i.name, oi.quantity
+                FROM order_items oi
+                JOIN items i ON i.id = oi.item_id
+                WHERE oi.order_id = %s
+                """,
+                [oid],
+            )
+            item_rows = cur.fetchall()
+
+        line_items = [
+            {"name": name, "quantity": float(qty or 0)}
+            for (name, qty) in item_rows
+        ]
+
         candidate_orders.append(
             {
                 "id": oid,
                 "status": status,
                 "store_id": store_id,
                 "created_at": str(order_date),
+                "items": line_items,   # <-- this is what Gemini sees
             }
         )
 
-    if not candidate_orders:
-        ReceiptChatMessage.objects.create(
-            receipt_id=receipt.id,
-            role="assistant",
-            content=(
-                "You don't seem to have any active delivery orders I can "
-                "match this receipt to right now."
-            ),
-        )
-        return redirect("receipt_detail", rid=receipt.id)
-
-    # 3) Ask Gemini to pick the best order (helper does all item lookups)
+    # 4) Ask Gemini which orders match this receipt
     try:
         inferred_order_id, ai_reply = suggest_matching_order(
             receipt=receipt,
@@ -1668,7 +1684,6 @@ def receipt_match_orders_view(request, rid: int):
             role="assistant",
             content=ai_reply,
         )
-
     except Exception as e:
         ReceiptChatMessage.objects.create(
             receipt_id=receipt.id,
@@ -1678,6 +1693,7 @@ def receipt_match_orders_view(request, rid: int):
 
     return redirect("receipt_detail", rid=receipt.id)
 
+
 @login_required
 @require_POST
 def receipt_chat_view(request, rid: int):
@@ -1685,10 +1701,12 @@ def receipt_chat_view(request, rid: int):
     user_message = (request.POST.get("message") or "").strip()
 
     if not user_message:
-        if request.headers.get("x-requested-with") == "XMLHttpRequest":
-            return JsonResponse({"reply": ""})
+        # For normal POST, just redirect back
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"ok": False, "error": "Empty message"}, status=400)
         return redirect("receipt_detail", rid=receipt.id)
 
+    # Load prior chat (user + assistant) from default DB
     history_qs = ReceiptChatMessage.objects.filter(
         receipt_id=receipt.id
     ).order_by("created_at", "id")
@@ -1699,13 +1717,14 @@ def receipt_chat_view(request, rid: int):
         if m.role in ("user", "assistant")
     ]
 
-    # save user msg
+    # Save user message
     ReceiptChatMessage.objects.create(
         receipt_id=receipt.id,
         role="user",
         content=user_message,
     )
 
+    # Call Gemini (which also updates lines)
     try:
         reply_text = chat_about_receipt(
             receipt,
@@ -1715,84 +1734,62 @@ def receipt_chat_view(request, rid: int):
     except Exception as e:
         reply_text = f"Sorry, I had an error talking to the AI: {e}"
 
-    # save assistant msg
+    # Save assistant reply
     ReceiptChatMessage.objects.create(
         receipt_id=receipt.id,
         role="assistant",
         content=reply_text,
     )
 
-    # AJAX request → JSON
-    if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return JsonResponse({"reply": reply_text})
+    # If this is an AJAX request, return JSON so JS can update the chat
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse(
+            {
+                "ok": True,
+                "reply": reply_text,
+            }
+        )
 
-    # normal form post → redirect
+    # Fallback: normal non-AJAX behaviour
     return redirect("receipt_detail", rid=receipt.id)
 
-
-@login_required
 @require_POST
-def receipt_confirm_delivery(request, rid: int):
-    """
-    Called when the user clicks '✅ Confirm match & mark delivered'.
-    Uses receipt.inferred_order_id and marks that delivery as completed.
-    """
-    if request.method != "POST":
-        return redirect("receipt_detail", rid=rid)
-
-    # Receipt lives in gsharedb
-    receipt = get_object_or_404(Receipt.objects.using("gsharedb"), pk=rid)
+@login_required
+def receipt_confirm_delivery_view(request, rid: int):
+    receipt = get_object_or_404(
+        Receipt.objects.using("gsharedb"),
+        pk=rid
+    )
 
     if not receipt.inferred_order_id:
-        # nothing to confirm
-        ReceiptChatMessage.objects.create(
-            receipt_id=receipt.id,
-            role="assistant",
-            content="I don't have a matched order to confirm yet.",
-        )
-        return redirect("receipt_detail", rid=receipt.id)
+        messages.error(request, "No matched order to confirm.")
+        return redirect("receipt_detail", rid=rid)
 
     order_id = receipt.inferred_order_id
 
-    # Wrap DB updates in a transaction on gsharedb
-    with transaction.atomic(using="gsharedb"):
-        # 1) Update the order status (if you want)
-        try:
-            order = Orders.objects.using("gsharedb").get(pk=order_id)
-            order.status = "delivered"   # or "completed", whatever you use
-            order.save(using="gsharedb")
-        except Orders.DoesNotExist:
-            order = None
+    # Update Deliveries table
+    try:
+        delivery = Deliveries.objects.using("gsharedb").get(order_id=order_id)
+        delivery.status = "delivered"
+        delivery.delivery_time = timezone.now()
+        delivery.save(using="gsharedb")
 
-        # 2) Update the corresponding delivery row for this driver
-        delivery_qs = Deliveries.objects.using("gsharedb").filter(
-            order_id=order_id,
+        # Mark the receipt as done
+        receipt.status = "done"
+        receipt.save(using="gsharedb")
+
+        # Add chat confirmation
+        ReceiptChatMessage.objects.create(
+            receipt_id=receipt.id,
+            role="assistant",
+            content=f"Great! I've marked order #{order_id} as delivered."
         )
 
-        # if you want to restrict to the current driver:
-        # driver_user_id = request.user.id  # depends how you map auth user -> Users
-        # delivery_qs = delivery_qs.filter(delivery_person_id=driver_user_id)
+        messages.success(request, "Delivery confirmed!")
+    except Deliveries.DoesNotExist:
+        messages.error(request, "Could not find a delivery entry for this order.")
 
-        delivery = delivery_qs.first()
-        if delivery:
-            delivery.status = "delivered"     # or "completed"
-            delivery.delivery_time = timezone.now()
-            delivery.save(using="gsharedb")
-
-    # 3) Add a chat message summarizing what happened
-    msg_parts = ["I've marked the delivery as completed"]
-    if order:
-        msg_parts.append(f"for order #{order.id}.")
-    else:
-        msg_parts.append("(but I couldn't find the order record).")
-
-    ReceiptChatMessage.objects.create(
-        receipt_id=receipt.id,
-        role="assistant",
-        content=" ".join(msg_parts),
-    )
-
-    return redirect("receipt_detail", rid=receipt.id)
+    return redirect("receipt_detail", rid=rid)
 
 @login_required
 def userprofile(request):
@@ -1937,6 +1934,7 @@ Returns:
 """
 @login_required
 def add_to_cart(request, item_id, quantity=1):
+    
     print("Adding item to cart:", item_id)
     print("Quantity:", quantity)
 
@@ -1945,41 +1943,30 @@ def add_to_cart(request, item_id, quantity=1):
         messages.error(request, "Profile not found.")
         return redirect('cart')
 
-    # Grab item 
+
+    # Grab item
     try:
         item = Items.objects.using('gsharedb').get(id=item_id)
     except Items.DoesNotExist:
         messages.error(request, "Item not found.")
-        return redirect('cart')
-
-    active_store_id = (
-        request.session.get('kroger_store_id')  
-        or request.session.get('active_store_id') 
-    )
-
-    active_store = None
-    if active_store_id:
-        active_store = Stores.objects.using('gsharedb').filter(id=active_store_id).first()
+        return redirect('cart') 
 
     # Get or create cart
     order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
-
     if not order:
         order = Orders.objects.using('gsharedb').create(
             user=profile,
             status='cart',
             order_date=timezone.now(),
-            store=active_store,                  
+            store=item.store,
             total_amount=0,
-            delivery_address=profile.address,
+            delivery_address = profile.address
         )
-    else:
-        if active_store and (order.store_id != active_store.id):
-            order.store = active_store
-            order.save(using='gsharedb', update_fields=['store'])
 
+    # Upsert into order_items (composite PK table) and recompute total
     with transaction.atomic(using='gsharedb'):
         with connections['gsharedb'].cursor() as cur:
+            # Insert or bump quantity
             cur.execute(
                 """
                 INSERT INTO order_items (order_id, item_id, quantity, price)
@@ -1990,6 +1977,7 @@ def add_to_cart(request, item_id, quantity=1):
                 [order.id, item.id, quantity, str(item.price or 0)]
             )
 
+            # RECALC TOTAL from line items
             cur.execute(
                 """
                 SELECT COALESCE(SUM(quantity * price), 0)
@@ -2000,14 +1988,15 @@ def add_to_cart(request, item_id, quantity=1):
             )
             total = cur.fetchone()[0] or 0
 
+    # Update order fields using ORM
     order.total_amount = total
     order.order_date = timezone.now()
     order.save(using='gsharedb')
-
-    # AJAX response
-    if (request.headers.get('x-requested-with') == 'XMLHttpRequest'
-            or request.content_type == "application/json"):
+    
+    # Always return JSON for AJAX
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == "application/json":
         return JsonResponse({"success": True, "message": f"Added {item.name} to your cart."})
+
 
     messages.success(request, f"Added {item.name} to your cart.")
     return redirect('cart')
@@ -2223,10 +2212,6 @@ def upsert_kroger_store_from_location(loc):
 
     parts = [p for p in [street, city, state, postal, country] if p]
     full_location = ", ".join(parts) if parts else None
-    
-    geo = loc.get("geolocation") or {}
-    lat = geo.get("latitude")
-    lng = geo.get("longitude")
 
     defaults = {
         "name": store_name,     
@@ -2236,9 +2221,6 @@ def upsert_kroger_store_from_location(loc):
         "postal_code": postal,
         "country": country,
         "location": full_location,
-        
-        "latitude": lat,
-        "longitude": lng,
     }
 
     store, created = Stores.objects.using('gsharedb').update_or_create(
@@ -2257,16 +2239,14 @@ def add_kroger_item_to_cart(request):
 
     product_name = (request.POST.get('product_name') or '').strip()
     product_price = request.POST.get('product_price')
-    image_url = None
 
-    if request.content_type == 'application/json':
+    if not product_name and request.content_type == 'application/json':
         try:
             body = json.loads(request.body or '{}')
             product_name = (body.get('product_name') or '').strip()
             product_price = body.get('product_price')
-            image_url = body.get('image_url')
         except Exception:
-            product_name, product_price, image_url = '', None, None
+            product_name, product_price = '', None
 
     if not product_name or product_price is None:
         messages.error(request, "Missing Kroger product data.")
@@ -2288,14 +2268,10 @@ def add_kroger_item_to_cart(request):
         messages.error(request, "Selected Kroger store not found. Please search again.")
         return redirect('cart')
 
-    defaults = {'price': price_dec, 'stock': 0}
-    if image_url:
-        defaults['image_url'] = image_url
-
     item, _ = Items.objects.using('gsharedb').update_or_create(
         name=product_name,
         store=kroger_store,
-        defaults=defaults
+        defaults={'price': price_dec, 'stock': 0}
     )
 
     return add_to_cart(request, item.id)
@@ -2333,12 +2309,6 @@ def save_kroger_results(request):
                   .get('price', {})
                   .get('regular')
             )
-            image_url = None
-            images = p.get('images', [])
-            if images:
-                sizes = images[0].get('sizes', [])
-                if sizes:
-                    image_url = sizes[0].get('url')
             if not name or regular is None:
                 continue
             price_dec = Decimal(str(regular))
@@ -2348,7 +2318,7 @@ def save_kroger_results(request):
         _, was_created = Items.objects.using('gsharedb').update_or_create(
             name=name,
             store=kroger_store,
-            defaults={'price': price_dec, 'stock': 1, 'description': name, 'image_url': image_url,}
+            defaults={'price': price_dec, 'stock': 0, 'description': name}
         )
         if was_created:
             created += 1
@@ -2392,7 +2362,6 @@ import random
 def estimate_order_time(user_address, store_address, num_items, api_key):
     
     drive_info = drive_time(user_address, store_address, api_key)
-    print(f"drive info: {drive_info}")
     if not drive_info:
         return None
     
@@ -2402,7 +2371,6 @@ def estimate_order_time(user_address, store_address, num_items, api_key):
     shopping_time = num_items * 1.5
     
     total_time = round_trip + shopping_time
-    print(f"total time: {total_time}")
     
     variation = random.uniform(0.9, 1.1)
     total_time *= variation
@@ -2416,15 +2384,10 @@ def estimate_order_time(user_address, store_address, num_items, api_key):
     }
     
 def drive_time(user_address, store_address, api_key):
-    print(f"api info: {api_key}")
-    url = f"https://maps.googleapis.com/maps/api/distancematrix/json?origins={user_address}&destinations={store_address}&key={api_key}"
+    url = f"https://maps.googleapis.com/maps/api/distancematrix/json?origins={user_address}&destination={store_address}&key={api_key}"
     
-    print(f"user_address info: {user_address}")
-
-    print(f"store_address info: {store_address}")
-    response = requests.get(url)
+    response = response.get(url)
     data = response.json()
-    print(f"data info: {data}")
     
     if data["status"] == "OK":
         element = data['rows'][0]["elements"][0]
@@ -2495,9 +2458,6 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
             'store_id': order.get('store_id'),
             'store_name': order.get('store_name', ''),
             'store_address': order.get('store_address', ''),
-            
-            'store_lat': order.get('store_lat'),
-            'store_lng': order.get('store_lng'),
             
             'status': order['status'],        
             'driver_id': driver_id,           
@@ -3046,9 +3006,9 @@ def getUserProfile(request, userID):
 
 
 @login_required
-def payments(request, order_id):
+def payments(request):
     user = get_user("email", request.user.email)
-    order = get_object_or_404(Orders.objects.using('gsharedb'), pk=order_id)
+    order = get_orders(user, "inprogress").first()
     print("order here: " + str(order))
     orders = []
     members = []
@@ -3127,37 +3087,17 @@ def payments(request, order_id):
     context = {
         'carts_in_group': carts_in_group,
         'members_payments': members_payments,
-        'orderID': order_id,
     }
     return render(request, "paymentsPage.html", context)
 
 @login_required
-def paymentsCheckout(request, order_id):
+def paymentsCheckout(request):
     # change order status to placed upon successful payment
-    
-    orders = []
-    order = get_object_or_404(Orders.objects.using('gsharedb'), pk=order_id)
-    delivery = get_delivery_for_order(order)
-    dperson = delivery.delivery_person
-    userAddress = dperson.address
-
-    dropOffLocation = order.delivery_address
-
-    orderSize = len(get_order_items(order))
-
-    store = "455 S 500 E SLC UT"
-    # api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
-    from django.conf import settings
-
-    api_key = settings.GOOGLE_MAPS_API_KEY
-    deliveryCost = pickup_price(userAddress, dropOffLocation, orderSize, store, api_key)["total_cost"]
-    print(f'delivery cost: {deliveryCost}')
     try:
         stripe.api_key = settings.STRIPE_SECRET_KEY
         profile = get_user("email", request.user.email)
         try:
-            
-            orders.append(order)
+            orders = get_orders(profile, "inprogress")
             if not orders:
                 messages.error(request, "No items in the cart to checkout.")
                 return redirect('cart')
@@ -3196,20 +3136,6 @@ def paymentsCheckout(request, order_id):
                 'quantity': 1,
             })
 
-        subtotal_cents = int(deliveryCost * 100)
-        print(f"subtotal cents: {subtotal_cents}")
-        del_cents = int(round(subtotal_cents * Decimal('0.07')))
-        print(f"del_cents cents: {del_cents}")
-
-        itemObjects.append({
-                'price_data': {
-                    'currency': 'usd',
-                    'product_data': {'name': 'Delivery Fees'},
-                    'unit_amount': subtotal_cents,
-                },
-                'quantity': 1,
-            })
-
          # ABOVE IS fallback for tax: add a manual 7% tax line (when not using Automatic Tax)
 
         # Replace the old Session.create(...) with Automatic Tax + address collection
@@ -3225,18 +3151,17 @@ def paymentsCheckout(request, order_id):
             customer_email=request.user.email,  # helps with tax and receipts
             
             success_url=f"http://www.gshare.me/payment_success/{order.id}/", # should do this if success: # consider moving this to webhook on payment success
-            cancel_url=f"http://www.gshare.me/payments/{order.id}",
+            cancel_url="http://www.gshare.me/cart/payments",
         )
         print("Session URL: " + checkoutSession.url)
         return redirect(checkoutSession.url)
     except stripe.error.StripeError as e:
         messages.error(request, f"Payment error: {e.user_message}")
-        messages.error(request, f"Payment error: {e.user_message}")
-        return redirect('payments', order_id=order.id)
+        return redirect('payments')
     except Exception as e:
         print(f"A serious error occurred: {e}. We have been notified.")
         messages.error(request, "An unexpected error occurred. Please try again.")
-        return redirect('payments', order_id=order.id)  # Added return
+        return redirect('payments')  # Added return
 
 
 def createGroupForShoppingCart(request, order_id):

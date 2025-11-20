@@ -102,7 +102,9 @@ urlpatterns = [
     path("deliveries/receipt/<int:rid>/", views.receipt_detail_view, name="receipt_detail"),
     path("deliveries/receipt/<int:rid>/chat/", views.receipt_chat_view, name="receipt_chat"),
     path("deliveries/receipt/<int:rid>/match-orders/", views.receipt_match_orders_view, name="receipt_match_orders"),
-    path("deliveries/receipt/<int:rid>/confirm/", views.receipt_confirm_delivery, name="receipt_confirm_delivery"),
+    path("deliveries/receipt/<int:rid>/confirm/", views.receipt_confirm_delivery_view, name="receipt_confirm_delivery"),
+
+
     
     # images
     path("api/upload-image/", views.upload_image, name="upload_image"),
