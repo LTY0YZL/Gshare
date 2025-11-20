@@ -1,14 +1,15 @@
 <!DOCTYPE html>
 
 {% load static %}
+{% load tailwind_cli %}
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
-    <link rel="stylesheet" href="{% static 'dist/tailwindcss.css' %}">
+    {% tailwind_css %}
 </head>
-{% include "navbar.html" with navbar_bg_color="#150931" %}
+{% include "navbar.html" %}
 <body class="bg-gradient-to-br from-[#150931] to-[#2a1259] min-h-screen">
 
     <div class="max-w-2xl mx-auto my-16 border border-purple-300 rounded-xl shadow-2xl p-10 m-8 bg-white flex flex-col">
@@ -21,13 +22,13 @@
         {% endif %}
         
         <div id="login">
-            <h4 class="text-3xl font-bold text-center text-purple-800 mb-8">User Login</h4>
+            <h4 class="text-3xl font-bold text-center text-[#150931] mb-8">User Login</h4>
             <form method="post" action="{% url 'login' %}" class="w-full">
                 {% csrf_token %}
                 <div class="mb-8">
                     <div class="mb-6">
                         <label for="username" class="block text-lg font-medium text-gray-700 mb-2">Username</label>
-                        <div class="flex w-full border-2 border-gray-300 rounded-lg transition-all duration-200 focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 focus-within:ring-opacity-50">
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg transition-all duration-200 focus-within:border-[#150931] focus-within:ring focus-within:ring-purple-200 focus-within:ring-opacity-50">
                             <img class="w-8 h-8 m-3" src="{% static 'media/user.png' %}" alt="User Icon">
                             <input type="text" id="username" name="username" class="w-full p-3 focus:outline-none text-lg" required>
                         </div>
@@ -35,21 +36,21 @@
 
                     <div class="mb-6">
                         <label for="password" class="block text-lg font-medium text-gray-700 mb-2">Password</label>
-                        <div class="flex w-full border-2 border-gray-300 rounded-lg transition-all duration-200 focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 focus-within:ring-opacity-50">
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg transition-all duration-200 focus-within:border-[#150931] focus-within:ring focus-within:ring-purple-200 focus-within:ring-opacity-50">
                             <img class="w-8 h-8 m-3" src="{% static 'media/lock.png' %}" alt="Password Icon">
                             <input type="password" id="password" name="password" class="w-full p-3 focus:outline-none text-lg" required>
                         </div>
                     </div>
                     
                     <div class="flex justify-between items-center mb-8">
-                        <a href="#" class="text-purple-700 hover:text-purple-900 underline text-base">Forgot Password?</a>
+                        <a href="#" class="text-[#150931] hover:text-purple-900 underline text-base">Forgot Password?</a>
                     </div>
                     
-                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-black py-4 px-5 rounded-lg font-bold transition duration-200 text-lg">Login</button>
+                    <button type="submit" class="w-full bg-[#150931] hover:bg-[#2a1259] text-white py-4 px-5 rounded-lg font-bold transition duration-200 text-lg">Login</button>
                     
                     <div class="mt-6 text-center">
                         <p class="text-gray-600 text-lg">Don't have an account? 
-                            <button type="button" onclick="togglefunc()" class="text-purple-700 hover:text-purple-900 font-medium ml-2">Sign Up</button>
+                            <button type="button" onclick="togglefunc()" class="text-[#150931] hover:text-purple-900 font-medium ml-2">Sign Up</button>
                         </p>
                     </div>
                 </div>
@@ -73,14 +74,14 @@
         </div>
 
         <div id="signup" class="hidden">
-            <h4 class="text-3xl font-bold text-center text-purple-800 mb-8">Create Account</h4>
+            <h4 class="text-3xl font-bold text-center text-[#150931] mb-8">Create Account</h4>
             <form method="post" action="{% url 'signup' %}" class="w-full">
                 {% csrf_token %}
                 <div class="mb-8">
                     <!-- Username -->
                     <div class="mb-6">
                         <label for="signup-username" class="block text-lg font-medium text-gray-700 mb-2">Username</label>
-                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 transition-all">
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-[#150931] focus-within:ring focus-within:ring-purple-200 transition-all">
                             <img class="w-8 h-8 m-3" src="{% static 'media/user.png' %}" alt="User Icon">
                             <input type="text" id="signup-username" name="username" class="w-full p-3 focus:outline-none text-lg" required>
                         </div>
@@ -89,15 +90,16 @@
                     <!-- First Name -->
                     <div class="mb-6">
                         <label for="first_name" class="block text-lg font-medium text-gray-700 mb-4">First Name</label>
-                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 transition-all">
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-[#150931] focus-within:ring focus-within:ring-purple-200 transition-all">
                             <img class="w-8 h-8 m-3" src="{% static 'media/user.png' %}" alt="User Icon">
                             <input type="text" id="first_name" name="first_name" class="w-full p-3 focus:outline-none text-lg" required>
+                        </div>
                     </div>
         
                     <!-- Last Name -->
                     <div class="mb-6">
                         <label for="last_name" class="block text-lg font-medium text-gray-700 mb-2">Last Name</label>
-                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 transition-all">
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-[#150931] focus-within:ring focus-within:ring-purple-200 transition-all">
                             <img class="w-8 h-8 m-3" src="{% static 'media/user.png' %}" alt="User Icon">
                             <input required type="text" id="last_name" name="last_name" class="w-full p-3 focus:outline-none text-lg">
                         </div>
@@ -106,7 +108,7 @@
                     <!-- Email -->
                     <div class="mb-6">
                         <label for="email" class="block text-lg font-medium text-gray-700 mb-2">Email</label>
-                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 transition-all">
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-[#150931] focus-within:ring focus-within:ring-purple-200 transition-all">
                             <img class="w-8 h-8 m-3" src="{% static 'media/user.png' %}" alt="Email Icon">
                             <input type="email" id="email" name="email" class="w-full p-3 focus:outline-none text-lg" required>
                         </div>
@@ -115,7 +117,7 @@
                     <!-- Password -->
                     <div class="mb-6">
                         <label for="signup-password" class="block text-lg font-medium text-gray-700 mb-2">Password</label>
-                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-purple-500 focus-within:ring focus-within:ring-purple-200 transition-all">
+                        <div class="flex w-full border-2 border-gray-300 rounded-lg focus-within:border-[#150931] focus-within:ring focus-within:ring-purple-200 transition-all">
                             <img class="w-8 h-8 m-3" src="{% static 'media/lock.png' %}" alt="Password Icon">
                             <input type="password" id="signup-password" name="password" class="w-full p-3 focus:outline-none text-lg" required>
                         </div>
@@ -124,21 +126,21 @@
                     <!-- Optional Address -->
                     <div class="mb-6">
                         <label for="address" class="block text-lg font-medium text-gray-700 mb-2">Address</label>
-                        <input type="text" id="address" name="address" class="w-full border-2 border-gray-300 rounded-lg p-3 focus:outline-none text-lg focus:border-purple-500 focus:ring focus:ring-purple-200" required>
+                        <input type="text" id="address" name="address" class="w-full border-2 border-gray-300 rounded-lg p-3 focus:outline-none text-lg focus:border-[#150931] focus:ring focus:ring-purple-200" required>
                     </div>
         
                     <!-- Optional Phone -->
                     <div class="mb-6">
                         <label for="phone" class="block text-lg font-medium text-gray-700 mb-2">Phone (optional)</label>
-                        <input type="text" id="phone" name="phone" class="w-full border-2 border-gray-300 rounded-lg p-3 focus:outline-none text-lg focus:border-purple-500 focus:ring focus:ring-purple-200">
+                        <input type="text" id="phone" name="phone" class="w-full border-2 border-gray-300 rounded-lg p-3 focus:outline-none text-lg focus:border-[#150931] focus:ring focus:ring-purple-200">
                     </div>
         
                     <!-- Submit -->
-                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-black py-4 px-5 rounded-lg font-bold transition duration-200 text-lg">Create Account</button>
+                    <button type="submit" class="w-full bg-[#150931] hover:bg-[#2a1259] text-white py-4 px-5 rounded-lg font-bold transition duration-200 text-lg">Create Account</button>
         
                     <div class="mt-6 text-center">
                         <p class="text-gray-600 text-lg">Already have an account? 
-                            <button type="button" onclick="togglefunc()" class="text-purple-700 hover:text-purple-900 font-medium ml-2">Log In</button>
+                            <button type="button" onclick="togglefunc()" class="text-[#150931] hover:text-purple-900 font-medium ml-2">Log In</button>
                         </p>
                     </div>
                 </div>
