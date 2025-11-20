@@ -1683,6 +1683,9 @@ def receipt_chat_view(request, rid: int):
     user_message = (request.POST.get("message") or "").strip()
 
     if not user_message:
+        # For normal POST, just redirect back
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"ok": False, "error": "Empty message"}, status=400)
         return redirect("receipt_detail", rid=receipt.id)
 
     # Load prior chat (user + assistant) from default DB
@@ -1703,9 +1706,7 @@ def receipt_chat_view(request, rid: int):
         content=user_message,
     )
 
-    # Call Gemini – it will:
-    #  - answer the user
-    #  - apply any operations to ReceiptLine inside chat_about_receipt
+    # Call Gemini (which also updates lines)
     try:
         reply_text = chat_about_receipt(
             receipt,
@@ -1722,7 +1723,16 @@ def receipt_chat_view(request, rid: int):
         content=reply_text,
     )
 
-    # When you redirect back, receipt_detail_view will reload the updated lines
+    # If this is an AJAX request, return JSON so JS can update the chat
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse(
+            {
+                "ok": True,
+                "reply": reply_text,
+            }
+        )
+
+    # Fallback: normal non-AJAX behaviour
     return redirect("receipt_detail", rid=receipt.id)
 
 @login_required
