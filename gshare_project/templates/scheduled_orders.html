@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scheduled Orders</title>
-    <link rel="stylesheet" href="{% static 'css/scheduled_orders.css' %}">
+    <link rel="stylesheet" href="{% static 'css/scheduled_orders.css' %}?v={% now 'U' %}">
 </head>
 <body>
     {% include 'navbar.html' %}
@@ -58,7 +58,7 @@
             </form>
         </div>
         {% empty %}
-        <p>No recurring carts yet. Create one to get started!</p>
+        <p style="text-align: center; color: #6B7280;">No recurring carts yet. Create one to get started!</p>
         {% endfor %}
     </div>
 </body>

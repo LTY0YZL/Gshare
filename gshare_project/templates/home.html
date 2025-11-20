@@ -6,51 +6,170 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home</title>
     {% comment %} <link rel="stylesheet" href="{% static 'css/style.css' %}"> {% endcomment %}
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #FFFFFF;
+            color: #1F2937;
+        }
+
+        .home-page {
+            background-color: #FFFFFF;
+        }
+
+        .home-main {
+            max-width: 960px;
+            margin: 32px auto 0;
+            padding: 0 16px 48px;
+            text-align: center;
+        }
+
+        .hero-title {
+            font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .hero-subtitle {
+            font-size: 1.125rem;
+            font-weight: 500;
+            color: #6B7280;
+            margin-bottom: 12px;
+        }
+
+        .hero-subtitle-accent {
+            color: #10B981;
+        }
+
+        .home-address-section {
+            max-width: 600px;
+            margin: 24px auto 32px;
+            padding: 16px 20px;
+            background-color: #F3F4F6;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .section-heading {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #1F2937;
+        }
+
+        .home-address-section form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: stretch;
+        }
+
+        .address-input {
+            padding: 10px 12px;
+            border: 1px solid #D1D5DB;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+        .primary-button {
+            padding: 10px 16px;
+            border-radius: 6px;
+            border: none;
+            background-color: #10B981;
+            color: #FFFFFF;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+        .primary-button:hover {
+            background-color: #059669;
+        }
+
+        .map-wrapper {
+            display: flex;
+            justify-content: center;
+            padding: 0 16px 32px;
+        }
+
+        .map-container {
+            width: 100%;
+            max-width: 720px;
+            height: 384px;
+            border-radius: 8px;
+            border: 1px solid #E5E7EB;
+            background-color: #F3F4F6;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-top: 16px;
+        }
+
+        .section-subheading {
+            margin-top: 32px;
+            font-size: 0.95rem;
+            color: #6B7280;
+        }
+
+        .store-list {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            padding: 16px 0 32px;
+        }
+
+        .store-list img {
+            max-height: 40px;
+            object-fit: contain;
+        }
+
+        @media (min-width: 640px) {
+            .home-address-section form {
+                flex-direction: row;
+            }
+
+            .address-input {
+                flex: 1;
+            }
+        }
+    </style>
 </head>
 {% include "navbar.html" %}
-<body class="desgin">
+<body class="desgin home-page">
 
-    <div class="flex flex-col items-center mb-16">
-        <h1 class="mb-4 text-4xl font-bold text-center">
+    <div class="home-main">
+        <h1 class="hero-title">
             Grocery Delivery Done Right
         </h1>
 
-        <h2 class="mb-4 text-2xl font-semibold text-center">
+        <h2 class="hero-subtitle">
             Find your local grocery store and get your groceries delivered to you by a neighbor.
         </h2>
-        <h2 class="mb-4 text-2xl font-semibold text-center">
+        <h2 class="hero-subtitle hero-subtitle-accent">
             Community Based.
         </h2>
 
-
-    <!--If they are logged in but did not enter their address yet-->
-    <div class="flex flex-col items-center mb-12">
-        <h4 class="mb-4">
-            Enter your address to find your neighborhood!
-        </h4>
-        <form onsubmit="geocodeAddress(); return false;" autocomplete="on">
-            <input id="input_location" class="border border-gray-300 rounded-lg shadow-lg"type="text" name="address" placeholder="Enter your address">
-            <button type="submit" class="border border-gray-300 rounded-lg shadow-lg">Search</button>
-        </form>
-    </div class="mb-12">
-    <div class="flex justify-center items-center w-full">
-        <div style="width: 90%;" id='map' class="w-2/5 h-96 mt-4 border border-gray-300 rounded-lg shadow-lg">
-
+        <!--If they are logged in but did not enter their address yet-->
+        <div class="home-address-section">
+            <h4 class="section-heading">
+                Enter your address to find your neighborhood!
+            </h4>
+            <form onsubmit="geocodeAddress(); return false;" autocomplete="on">
+                <input id="input_location" class="address-input" type="text" name="address" placeholder="Enter your address">
+                <button type="submit" class="primary-button">Search</button>
+            </form>
         </div>
-    </div>
 
-    <!--If they are logged in and have entered their address-->
-    <h4 class="mt-8">
-        You can request to have your cart picked up, or accept someone else's cart!
-    </h4>
+        <div class="map-wrapper">
+            <div id='map' class="map-container"></div>
+        </div>
 
-
-    </div>
-
-    <div name="Contains list of stores, maybe make it scrollable">
-        <a href="walmart.html"> <img src="walmartLogo"> </a>
-        <a href="costco.html"> <img src="costcoLogo"> </a>
-        <a href="target.html"> <img src="targetLogo"> </a>
+        <!--If they are logged in and have entered their address-->
+        <h4 class="section-subheading">
+            You can request to have your cart picked up, or accept someone else's cart!
+        </h4>
     </div>
 
     <script>
@@ -106,10 +225,10 @@
                     alert('Geocode was not successful for the following reason: ' + status);
                 }
             });
-        } 
+        }
     </script>
 
-    <script async defer 
+    <script async defer
         src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places&callback=initMap">
 
     </script>

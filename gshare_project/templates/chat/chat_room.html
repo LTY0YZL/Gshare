@@ -1,112 +1,104 @@
 {% load tailwind_cli %}
 <!DOCTYPE html>
+{% load static %}
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chat Room</title>
   {% tailwind_css %}
+  <link rel="stylesheet" href="{% static 'css/chat_room.css' %}?v={% now 'U' %}">
 </head>
 
-<body class="bg-neutral-100 text-gray-800">
+<body>
   {% include "navbar.html" %}
 
   <!-- Grid Layout -->
-  <div class="grid grid-cols-[auto_1fr_auto] h-screen overflow-hidden relative">
+  <div class="chat-layout">
 
     <!-- LEFT SIDEBAR -->
-    <aside id="left-sidebar"
-      class="bg-blue-900/95 text-white w-64 transition-all duration-300 overflow-y-auto">
-      <div class="p-4 border-b border-blue-800">
-        <h2 class="text-xl font-semibold mb-4">Direct Messages</h2>
-        <ul class="space-y-1 mb-6">
+    <aside id="left-sidebar" class="chat-sidebar">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">Direct Messages</h2>
+        <ul class="sidebar-list">
           {% for dm in dm_list %}
             <li>
               <a href="{% url 'direct_message' dm.id %}" 
-                 class="block px-3 py-2 rounded hover:bg-blue-700 transition">{{ dm.other_user.username }}</a>
+                 class="sidebar-link">{{ dm.other_user.username }}</a>
             </li>
           {% empty %}
-            <p class="text-gray-300 text-sm">No direct messages yet.</p>
+            <p class="empty-text">No direct messages yet.</p>
           {% endfor %}
         </ul>
 
-        <h2 class="text-xl font-semibold mb-2">Groups</h2>
-        <ul class="space-y-1">
+        <h2 class="sidebar-title" style="margin-top: 24px;">Groups</h2>
+        <ul class="sidebar-list">
           {% for group in groups %}
             <li>
               <a href="{% url 'chat_room' group.slug %}"
-                 class="block px-3 py-2 rounded hover:bg-blue-700 transition">{{ group.name }}</a>
+                 class="sidebar-link">{{ group.name }}</a>
             </li>
           {% empty %}
-            <p class="text-gray-300 text-sm">You're not part of any groups yet.</p>
+            <p class="empty-text">You're not part of any groups yet.</p>
           {% endfor %}
         </ul>
       </div>
     </aside>
 
     <!-- CHAT SECTION -->
-    <main class="flex flex-col h-full min-h-0"> <!-- added min-h-0 -->
-      <div id="chat-log"
-        class="flex flex-col flex-1 overflow-y-auto px-6 py-4 space-y-2 text-sm leading-snug min-h-0">
+    <main class="chat-main">
+      <div id="chat-log" class="chat-log">
         {% for message in messages %}
-          <div
-            class="max-w-[70%] px-4 py-2 rounded-2xl break-words
-              {% if message.sender.username == user.username %}
-                bg-blue-600 text-white self-end
-              {% else %}
-                bg-gray-300 text-gray-900 self-start
-              {% endif %}">
-            <span class="font-semibold">{{ message.sender.username }}:</span> {{ message.content }}
+          <div class="message-bubble {% if message.sender.username == user.username %}message-self{% else %}message-other{% endif %}">
+            <span class="message-sender">{{ message.sender.username }}:</span> {{ message.content }}
             {% if message.image %}
-              <br><img src="{{ message.image }}" alt="Image" class="max-w-xs rounded-lg mt-2">
+              <br><img src="{{ message.image }}" alt="Image" class="message-image">
             {% endif %}
           </div>
         {% endfor %}
       </div>
 
-      <!-- Image Preview -->
-    <div class="sticky bottom-0 z-10 bg-white border-t border-gray-300">
-        <div class="flex items-center gap-3 p-4">
-          <div id="image-preview" class="hidden items-center gap-3">
-            <img id="preview-img" class="w-20 h-20 object-cover rounded-lg shadow-sm" alt="Preview">
-            <button id="remove-image-btn" class="text-red-600 hover:text-red-800">Remove</button>
-          </div>
+      <!-- Image Preview & Input -->
+      <div class="chat-input-area">
+        <div id="image-preview" class="image-preview-container hidden">
+            <img id="preview-img" class="preview-img" alt="Preview">
+            <button id="remove-image-btn" class="remove-img-btn">Remove</button>
+        </div>
 
+        <div class="input-container">
           <input id="chat-message-input"
-            class="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-base focus:ring-2 focus:ring-blue-400 outline-none"
+            class="chat-input"
             type="text" placeholder="Type your message..." />
           <input id="image-input" type="file" accept="image/*" style="display:none;" />
 
-          <button id="image-upload-btn" class="bg-gray-600 text-white px-4 py-2 rounded-xl hover:bg-gray-700 transition font-medium">
+          <button id="image-upload-btn" class="icon-btn">
               +
           </button>
 
-          <button id="chat-message-submit"
-            class="bg-blue-600 text-white px-5 py-2 rounded-xl hover:bg-blue-700 transition font-medium">Send</button>
+          <button id="chat-message-submit" class="send-btn">Send</button>
         </div>
       </div>
     </main>
 
     <!-- RIGHT SIDEBAR -->
-    <aside id="right-sidebar"
-      class="bg-blue-900/95 text-white w-64 transition-all duration-300 overflow-y-auto">
-      <div class="p-4 border-b border-blue-800">
+    <aside id="right-sidebar" class="chat-sidebar">
+      <div class="sidebar-header">
         {% if thread %}
-          <h2 class="text-lg font-semibold">Direct Message</h2>
-          <p class="text-gray-300 text-sm">Chatting with <span class="font-semibold text-white">{{ other_user.username }}</span></p>
+          <h2 class="sidebar-title">Direct Message</h2>
+          <p class="sidebar-subtitle">Chatting with <span style="font-weight: 600; color: #1F2937;">{{ other_user.username }}</span></p>
         {% else %}
-          <h2 class="text-lg font-semibold mb-1">Room: {{ room_name }}</h2>
-          <p class="text-gray-300 text-sm">Room Code: {{ room_code }}</p>
+          <h2 class="sidebar-title">Room: {{ room_name }}</h2>
+          <p class="sidebar-subtitle">Room Code: {{ room_code }}</p>
         {% endif %}
       </div>
 
       {% if members %}
-      <div class="p-4 border-b border-blue-800">
-        <h3 class="text-lg font-semibold mb-3">Members</h3>
-        <ul class="space-y-1 max-h-48 overflow-y-auto">
+      <div class="sidebar-header">
+        <h3 class="sidebar-title" style="font-size: 1rem;">Members</h3>
+        <ul class="sidebar-list">
           {% for member in members %}
             <li>
-              <span class="block px-3 py-2 rounded hover:bg-blue-700 transition">{{ member.username }}</span>
+              <span class="sidebar-link">{{ member.username }}</span>
             </li>
           {% endfor %}
         </ul>
@@ -114,40 +106,36 @@
       {% endif %}
 
       <!-- Display Persistent Notifications -->
-      <div class="p-4 border-b border-blue-800">
-        <h3 class="text-lg font-semibold mb-3">Notifications</h3>
-        <div id="notification-list" class="space-y-2 max-h-48 overflow-y-auto">
+      <div class="sidebar-header" style="border-bottom: none;">
+        <h3 class="sidebar-title" style="font-size: 1rem;">Notifications</h3>
+        <div id="notification-list">
           {% if notifications %}
             {% for notification in notifications %}
-              <div class="bg-blue-800 rounded-lg p-3 text-sm break-words">
-                <p class="text-gray-200">{{ notification.message }}</p>
-                <p class="text-xs text-gray-400 mt-1">{{ notification.created_at|date:"H:i" }}</p>
+              <div class="notification-item">
+                <p class="notification-text">{{ notification.message }}</p>
+                <p class="notification-time">{{ notification.created_at|date:"H:i" }}</p>
               </div>
             {% empty %}
-              <p class="text-gray-300 text-sm">No new notifications</p>
+              <p class="empty-text">No new notifications</p>
             {% endfor %}
           {% else %}
-            <p class="text-gray-300 text-sm">No notifications</p>
+            <p class="empty-text">No notifications</p>
           {% endif %}
         </div>
       </div>
 
       <!-- Badge for unread count -->
-      <div class="p-4">
-        <div id="notification-badge" class="fixed top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full shadow-lg hidden">
-          <span id="badge-count">0</span>
-        </div>
+      <div id="notification-badge" class="notification-badge hidden">
+        <span id="badge-count">0</span>
       </div>
     </aside>
 
     <!-- FLOATING TOGGLE BUTTONS -->
-    <button id="toggle-left"
-      class="absolute top-1/2 left-2 transform -translate-y-1/2 bg-blue-700 text-white p-2 rounded-full shadow-lg hover:bg-blue-600 transition z-50">
+    <button id="toggle-left" class="toggle-btn toggle-left">
       ⮜
     </button>
 
-    <button id="toggle-right"
-      class="absolute top-1/2 right-2 transform -translate-y-1/2 bg-blue-700 text-white p-2 rounded-full shadow-lg hover:bg-blue-600 transition z-50">
+    <button id="toggle-right" class="toggle-btn toggle-right">
       ⮞
     </button>
   </div>
@@ -168,11 +156,15 @@
     let isTyping = false;
     let unreadNotifications = [];
 
+    window.onload = () => chatLog.scrollTop = chatLog.scrollHeight;
 
     // load notifications on page load
     window.addEventListener('load', () => {
       const notifications = document.querySelectorAll('#notification-list > div');
       updateNotificationBadge(notifications.length);
+      
+      // Initialize sidebar state
+      updateSidebars();
     });
 
     function updateNotificationBadge(count) {
@@ -240,7 +232,17 @@
         const data = JSON.parse(e.data);
 
         if (data.type === 'message') {
-            renderMessage(data);
+            const messageDiv = document.createElement('div');
+            const isSelf = data.username === username;
+            messageDiv.className = `message-bubble ${
+                isSelf ? 'message-self' : 'message-other'
+            }`;
+            messageDiv.innerHTML = `<span class='message-sender'>${data.username}:</span> ${data.message}`;
+
+            if (data.image_url) {
+                messageDiv.innerHTML += `<br><img src="${data.image_url}" alt="Image" class="message-image">`;
+            }
+            chatLog.appendChild(messageDiv);
             chatLog.scrollTop = chatLog.scrollHeight;
 
             removeTypingIndicator(data.username);
@@ -249,14 +251,13 @@
         if (data.type === 'notification' && data.username !== username) {
           const notificationList = document.getElementById('notification-list');
           const notificationDiv = document.createElement('div');
-          notificationDiv.className = 'bg-blue-800 rounded-lg p-3 text-sm break-words';
+          notificationDiv.className = 'notification-item';
           const now = new Date();
           const timeStr = now.getHours().toString().padStart(2, '0') + ':' + 
                           now.getMinutes().toString().padStart(2, '0');
           notificationDiv.innerHTML = `
-            <p class="text-gray-200">${data.title}</p>
-            <p class="text-gray-300">${data.body}</p>
-            <p class="text-xs text-gray-400 mt-1">${timeStr}</p>
+            <p class="notification-text">${data.title}</p>
+            <p class="notification-time">${timeStr}</p>
             `;
           notificationList.insertBefore(notificationDiv, notificationList.firstChild);
 
@@ -320,21 +321,34 @@
     const toggleLeft = document.getElementById('toggle-left');
     const toggleRight = document.getElementById('toggle-right');
 
-    let leftOpen = true;
-    let rightOpen = true;
+    // Check if mobile
+    const isMobile = window.innerWidth < 768;
+
+    let leftOpen = !isMobile; // Closed on mobile, open on desktop
+    let rightOpen = !isMobile;
+
+    function updateSidebars() {
+        leftSidebar.style.width = leftOpen ? '16rem' : '0';
+        rightSidebar.style.width = rightOpen ? '16rem' : '0';
+        
+        toggleLeft.innerText = leftOpen ? '⮜' : '⮞';
+        toggleRight.innerText = rightOpen ? '⮞' : '⮜';
+    }
 
     toggleLeft.addEventListener('click', () => {
         leftOpen = !leftOpen;
-        leftSidebar.style.width = leftOpen ? '16rem' : '0';
-        leftSidebar.style.padding = leftOpen ? '1rem' : '0';
-        toggleLeft.innerText = leftOpen ? '⮜' : '⮞';
+        if (isMobile && leftOpen) {
+            rightOpen = false; // Close other sidebar on mobile
+        }
+        updateSidebars();
     });
 
     toggleRight.addEventListener('click', () => {
         rightOpen = !rightOpen;
-        rightSidebar.style.width = rightOpen ? '16rem' : '0';
-        rightSidebar.style.padding = rightOpen ? '1rem' : '0';
-        toggleRight.innerText = rightOpen ? '⮞' : '⮜';
+        if (isMobile && rightOpen) {
+            leftOpen = false; // Close other sidebar on mobile
+        }
+        updateSidebars();
     });
 
     // Typing Indicators
@@ -344,6 +358,10 @@
             indicator = document.createElement('div');
             indicator.id = `typing-${user}`;
             indicator.className = 'text-gray-500 italic text-sm self-start';
+            indicator.style.color = '#6B7280';
+            indicator.style.fontStyle = 'italic';
+            indicator.style.fontSize = '0.875rem';
+            indicator.style.alignSelf = 'flex-start';
             indicator.textContent = `${user} is typing...`;
             chatLog.appendChild(indicator);
             chatLog.scrollTop = chatLog.scrollHeight;
@@ -392,45 +410,6 @@
         const badge = document.getElementById('notification-badge');
         badge.textContent = '0';
     });
-
-
-    async function loadHistory() {
-      let url;
-
-      {% if thread %}
-          url = `/groups/history/dm/{{ thread.id }}/`;
-      {% else %}
-          url = `/groups/history/${roomName}/`;
-      {% endif %}
-      console.log(url);
-
-      const res = await fetch(url);
-      const data = await res.json();
-      data.messages.forEach(msg => renderMessage(msg));
-    }
-
-    function renderMessage(msg) {
-      const messageDiv = document.createElement('div');
-      const isSelf = msg.username === username;
-
-      messageDiv.className = `max-w-[70%] px-4 py-2 rounded-2xl break-words text-sm leading-snug ${
-          isSelf ? 'bg-blue-600 text-white self-end' : 'bg-gray-300 text-gray-900 self-start'
-      }`;
-
-      messageDiv.innerHTML = `<span class='font-semibold'>${msg.username}:</span> ${msg.message}`;
-
-      if (msg.image_url) {
-          messageDiv.innerHTML += `<br><img src="${msg.image_url}" class="max-w-xs rounded-lg mt-2">`;
-      }
-
-      chatLog.appendChild(messageDiv);
-  }
-
-    window.addEventListener("load", async () => {
-      await loadHistory();
-      chatLog.scrollTop = chatLog.scrollHeight;
-  });
-
   </script>
 </body>
 </html>

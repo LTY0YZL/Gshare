@@ -7,56 +7,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Groups</title>
     {% tailwind_css %}
+    <link rel="stylesheet" href="{% static 'css/groups.css' %}?v={% now 'U' %}">
 </head>
 {% include "navbar.html" %}
-<body class="bg-gray-50 text-gray-800">
+<body>
 
-<div class="grid grid-cols-[280px_1fr] h-screen overflow-hidden">
+<div class="groups-layout">
     <!-- Sidebar -->
-    <aside class="bg-blue-900 text-white flex flex-col p-6">
-        <h2 class="text-2xl font-bold mb-6 border-b border-blue-700 pb-2">Direct Messages</h2>
-        <ul class="space-y-2 mb-6">
+    <aside class="groups-sidebar">
+        <h2 class="sidebar-section-title">Direct Messages</h2>
+        <ul class="sidebar-list">
             <li>
-                <a href="#" class="block px-3 py-2 rounded-lg hover:bg-blue-800 transition">DM’s</a>
+                <a href="#" class="sidebar-link">DM’s</a>
             </li>
         </ul>
 
-        <h2 class="text-2xl font-bold mb-4 border-b border-blue-700 pb-2">Groups</h2>
-        <ul class="space-y-2 flex-1 overflow-y-auto">
+        <h2 class="sidebar-section-title">Groups</h2>
+        <ul class="sidebar-list" style="flex: 1;">
             {% for group in groups %}
                 <li>
-                    <a href="{% url 'chat_room' group.slug %}" class="block px-3 py-2 rounded-lg hover:bg-blue-800 transition">{{ group.name }}</a>
+                    <a href="{% url 'chat_room' group.slug %}" class="sidebar-link">{{ group.name }}</a>
                 </li>
             {% empty %}
-                <p class="text-sm text-gray-200 mt-2">You are not part of any groups.</p>
+                <p class="empty-state-text">You are not part of any groups.</p>
             {% endfor %}
         </ul>
     </aside>
 
     <!-- Main content -->
-    <main class="flex flex-col items-center justify-start p-10 overflow-y-auto">
-        <div class="w-full max-w-3xl bg-white shadow-md rounded-2xl p-8">
-            <h1 class="text-4xl font-extrabold text-center mb-4">Your Groups</h1>
+    <main class="groups-main">
+        <div class="groups-card">
+            <h1 class="page-title">Your Groups</h1>
 
-            <div class="flex justify-center gap-6 mb-10">
-                <a href="{% url 'create_group' %}" 
-                   class="text-blue-600 hover:text-blue-800 font-semibold underline-offset-2 hover:underline transition">
+            <div class="action-links">
+                <a href="{% url 'create_group' %}" class="action-link">
                    Create a New Group
                 </a>
-                <a href="{% url 'join_group' %}" 
-                   class="text-blue-600 hover:text-blue-800 font-semibold underline-offset-2 hover:underline transition">
+                <a href="{% url 'join_group' %}" class="action-link">
                    Join a Group
                 </a>
             </div>
 
-            <h2 class="text-2xl font-semibold text-gray-700 text-center mb-6">
+            <h2 class="section-subtitle">
                 Start a Direct Message
             </h2>
-            <p class="text-center text-gray-500 mb-4">Enter the username of the person you’d like to message.</p>
+            <p class="section-description">Enter the username of the person you’d like to message.</p>
 
-            <form method="post" class="flex flex-col items-center gap-4">
+            <form method="post" class="dm-form">
                 {% csrf_token %}
-                <div class="relative w-full max-w-md">
+                <div class="input-wrapper">
                     <input 
                         type="text" 
                         id="username" 
@@ -64,19 +63,19 @@
                         required
                         placeholder="Search for a username..."
                         autocomplete="off"
-                        class="w-full border border-gray-300 rounded-xl h-12 px-4 text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                        class="form-input"
                     >
 
                     <!-- Autocomplete box -->
                     <div 
                         id="username_suggestions"
-                        class="absolute top-full left-0 w-full bg-white border border-gray-200 rounded-lg shadow-lg hidden z-10"
+                        class="suggestions-box hidden"
                     ></div>
                 </div>
 
                 <button 
                     type="submit" 
-                    class="bg-blue-600 text-white rounded-xl px-8 py-2 text-lg font-medium hover:bg-blue-700 shadow-md transition"
+                    class="submit-button"
                 >
                     Create DM
                 </button>
@@ -110,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             suggestionsBox.innerHTML = usernames
-                .map(username => `<div class="px-4 py-2 cursor-pointer hover:bg-blue-100">${username}</div>`)
+                .map(username => `<div class="suggestion-item">${username}</div>`)
                 .join("");
 
             suggestionsBox.classList.remove("hidden");

@@ -2,59 +2,71 @@
 {% load static %}
 {% tailwind_css %}
 
-<header class="{% if navbar_bg_color %}bg-[{{ navbar_bg_color }}] bg-white text-black{% else %}bg-[#150931] text-white{% endif %}">
-    <nav class="nav flex-1 flex items-center justify-between space-x-4">
-
-        <div class="flex items-center space-x-6">
-            <a href="/">
-                <img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="logo w-12 h-12 rounded-full">
-            </a>
-
-            <div class="flex items-center space-x-6 md:ml-10">
-                <!-- <a href="/">Home</a> -->
-                <a href="{% url 'cart' %}">Stores</a>
-                <a href="{% url 'shoppingcart' %}">Cart</a>
-                <a href="{% url 'maps' %}">Maps</a>
-                <a href="{% url 'groups_page' %}">Groups</a>
-                <a href="{% url 'order_history' %}">Orders</a>
-                <a href="{% url 'aboutus' %}">About</a>
-
-                {# Scan behaviour #}
-                {% if can_use_scan %}
-                    <a href="{% url 'receipt_upload' %}" class="nav-link">
-                        Scan
-                    </a>
-                {% else %}
-                    <button
-                        type="button"
-                        class="nav-link opacity-60 cursor-not-allowed"
-                        onclick="openScanInfoModal()"
-                    >
-                        Scan
-                    </button>
-                {% endif %}
+<header class="relative z-50 w-full shadow-md {% if not navbar_bg_color %}bg-[#150931] text-white{% else %}bg-white text-black{% endif %}" {% if navbar_bg_color %}style="background-color: {{ navbar_bg_color }};"{% endif %}>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-16">
+            <!-- Logo -->
+            <div class="flex-shrink-0 flex items-center">
+                <a href="/">
+                    <img alt="logo" src="{% static 'media/G-ShareLogo.png' %}" class="h-10 w-10 rounded-full">
+                </a>
             </div>
 
+            <!-- Hamburger menu button - Always visible -->
+            <div>
+                <button id="mobile-menu-button" type="button" class="inline-flex items-center justify-center p-2 rounded-md hover:bg-opacity-20 hover:bg-gray-700 focus:outline-none" aria-controls="mobile-menu" aria-expanded="false" aria-label="Menu">
+                    <span class="text-2xl">&#9776;</span>
+                </button>
+            </div>
         </div>
+    </div>
 
-        <div class="flex items-center space-x-4">
+    <!-- Menu - Hidden by default, toggled by JS -->
+    <div class="hidden" id="mobile-menu">
+        <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t border-gray-700/20">
+            <a href="{% url 'cart' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white hover:bg-opacity-20">Stores</a>
+            <a href="{% url 'shoppingcart' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white hover:bg-opacity-20">Cart</a>
+            <a href="{% url 'maps' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white hover:bg-opacity-20">Maps</a>
+            <a href="{% url 'groups_page' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white hover:bg-opacity-20">Groups</a>
+            <a href="{% url 'order_history' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white hover:bg-opacity-20">Orders</a>
+            <a href="{% url 'aboutus' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white hover:bg-opacity-20">About</a>
+
+            {% if can_use_scan %}
+                <a href="{% url 'receipt_upload' %}" class="block text-left px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white hover:bg-opacity-20">Scan</a>
+            {% else %}
+                <button type="button" class="flex w-full justify-start px-3 py-2 rounded-md text-base font-medium opacity-60 cursor-not-allowed hover:bg-gray-700 hover:text-white hover:bg-opacity-20" onclick="openScanInfoModal()">Scan</button>
+            {% endif %}
+        </div>
+        <div class="pt-4 pb-4 border-t border-gray-700/20">
             {% if request.user.is_authenticated %}
-                <div class="flex items-center">
-                    <a href="{% url 'profile' %}" class="hover:underline">
-                        {{ request.user.name|default:request.user.get_full_name|default:request.user.username }}
-                    </a>
-                    <span class="text-gray-400 px-4">|</span>
-                    <a href="{% url 'logout' %}" class="hover:underline">Log out</a>
+                <div class="flex items-center px-5 mb-3">
+                    <div class="text-base font-medium">{{ request.user.name|default:request.user.get_full_name|default:request.user.username }}</div>
+                </div>
+                <div class="px-2 space-y-1">
+                    <a href="{% url 'profile' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white hover:bg-opacity-20">Profile</a>
+                    <a href="{% url 'logout' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white hover:bg-opacity-20">Log out</a>
                 </div>
             {% else %}
-                <div class="flex items-center space-x-4">
-                    <a href="{% url 'login' %}" class="hover:underline">Log in</a>
+                <div class="px-2 space-y-1">
+                    <a href="{% url 'login' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white hover:bg-opacity-20">Log in</a>
                 </div>
             {% endif %}
         </div>
-
-    </nav>
+    </div>
 </header>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const btn = document.getElementById('mobile-menu-button');
+        const menu = document.getElementById('mobile-menu');
+
+        if(btn && menu) {
+            btn.addEventListener('click', () => {
+                menu.classList.toggle('hidden');
+            });
+        }
+    });
+</script>
 
 <div id="scan-info-modal"
      class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center z-50">
