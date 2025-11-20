@@ -350,7 +350,14 @@ END_OPERATIONS
     # Apply changes + refresh gemini_json
     _apply_operations_to_receipt(receipt, ops_raw)
 
-    return natural_reply or "Okay, I’ve updated the receipt."
+    clean_reply = (
+        natural_reply
+        .replace("```json", "")
+        .replace("```", "")
+        .strip()
+    )
+
+    return clean_reply or "Okay, I’ve updated the receipt."
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
