@@ -1,93 +1,137 @@
-# G-Share
-
-
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://capstone.cs.utah.edu/g-share/g-share.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-- [ ] [Set up project integrations](https://capstone.cs.utah.edu/g-share/g-share/-/settings/integrations)
-
-## Collaborate with your team
-
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
 ## Name
-Choose a self-explaining name for your project.
+Gshare
 
 ## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+The purpose of G-Share is to transform the grocery shopping experience by creating a collaborative shopping platform that enhances the shopping experience. G-Share connects neighbors who are already planning grocery store visits with those who need groceries but lack the time, energy, or budget for traditional shopping trips or delivery options. This platform addresses a common household challenge by offering an efficient and affordable alternative to conventional delivery apps, which often charge high fees. Through G-Share, community members help each other obtain essential items, creating both convenience and neighborhood connections.
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+## Tech Stack
+Backend: Django, Channels/WebSockets
+Frontend: HTML, TailwindCSS, JavaScript
+Database: MySQL, SQLite
+Hosting: AWS Elastic Beanstalk, AWS S3
+APIs: Kroger API, Google Maps API
+AI: Gemini
 
 ## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+This project is a website, so the user doesn't need to install anything.
 
 ## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+1. Create an Account
+
+2. Set Up Your Profile
+Inside My Profile, you can:
+     Update name, email, address
+     Upload a profile picture
+     Add a bio
+    Change your password
+Your address is automatically converted to map coordinates so you can see nearby shoppers and deliveries.
+
+3.Browse Items and Add to Cart
+Go to the Stores/Cart page. Search items from kroger grocery stores
+Or use Voice order to order things for AI
+
+4. Use Kroger Search (Smith’s, etc.)
+GShare supports realtime Kroger product search using ZIP codes.
+
+Go to the Store Filter and select Kroger
+      Enter a ZIP code (e.g., 84102)
+      Enter a product search term like “eggs”
+
+GShare will find Kroger-owned stores near that ZIP
+     Display real Kroger products
+     Click Add to Cart to save Kroger items to your cart
+
+5. Checkout Order
+Once your cart is ready:
+     Click Publish order
+
+Your order becomes visible to nearby drivers on the live map.
+
+6. Track Your Orders on the Map
+
+The map shows:
+    Your orders
+    Nearby shoppers
+    Stores (your order store location)
+
+Clicking a marker opens a slide-in panel with:
+    Order details
+     Item list
+    Buttons for taking or delivering orders
+
+7. Become a Driver (Optional)
+
+You can take your own order or others order
+     Click an order on the map
+     Press Take Order
+     Turn on Start Sharing to share your live GPS location
+
+The app will
+    Track your path(Show route from you to store to customer)
+
+When someone or you are taking your orders
+       back to cart page
+       click Order Requests
+       Accept this person tkae your order
+ 
+Now your can start to delivery this order
+
+8. Group Chating
+Join chat in Group page to talk to driver or join a daliy chat with others
+    join a group with code other send or create a new group
+    type or send image in chat
 
 ## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+For support, send an email to this address.
+email: g.sharelimited@gmail.com
 
 ## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+It is currently released to the public. We are planning to make a few small changes for the coming months, but based on traffic, we will decide to shut it down or continue it.
 
 ## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+We are open to contributions, but they should be tested on the local server, then pushed to the contribution branch, which will then be decided if it is good enough to push to production.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+Getting started
+
+
+Step (1):
+Download python
+
+
+Step (2):
+Create a Virtual Environment. You can use "python -m venv venv\"
+
+
+Step (3):
+Activate the Virtual Environment. You can use "venv\scripts\activate"
+
+
+Step (4):
+Install all the requirements inside the Virtual Environment. Use this in the terminal after cd to gshare_project "python -r pip install requirements.txt"
+
+
+Step (5):
+Make changes.
+
+
+Steps (6):
+Run the project on the local server for testing. Using "python manage.py runserver"
 
 ## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Creator
+    Abdul Mansoor
+    Yang Hong
+    Jason Davies
+    Anand Palukuri
 
 ## License
-For open source projects, say how it is licensed.
+MIT License
 
 ## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Active Development
+
+
+G-Share is currently under active development.
+New features, performance improvements, and bug fixes are being added regularly.
+Contributions are welcome
