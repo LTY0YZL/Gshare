@@ -53,10 +53,10 @@ When you're ready to make this README your own, just edit this file and use the 
 Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
 
 ## Name
-Choose a self-explaining name for your project.
+Gshare
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## Description-[anand]
+The purpose of G-Share is to transform the grocery shopping experience by creating a collaborative shopping platform that enhances the shopping experience. G-Share connects neighbors who are already planning grocery store visits with those who need groceries but lack the time, energy, or budget for traditional shopping trips or delivery options. This platform addresses a common household challenge by offering an efficient and affordable alternative to conventional delivery apps, which often charge high fees. Through G-Share, community members help each other obtain essential items, creating both convenience and neighborhood connections.
 
 ## Badges
 On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
@@ -64,24 +64,41 @@ On some READMEs, you may see small images that convey metadata, such as whether 
 ## Visuals
 Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+## Installation-[anand]
+This project is a website, so the user doesn't need to install anything.
 
 ## Usage
 Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+## Support-[anand]
+For support send an email to this address.
+email: g.sharelimited@gmail.com
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+## Roadmap-[anand]
+It is currently released to the public. We are planning to make a few small changes for the coming months, but based on traffic, we will decide to shut it down or continue it.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+## Contributing-[anand]
+We are open to contributions, but they should be tested on the local server, then pushed to the contribution branch, which will then be decided if it is good enough to push to production.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Getting started
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+Step (1):
+Download python
+
+Step (2):
+Create a Virtual Environment. You can use "python -m venv venv\"
+
+Step (3):
+Activate the Virtual Envirnoment. You can use "venv\scripts\activate"
+
+Step (4):
+Install all the reqirements inside the Virtual Envirnoment. Use this in the terminal after cd to gshare_project "python -r pip install requirements.txt"
+
+Step (5):
+Make changes.
+
+Steps (6):
+Run the project on local server for testing. Using "python manage.py runserver" 
 
 ## Authors and acknowledgment
 Show your appreciation to those who have contributed to the project.
