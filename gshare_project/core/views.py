@@ -995,6 +995,8 @@ def orders_in_viewport(min_lat, min_lng, max_lat, max_lng, limit=500, viewer=Non
             'store_id': store.id if store else None,
             'store_name': store.name if store else "",
             'store_address': store.location if (store and store.location) else "",
+            'store_lat': float(store.latitude) if (store and store.latitude is not None) else None,
+            'store_lng': float(store.longitude) if (store and store.longitude is not None) else None,
         })
 
     return orders_with_users
@@ -1950,6 +1952,15 @@ def add_to_cart(request, item_id, quantity=1):
     except Items.DoesNotExist:
         messages.error(request, "Item not found.")
         return redirect('cart') 
+    
+    active_store_id = (
+        request.session.get('kroger_store_id')  
+        or request.session.get('active_store_id') 
+    )
+
+    active_store = None
+    if active_store_id:
+        active_store = Stores.objects.using('gsharedb').filter(id=active_store_id).first()
 
     # Get or create cart
     order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
@@ -1958,10 +1969,15 @@ def add_to_cart(request, item_id, quantity=1):
             user=profile,
             status='cart',
             order_date=timezone.now(),
-            store=item.store,
+            store=active_store,                  
             total_amount=0,
-            delivery_address = profile.address
+            delivery_address=profile.address,
         )
+    else:
+        if active_store and (order.store_id != active_store.id):
+            order.store = active_store
+            order.save(using='gsharedb', update_fields=['store'])
+
 
     # Upsert into order_items (composite PK table) and recompute total
     with transaction.atomic(using='gsharedb'):
@@ -2198,7 +2214,6 @@ def cart(request):
     # #     'cart_items': items,
     # #     'custom_user': profile,
     # # })
-    
 def upsert_kroger_store_from_location(loc):
     addr = loc.get("address", {}) or {}
 
@@ -2212,6 +2227,10 @@ def upsert_kroger_store_from_location(loc):
 
     parts = [p for p in [street, city, state, postal, country] if p]
     full_location = ", ".join(parts) if parts else None
+    
+    geo = loc.get("geolocation") or {}
+    lat = geo.get("latitude")
+    lng = geo.get("longitude")
 
     defaults = {
         "name": store_name,     
@@ -2221,6 +2240,9 @@ def upsert_kroger_store_from_location(loc):
         "postal_code": postal,
         "country": country,
         "location": full_location,
+        
+        "latitude": lat,
+        "longitude": lng,
     }
 
     store, created = Stores.objects.using('gsharedb').update_or_create(
@@ -2230,6 +2252,7 @@ def upsert_kroger_store_from_location(loc):
     )
 
     return store
+
     
 @login_required
 def add_kroger_item_to_cart(request):
@@ -2466,6 +2489,8 @@ def maps_data(request, min_lat, min_lng, max_lat, max_lng):
             'store_id': order.get('store_id'),
             'store_name': order.get('store_name', ''),
             'store_address': order.get('store_address', ''),
+            'store_lat': order.get('store_lat'),
+            'store_lng': order.get('store_lng'),
             
             'status': order['status'],        
             'driver_id': driver_id,           
