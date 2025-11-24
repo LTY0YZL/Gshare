@@ -149,7 +149,7 @@
 
   const chatSocket = new WebSocket(
       ws_scheme + "://" + window.location.host +
-      "{% if thread %}/ws/chat/dm/{{ thread.id }}/{% else %}/ws/chat/{{ room_name }}/{% endif %}"
+      "/{% if thread %}ws/chat/dm/{{ thread.id }}/{% else %}ws/chat/{{ room_name }}/{% endif %}"
   );
 
     const chatLog = document.querySelector('#chat-log');
