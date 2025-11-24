@@ -55,7 +55,7 @@ Every project is different, so consider which of these sections apply to yours. 
 ## Name
 Gshare
 
-## Description-[anand]
+## Description
 The purpose of G-Share is to transform the grocery shopping experience by creating a collaborative shopping platform that enhances the shopping experience. G-Share connects neighbors who are already planning grocery store visits with those who need groceries but lack the time, energy, or budget for traditional shopping trips or delivery options. This platform addresses a common household challenge by offering an efficient and affordable alternative to conventional delivery apps, which often charge high fees. Through G-Share, community members help each other obtain essential items, creating both convenience and neighborhood connections.
 
 ## Badges
@@ -64,20 +64,20 @@ On some READMEs, you may see small images that convey metadata, such as whether 
 ## Visuals
 Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
 
-## Installation-[anand]
+## Installation
 This project is a website, so the user doesn't need to install anything.
 
 ## Usage
 Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support-[anand]
+## Support
 For support send an email to this address.
 email: g.sharelimited@gmail.com
 
-## Roadmap-[anand]
+## Roadmap
 It is currently released to the public. We are planning to make a few small changes for the coming months, but based on traffic, we will decide to shut it down or continue it.
 
-## Contributing-[anand]
+## Contributing
 We are open to contributions, but they should be tested on the local server, then pushed to the contribution branch, which will then be decided if it is good enough to push to production.
 
 Getting started
