@@ -1959,8 +1959,10 @@ def add_to_cart(request, item_id, quantity=1):
     )
 
     active_store = None
-    if active_store_id:
-        active_store = Stores.objects.using('gsharedb').filter(id=active_store_id).first()
+    active_store = Stores.objects.using('gsharedb').filter(id=active_store_id).first()
+
+    if(active_store_id == None):
+        active_store = Items.objects.using('gsharedb').filter(id=item_id).first().store
 
     # Get or create cart
     order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
