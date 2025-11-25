@@ -1287,8 +1287,35 @@ def home(request):
     
     return render(request, 'home.html', context)
 
+def video_url(video_key):
+    s3 = get_s3_client()
+    bucket, region = get_bucket_and_region()
+    object_url = f"https://gshare-media-prod.s3.us-east-2.amazonaws.com/uploads/Tutorial_Video.mp4"
+
+    try:
+        presigned_url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": video_key},
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Presign failed: {e}"}, status=500)
+    return JsonResponse(
+        {
+            "ok": True,
+            "key": video_key,
+            "object_url": object_url,
+            "presigned_url": presigned_url,
+        }
+    )
+
 def aboutus(request):
-    return render(request, "aboutus.html")
+    jsonResponse = video_url("uploads/Tutorial_Video.mp4")
+    print(jsonResponse.items())
+    context = {
+        'presigned_url': "gshare_project/static/media/Tutorial_Video.mp4",
+    }
+    return render(request, "aboutus.html", context=context)
 
 def login_view(request):
     if request.user.is_authenticated:
