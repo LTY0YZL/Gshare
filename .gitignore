@@ -29,7 +29,7 @@ htmlcov/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-media/
+#media/
 
 # Environment variables
 .env
@@ -97,7 +97,7 @@ yarn-error.log*
 myenv/
 
 # Ignore uploaded media files
-/gshare_project/media/
+#/gshare_project/media/
 # Local History
 .history/
 **/.history/
