@@ -1,2 +1,3 @@
-web: daphne -b 0.0.0.0 -p 8000 configurations.asgi:application
-worker: python manage.py qcluster
+web: gunicorn gshare_project.configurations.wsgi:application
+worker: daphne -b 0.0.0.0 -p 8001 gshare_project.configurations.asgi:application
+worker2: python manage.py qcluster
