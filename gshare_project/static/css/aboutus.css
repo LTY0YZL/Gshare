@@ -1,0 +1,152 @@
+body {
+    margin: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #FFFFFF;
+    color: #1F2937;
+}
+
+.about-container {
+    max-width: 1200px;
+    margin: 24px auto;
+    padding: 0 16px;
+}
+
+.tabsList {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    background-color: #F3F4F6;
+    border-radius: 999px;
+    padding: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+}
+
+.tabButton {
+    background-color: transparent;
+    color: #6B7280;
+    padding: 0.5rem 1.25rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: 'Inter', sans-serif;
+}
+
+.tabButton:hover {
+    background-color: #E5E7EB;
+    color: #1F2937;
+}
+
+.tabButton.active {
+    background-color: #10B981;
+    color: #FFFFFF;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.tab-content {
+    background-color: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin-bottom: 24px;
+}
+
+.page-title {
+    font-size: 2rem;
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 16px;
+    color: #1F2937;
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+}
+
+.section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: #1F2937;
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+}
+
+.team-member-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background-color: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.team-member-pic {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #E5E7EB;
+    flex-shrink: 0;
+}
+
+.team-member-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.team-member-name {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: #1F2937;
+}
+
+.team-member-bio {
+    font-size: 0.95rem;
+    color: #374151;
+    line-height: 1.5;
+    overflow-wrap: break-word;
+}
+
+.team-member-contact {
+    font-size: 0.9rem;
+    color: #6B7280;
+    margin-top: 8px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .tabsList {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .tabButton {
+        width: 100%;
+        text-align: center;
+    }
+
+    .team-member-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .team-member-pic {
+        width: 80px;
+        height: 80px;
+    }
+
+    .page-title {
+        font-size: 1.75rem;
+    }
+}
