@@ -1,2 +1,0 @@
-web: gunicorn gshare_project.configurations.wsgi:application
-worker: daphne -b 0.0.0.0 -p 8001 gshare_project.asgi:application
