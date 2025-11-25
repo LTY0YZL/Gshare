@@ -7,13 +7,136 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>About Us</title>
     {% tailwind_css %}
+    <link rel="stylesheet" href="{% static 'css/aboutus.css' %}?v={% now 'U' %}">
 </head>
-<body class="bg-gray-100 min-h-screen">
+
+<body>
     {% include "navbar.html" %}
-    <div class="container mx-auto px-4 py-8">
-        <h1 class="text-4xl font-bold text-center mb-6">About G-Share</h1>
-        <p class="text-lg text-center mb-4">G-Share is a community-based grocery delivery platform that connects neighbors for efficient and cost-effective shopping.</p>
-        <p class="text-center">Learn more about our mission, features, and how to get started.</p>
+    
+    <div class="about-container">
+        <div class="tabsList">
+            <button class="tabButton active" onclick="showSection('aboutGShare')">About G-Share</button>
+            <button class="tabButton" onclick="showSection('teamDiv')">G-Share Team</button>
+            <button class="tabButton" onclick="showSection('gshareTutorials')">G-Share Tutorials</button>
+        </div>
+
+        <!--About G Share -->
+        <div class="tab-content" id="aboutGShare">
+            <h1 class="page-title">About G-Share</h1>
+            <p class="text-lg text-center mb-4">G-Share is a community-based grocery delivery platform that connects neighbors for efficient and cost-effective shopping.</p>
+            <p class="text-center mb-6">Learn more about our mission, features, and how to get started.</p>
+            <h6 class="section-title">What is the purpose of G-Share?</h6>
+            <p class="mb-6">
+                The purpose of G-Share is to transform the grocery shopping experience by creating a collaborative shopping platform. G-Share connects neighbors who are already planning 
+                grocery store visits with those who need groceries but lack the time, energy, or budget for traditional shopping trips or delivery options. This platform addresses a common 
+                household challenge by providing an efficient, affordable alternative to conventional delivery apps that have high fees. Through G-Share, community members help each other obtain 
+                essential items, creating both convenience and neighborhood connections.
+            </p>
+
+            <h6 class="section-title">Who is G-Share for?</h6>
+            <p>
+                G-Share is a product that would greatly benefit two groups of people. First, it will benefit shoppers. These are community members who are already planning to visit grocery stores 
+                and are willing to pick up additional items for neighbors along their scheduled route to make some extra cash while helping their neighbors. On the other hand, it will benefit requesters. 
+                These are busy individuals, parents, elderly community members, or anyone who needs groceries but faces barriers to in-person shopping.   The easiest way to get groceries is to travel to 
+                the store and get them yourself, however, for many people, this isn’t an option.  The elderly who struggle to get around, or people who don’t have time to make it to the store are left with 
+                having groceries delivered to them.  However there is a flaw with this system as well, since many stores don’t have a delivery system, and if they do it often has high costs from shipping, 
+                delivery fees, or you need to have premium memberships which is an additional cost.  Our service reduces costs for customers, creates earning opportunities for shoppers, and strengthens 
+                community bonds. G-Share makes grocery delivery accessible to those with mobility limitations, busy schedules, or transportation challenges—all while providing significant savings compared to traditional delivery services.
+            </p>
+        </div>
+
+        <!--G-Share Team -->
+        <div class="tab-content hidden" id="teamDiv">
+            <h1 class="page-title">The team behind G-Share</h1>
+            <div class="team-member-card">
+                <img src="{% static 'media/Abdul.jpg' %}" alt="Abdul Mansoor headshot" class="team-member-pic">
+                <div class="team-member-details">
+                    <h3 class="team-member-name">Abdul Mansoor</h3>
+                    <p class="team-member-bio">
+                        Hello, I am Abdul. I am a graduating Computer Science student at the University of Utah and a member of the G-Share team. I helped build the frontend of our web application using HTML, CSS, and JavaScript while also assisting with some of the backend implementations of the features I have been working on. The features that I helped build include User Identification (login, sign-up, profiles, reviews), payments, recurring orders, and finally the AI ordering assistant. I enjoy software development and engineering, and I am also interested in learning about Artificial Intelligence, Machine Learning, and Cybersecurity.
+                    </p>
+
+                    <p class="team-member-bio mt-2">
+                        When I am not focused on school or work, I like to spend my time playing or watching soccer, spending time with family, or building small projects of my own.
+                    </p>
+                    <p class="team-member-contact">Email: amansoor.sq@gmail.com</p>
+                </div>
+            </div>
+
+            <div class="team-member-card">
+                <img src="{% static 'media/Jason.png' %}" alt="Jason headshot" class="team-member-pic">
+                <div class="team-member-details">
+                    <h3 class="team-member-name">Jason Davies</h3>
+                    <p class="team-member-bio">
+                        Hello, my name is Jason Davies. I am currently pursuing my bachelor’s degree in Computer Science at the University of Utah, with just one semester left before graduation. Throughout my studies, I have taken numerous courses in Artificial Intelligence and Machine Learning, which have become the primary areas of computer science that interest me the most. I am fascinated by the rapid development of AI and look forward to seeing how these technologies continue to evolve and create meaningful improvements in people’s lives.
+                        <br><br>
+                        In addition to AI and ML, I also have an interest in computer hardware and architecture. Although I have taken fewer classes in that area, I am eager to learn more and have recently developed a growing curiosity about computer components and the process of building systems from the ground up.
+                        <br><br>
+                        Outside of academics, I enjoy exploring video games—both from a technical standpoint and as a hobby. I also appreciate art and drawing, and I spend a good amount of my free time reading. When I’m not studying or working on projects, I enjoy watching football and basketball.
+                        <br><br>
+                        If you would like to get in touch, I can be reached by email at daviesj830@gmail.com
+                    </p>
+                    <p class="team-member-contact">Email: daviesj830@gmail.com</p>
+                </div>
+            </div>
+
+            <div class="team-member-card">
+                <img src="{% static 'media/Yang.png' %}" alt="Yang Hong headshot" class="team-member-pic">
+                <div class="team-member-details">
+                    <h3 class="team-member-name">Yang Hong</h3>
+                    <p class="team-member-bio">
+                        My name is Yang Hong, and I am a senior computer science student with a solid foundation in software development, algorithms, and databases. Through academic and personal projects, I have accumulated rich practical experience, enabling me to build clear, efficient, and user-centric solutions. I am proficient in Python, Java, and C++, and skilled in using tools such as MySQL and AWS. Beyond technical skills, I value teamwork, communication, and continuous learning. My graduation project deeply impressed upon me the importance of collaboration and clear communication for team success. I enjoy learning new technologies, solving problems, and continuously improving my skills through practice. I aspire to apply my knowledge to my future studies or work and continue to grow into an excellent software engineer. I look forward to continuing to participate in projects that allow me to learn from others' experiences, embrace new challenges, and make a meaningful impact.
+                        <br><br>
+                        Outside of academics, I enjoy playing video games, listening to music, and reading novels. These hobbies inspire my creativity and help me stay balanced, while also giving me new perspectives that I bring into my work.
+                    </p>
+                    <p class="team-member-contact">Email: 200384hy@gmail.com</p>
+                </div>
+            </div>
+
+            <div class="team-member-card">
+                <img src="{% static 'media/Anand.jpg' %}" alt="Anand Raju Palukuri headshot" class="team-member-pic">
+                <div class="team-member-details">
+                    <h3 class="team-member-name">Anand Raju Palukuri</h3>
+                    <p class="team-member-bio">
+                        Hi, I’m Anand Raju Palukuri, a Computer Science major at the University of Utah graduating in December 2025. I’m passionate about building full-stack applications that balance strong backend engineering with intuitive, accessible design. My academic background includes algorithms, machine learning, human-centered design, database systems, and data visualization, giving me both technical depth and a user-centered perspective.
+                        <br><br>
+                        Professionally, I worked as a Software Engineer at Coordinator, Inc., where I built a contract-generation application using C#, .NET MAUI, and React. I developed WCAG-compliant interfaces, automated DOCX parsing, and integrated more than 32 document-processing APIs, and helped shorten QA cycles by 30% through iterative development and agile practices.
+                        <br><br>
+                        A major part of my experience has been working as part of a team on G-Share, a full-stack grocery-sharing platform designed to support community-based delivery. Within the team, I contributed to backend architecture, optimised MySQL queries for performance, integrated AWS S3 for media handling, and implemented Google Maps features for distance filtering and route visualisation. I also developed G-Share’s AI Scan system, a Gemini-powered workflow that scans receipts, extracts and corrects items through chat, matches them to active orders, and enables automated delivery confirmation inside a real-time chat interface.
+                        <br><br>
+                        Outside of G-Share, I’ve worked on several technical projects. I built an Android Malware Detection pipeline with custom ML ensembles, achieving 91.98% accuracy. I also created an interactive Data Visualisation Dashboard using D3.js to explore U.S. startup funding and CS salary trends. Additionally, I helped design a Learning Management System by building a 10-table MySQL schema with role-based access control and implementing LINQ-driven backend logic.
+                        <br><br>
+                        Across all my work, I enjoy solving meaningful problems and creating polished software that people genuinely enjoy using.
+                    </p>
+                    <p class="team-member-contact">Email: anandraju.palukuri@gmail.com</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content hidden" id="gshareTutorials">
+            <h1 class="page-title">A video on how to use G-Share:</h1>
+            <video width="100%" style="height: 40rem;" controls preload="none">
+                <source src="https://gshare-media-prod.s3.us-east-2.amazonaws.com/uploads/Tutorial_Video.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
     </div>
+
 </body>
+
+<script>
+    function showSection(sectionId) {
+        document.querySelectorAll('.tab-content').forEach(section => {
+            section.classList.add('hidden');
+        });
+        
+        document.getElementById(sectionId).classList.remove('hidden');
+        
+        document.querySelectorAll('.tabButton').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        event.target.classList.add('active');
+    }
+</script>
 </html>
