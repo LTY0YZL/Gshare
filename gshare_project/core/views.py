@@ -534,25 +534,48 @@ def remove_delivery_json(request, order_id):
     if request.method == 'POST':
         try:
             delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
+            order = delivery.order
             success = reject_delivery(delivery)
+
+            if success:
+                order.status = 'placed'
+                order.save(using='gsharedb')
+
             return JsonResponse({'success': success})
+
         except Deliveries.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
+            try:
+                order = Orders.objects.using('gsharedb').get(id=order_id)
+                order.status = 'placed'
+                order.save(using='gsharedb')
+                return JsonResponse({'success': True})
+            except Orders.DoesNotExist:
+                return JsonResponse(
+                    {'success': False, 'error': 'Order not found'},
+                    status=404
+                )
+
     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
 def create_delivery_json(request, order_id):
-    if request.method == 'POST':
-        try:
-            order = Orders.objects.using('gsharedb').get(id=order_id)
+    try:
+        order = Orders.objects.using('gsharedb').get(id=order_id)
+
+        data = json.loads(request.body or "{}")
+        driver_id = data.get("driver_id")
+
+        if driver_id:
+            delivery_person = get_user("id", driver_id)
+        else:
             delivery_person = get_user("email", request.user.email)
-            print("delivery_person:", delivery_person)
-            delivery = Create_delivery(order, delivery_person)
-            if delivery:
-                return JsonResponse({'success': True, 'delivery_id': delivery.id})
-            else:
-                return JsonResponse({'success': False, 'error': 'Failed to create delivery'}, status=500)
-        except Orders.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+
+        delivery = Create_delivery(order, delivery_person)
+        if delivery:
+            return JsonResponse({'success': True, 'delivery_id': delivery.id})
+        else:
+            return JsonResponse({'success': False, 'error': 'Failed to create delivery'}, status=500)
+    except Orders.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
 
 def delivery_accepted_json(request, order_id):
     if request.method == 'POST':
@@ -623,7 +646,60 @@ def get_order_for_delivery(delivery: Deliveries):
         return order
     except Orders.DoesNotExist:
         return None
+    
+@login_required
+def update_delivery_person(request, order_id):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'}, status=405)
 
+    try:
+        order = Orders.objects.using('gsharedb').get(id=order_id)
+    except Orders.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+
+    try:
+        driver_user = get_user("email", request.user.email)
+        delivery, created = Deliveries.objects.using('gsharedb').get_or_create(
+            order=order,
+            defaults={
+                'delivery_person': driver_user,
+                'status': 'inprogress',
+                'pickup_time': timezone.now() + timedelta(minutes=15),
+            },
+        )
+
+        delivery.delivery_person = driver_user
+        delivery.status = 'inprogress'
+        delivery.save(using='gsharedb')
+        order.status = 'inprogress'
+        order.save(using='gsharedb')
+
+        return JsonResponse({'success': True})
+    except Exception as e:
+        print("update_delivery_person error:", e)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+def remove_delivery_person(request, order_id):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'}, status=405)
+
+    try:
+        order = Orders.objects.using('gsharedb').get(id=order_id)
+    except Orders.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+
+    try:
+        Deliveries.objects.using('gsharedb').filter(order=order).delete()
+        order.status = 'placed'
+        order.save(using='gsharedb')
+
+        return JsonResponse({'success': True})
+    except Exception as e:
+        print("remove_delivery_person error:", e)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    
 def remove_delivery_json(request, order_id):
     if request.method == 'POST':
         try:
@@ -635,18 +711,36 @@ def remove_delivery_json(request, order_id):
     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
 def create_delivery_json(request, order_id):
-    if request.method == 'POST':
-        try:
-            order = Orders.objects.using('gsharedb').get(id=order_id)
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+    try:
+        order = Orders.objects.using('gsharedb').get(id=order_id)
+    except Orders.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+
+    # Try to read driver_id from the request body (Order Requests page)
+    try:
+        body = request.body.decode('utf-8') or '{}'
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        data = {}
+
+    driver_id = data.get('driver_id')
+
+    try:
+        if driver_id:
+            delivery_person = Users.objects.using('gsharedb').get(id=driver_id)
+        else:
             delivery_person = get_user("email", request.user.email)
-            print("delivery_person:", delivery_person)
-            delivery = Create_delivery(order, delivery_person)
-            if delivery:
-                return JsonResponse({'success': True, 'delivery_id': delivery.id})
-            else:
-                return JsonResponse({'success': False, 'error': 'Failed to create delivery'}, status=500)
-        except Orders.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+    except Users.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Driver not found'}, status=404)
+
+    delivery = Create_delivery(order, delivery_person)
+    if not delivery:
+        return JsonResponse({'success': False, 'error': 'Failed to create delivery'}, status=500)
+
+    return JsonResponse({'success': True, 'delivery_id': delivery.id})
 
 def delivery_accepted_json(request, order_id):
     if request.method == 'POST':

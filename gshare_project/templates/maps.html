@@ -119,6 +119,7 @@
         let directLegPolyline = null;   // driver TO profile WITHOUT STORE,  JUST FOR TEST
 
         let myActiveMarker = null;
+        let activeDriverId = null;
 
         function circleIcon(fill, stroke) {
             return {
@@ -160,6 +161,10 @@
                 const isMe = data.uid === CURRENT_UID;
                 const m = ensureLiveMarker(data.uid, data.username, data.role, isMe);
                 m.setPosition({ lat: data.lat, lng: data.lng });
+
+                if (activeDriverId && data.uid === activeDriverId) {
+                    updateRouteFromDriver({ lat: data.lat, lng: data.lng });
+                }
             };
 
             pageWS.onclose = () => {
@@ -427,6 +432,8 @@
                             return;
                         }
 
+                        activeDriverId = order.driver_id || null;
+
                         const rawLat = order.store_lat;
                         const rawLng = order.store_lng;
                         const lat = rawLat !== null && rawLat !== undefined ? parseFloat(rawLat) : NaN;
@@ -458,10 +465,19 @@
                                 storeMarker.setMap(map);
                             }
 
-                            if (meLiveMarker) {
+                            let originMarker = null;
+                            if (activeDriverId && liveMarkers.has(activeDriverId)) {
+                                originMarker = liveMarkers.get(activeDriverId);
+                            } else if (!activeDriverId && meLiveMarker) {
+                                originMarker = meLiveMarker;
+                            }
+
+                            if (originMarker) {
+                                updateRouteFromDriver(originMarker.getPosition());
+                            } else if (meLiveMarker) {
                                 updateRouteFromDriver(meLiveMarker.getPosition());
                             }
-                            return; 
+                            return;
                         }
 
                         if (order.store_address) {
@@ -540,8 +556,9 @@
         function showPopup(group) {
             console.log("popup");
             let ordersHTML = group.orders.map(order => {
-            const isBuyer  = (order.user_id === CURRENT_VIEWER_ID);
-            const isDriver = (order.driver_id === CURRENT_VIEWER_ID);
+            const viewerName = user;
+            const isBuyer  = (group.orders[0].user === viewerName);
+            const isDriver = (order.driver_name === viewerName);
 
             let actionHtml = '';
 
@@ -554,48 +571,53 @@
                     </button>
                 `;
             } else if (order.status === 'inprogress') {
-                const canConfirm = isBuyer || isDriver;
+                const isBuyer  = (order.user_id === CURRENT_VIEWER_ID);
+                const isDriver = (order.driver_id === CURRENT_VIEWER_ID);
 
                 let baseText = '';
+
                 if (isBuyer && isDriver) {
                     baseText = `
-                    <p class="mt-2 text-green-700 font-semibold">
-                        You are picking up your own order.
-                    </p>
-                `;
-                } else if (isDriver) {
-                    baseText = `
                         <p class="mt-2 text-green-700 font-semibold">
-                            You are delivering this order.
-                         </p>
-                        `;
-                } else if (isBuyer) {
-                    baseText = `
-                        <p class="mt-2 text-blue-700 font-semibold">
-                            Your order is in progress.<br>
-                            {% comment %} Driver: ${order.driver_name || 'TBD'} {% endcomment %}
+                            You are picking up your own order.
                         </p>
-                    `;
-                } else {
-                    baseText = `
-                        <p class="mt-2 text-gray-500">
-                            This order has already been accepted.
+                        <p class="mt-1 text-black font-semibold">
+                            Delivery in progress...
                         </p>
                     `;
                 }
-
-                {% comment %} const buttonHtml = canConfirm ? `
-                    <button button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2""
-                        onclick="confirmDelivered(${order.order_id})">
-                        Mark as delivered
-                    </button>
-                ` : ''; {% endcomment %}
-                {% comment %} const delivery = `<p class="mt-2 text-black font-semibold">
-                    Delivery in progress...
-                </p>`; {% endcomment %}
-
+                else if (isDriver) {
+                    baseText = `
+                        <p class="mt-2 text-green-700 font-semibold">
+                            You are delivering this order.
+                        </p>
+                        <p class="mt-1 text-black font-semibold">
+                            Delivery in progress...
+                        </p>
+                    `;
+                }
+                else if (isBuyer) {
+                    baseText = `
+                        <p class="mt-2 text-blue-700 font-semibold">
+                            Your order is in progress.<br>
+                            Driver: <b>${order.driver_name || 'TBD'}</b>
+                        </p>
+                        <p class="mt-1 text-black font-semibold">
+                            Delivery in progress...
+                        </p>
+                    `;
+                }
+                else {
+                    baseText = `
+                        <p class="mt-2 text-gray-500">
+                            This order has already been accepted${order.driver_name ? ' by <b>' + order.driver_name + '</b>' : ''}.
+                        </p>
+                        <p class="mt-1 text-black font-semibold">
+                            Delivery in progress...
+                        </p>
+                    `;
+                }
                 actionHtml = baseText;
-
             } else {
                 actionHtml = `
                     <p class="mt-2 text-gray-500">
