@@ -1,467 +1,190 @@
-{% load tailwind_cli %}
 <!DOCTYPE html>
-{% load static %}
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chat Room</title>
-  {% tailwind_css %}
-  <link rel="stylesheet" href="{% static 'css/chat_room.css' %}?v={% now 'U' %}">
+  <title>Simple Chat</title>
+  <style>
+    #chat-log { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 10px; }
+    .message-self { text-align: right; color: blue; }
+    .message-other { text-align: left; color: green; }
+  </style>
 </head>
-
 <body>
-  {% include "navbar.html" %}
+  <div id="chat-log"></div>
+  <input id="chat-message-input" type="text" placeholder="Type a message...">
+  <input id="chat-image-input" type="file" accept="image/*" style="display:none;">
 
-  <!-- Grid Layout -->
-  <div class="chat-layout">
+  <button id="chooseImageBtn">+</button>
 
-    <!-- LEFT SIDEBAR -->
-    <aside id="left-sidebar" class="chat-sidebar">
-      <div class="sidebar-header">
-        <h2 class="sidebar-title">Direct Messages</h2>
-        <ul class="sidebar-list">
-          {% for dm in dm_list %}
-            <li>
-              <a href="{% url 'direct_message' dm.id %}" 
-                 class="sidebar-link">{{ dm.other_user.username }}</a>
-            </li>
-          {% empty %}
-            <p class="empty-text">No direct messages yet.</p>
-          {% endfor %}
-        </ul>
-
-        <h2 class="sidebar-title" style="margin-top: 24px;">Groups</h2>
-        <ul class="sidebar-list">
-          {% for group in groups %}
-            <li>
-              <a href="{% url 'chat_room' group.slug %}"
-                 class="sidebar-link">{{ group.name }}</a>
-            </li>
-          {% empty %}
-            <p class="empty-text">You're not part of any groups yet.</p>
-          {% endfor %}
-        </ul>
-      </div>
-    </aside>
-
-    <!-- CHAT SECTION -->
-    <main class="chat-main">
-      <div id="chat-log" class="chat-log">
-        {% for message in messages %}
-          <div class="message-bubble {% if message.sender.username == user.username %}message-self{% else %}message-other{% endif %}">
-            <span class="message-sender">{{ message.sender.username }}:</span> {{ message.content }}
-              {% if message.image_url %}
-                <br><img src="{{ message.image_url }}" alt="Image" class="message-image">
-              {% endif %}
-          </div>
-        {% endfor %}
-      </div>
-
-      <!-- Image Preview & Input -->
-      <div class="chat-input-area">
-        <div id="image-preview" class="image-preview-container hidden">
-            <img id="preview-img" class="preview-img" alt="Preview">
-            <button id="remove-image-btn" class="remove-img-btn">Remove</button>
-        </div>
-
-        <div class="input-container">
-          <input id="chat-message-input"
-            class="chat-input"
-            type="text" placeholder="Type your message..." />
-          <input id="image-input" type="file" accept="image/*" style="display:none;" />
-
-          <button id="image-upload-btn" class="icon-btn">
-              +
-          </button>
-
-          <button id="chat-message-submit" class="send-btn">Send</button>
-        </div>
-      </div>
-    </main>
-
-    <!-- RIGHT SIDEBAR -->
-    <aside id="right-sidebar" class="chat-sidebar">
-      <div class="sidebar-header">
-        {% if thread %}
-          <h2 class="sidebar-title">Direct Message</h2>
-          <p class="sidebar-subtitle">Chatting with <span style="font-weight: 600; color: #1F2937;">{{ other_user.username }}</span></p>
-        {% else %}
-          <h2 class="sidebar-title">Room: {{ room_name }}</h2>
-          <p class="sidebar-subtitle">Room Code: {{ room_code }}</p>
-        {% endif %}
-      </div>
-
-      {% if members %}
-      <div class="sidebar-header">
-        <h3 class="sidebar-title" style="font-size: 1rem;">Members</h3>
-        <ul class="sidebar-list">
-          {% for member in members %}
-            <li>
-              <span class="sidebar-link">{{ member.username }}</span>
-            </li>
-          {% endfor %}
-        </ul>
-      </div>
-      {% endif %}
-
-      <!-- Display Persistent Notifications -->
-      <div class="sidebar-header" style="border-bottom: none;">
-        <h3 class="sidebar-title" style="font-size: 1rem;">Notifications</h3>
-        <div id="notification-list">
-          {% if notifications %}
-            {% for notification in notifications %}
-              <div class="notification-item">
-                <p class="notification-text">{{ notification.message }}</p>
-                <p class="notification-time">{{ notification.created_at|date:"H:i" }}</p>
-              </div>
-            {% empty %}
-              <p class="empty-text">No new notifications</p>
-            {% endfor %}
-          {% else %}
-            <p class="empty-text">No notifications</p>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- Badge for unread count -->
-      <div id="notification-badge" class="notification-badge hidden">
-        <span id="badge-count">0</span>
-      </div>
-    </aside>
-
-    <!-- FLOATING TOGGLE BUTTONS -->
-    <button id="toggle-left" class="toggle-btn toggle-left">
-      ⮜
-    </button>
-
-    <button id="toggle-right" class="toggle-btn toggle-right">
-      ⮞
-    </button>
+  <div id="imagePreviewContainer" style="display:none;">
+    <img id="imagePreview" style="max-width:150px; max-height:150px; border-radius:8px;">
+    <button id="removeImageBtn">✖</button>
   </div>
+  <button id="chat-message-submit">Send</button>
 
-  <!-- WebSocket Script -->
-  <script>
-    const roomName = "{{ room_name }}";
-    const username = "{{ user.username }}";
+ <script>
+  // Convert Django template variables safely into JS values.
+  const GROUP_ID = {% if room_name %} "{{ room_name }}" {% else %} null {% endif %};
+  const THREAD_ID = {% if thread %} {{ thread.id }} {% else %} null {% endif %};
 
-  const ws_scheme = window.location.protocol === "https:" ? "wss" : "ws";
+  const imageInput = document.getElementById("chat-image-input");
+  const chooseImageBtn = document.getElementById("chooseImageBtn");
+  const imagePreview = document.getElementById("imagePreview");
+  const previewContainer = document.getElementById("imagePreviewContainer");
+  const removeImageBtn = document.getElementById("removeImageBtn");
+  const messageInput = document.getElementById("chat-message-input");
 
-  const chatSocket = new WebSocket(
-      ws_scheme + "://" + window.location.host +
-      "/{% if thread %}ws/chat/dm/{{ thread.id }}/{% else %}ws/chat/{{ room_name }}/{% endif %}"
-  );
+  let selectedImageFile = null;
 
-    const chatLog = document.querySelector('#chat-log');
-    let selectedImage = null;
-    let isTyping = false;
-    let unreadNotifications = [];
 
-    window.onload = () => chatLog.scrollTop = chatLog.scrollHeight;
 
-    // load notifications on page load
-    window.addEventListener('load', () => {
-      const notifications = document.querySelectorAll('#notification-list > div');
-      updateNotificationBadge(notifications.length);
-      
-      // Initialize sidebar state
-      updateSidebars();
-    });
+// PREVIEW IMAGE FUNCTION
+function loadImagePreview(file) {
+    const url = URL.createObjectURL(file);
+    imagePreview.src = url;
+    previewContainer.style.display = "inline-block";
+}
 
-    function updateNotificationBadge(count) {
-      const badge = document.getElementById('notification-badge');
-      const badgeCount = document.getElementById('badge-count');
+  chooseImageBtn.addEventListener("click", () => {
+    imageInput.click();
+});
 
-      if (count > 0) {
-          badgeCount.textContent = count;
-          badge.classList.remove('hidden');
-      } else {
-          badge.classList.add('hidden');
+// WHEN USER SELECTS AN IMAGE
+imageInput.addEventListener("change", (e) => {
+    if (e.target.files && e.target.files[0]) {
+        selectedImageFile = e.target.files[0];
+        loadImagePreview(selectedImageFile);
+    }
+});
+
+// WHEN USER PASTES AN IMAGE
+messageInput.addEventListener("paste", (e) => {
+    const items = e.clipboardData.items;
+
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+          let blob = item.getAsFile();
+
+          // Blob has NO name → wrap it in a File so Django + AWS accept it
+          const file = new File([blob], `pasted_${Date.now()}.png`, {
+              type: blob.type || "image/png"
+          });
+
+          selectedImageFile = file;
+          loadImagePreview(file);
+          e.preventDefault();
+          break;
       }
+
     }
+});
 
-    // Image Upload Button
-    document.getElementById('image-upload-btn').addEventListener('click', () => {
-        document.getElementById('image-input').click();
-    });
+document.addEventListener("DOMContentLoaded", function() {
+  const chatLog = document.getElementById("chat-log");
+  const input = document.getElementById("chat-message-input");
+  const sendBtn = document.getElementById("chat-message-submit");
 
-    // File Input Change
-    document.getElementById('image-input').addEventListener('change', (e) => {
-        selectedImage = e.target.files[0];
-        if (selectedImage) {
-            showImagePreview(selectedImage);
-            console.log("Image selected:", selectedImage.name);
-        }
-    });
-
-    // Paste Image
-    document.getElementById('chat-message-input').addEventListener('paste', (e) => {
-        const items = e.clipboardData.items;
-
-        for (let item of items) {
-            if (item.type.indexOf('image') !== -1) {
-                e.preventDefault();
-                selectedImage = item.getAsFile();
-                showImagePreview(selectedImage);
-                console.log("Image pasted:", selectedImage.name);
-                break;
-            }
-        }
-    });
-
-    // Show Image Preview
-    function showImagePreview(file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const previewDiv = document.getElementById('image-preview');
-            const previewImg = document.getElementById('preview-img');
-            previewImg.src = e.target.result;
-            previewDiv.classList.remove('hidden');
-        };
-        reader.readAsDataURL(file);
-    }
-
-    // Remove Image Button
-    document.getElementById('remove-image-btn').addEventListener('click', () => {
-        selectedImage = null;
-        document.getElementById('image-preview').classList.add('hidden');
-        document.getElementById('image-input').value = '';
-    });
-
-    // Handle Messages
-    chatSocket.onmessage = function (e) {
-        const data = JSON.parse(e.data);
-
-        if (data.type === 'message') {
-            const messageDiv = document.createElement('div');
-            const isSelf = data.username === username;
-            messageDiv.className = `message-bubble ${
-                isSelf ? 'message-self' : 'message-other'
-            }`;
-            messageDiv.innerHTML = `<span class='message-sender'>${data.username}:</span> ${data.message}`;
-
-            if (data.image_url) {
-                messageDiv.innerHTML += `<br><img src="${data.image_url}" alt="Image" class="message-image">`;
-            }
-            chatLog.appendChild(messageDiv);
-            chatLog.scrollTop = chatLog.scrollHeight;
-
-            removeTypingIndicator(data.username);
-        }
-
-        if (data.type === 'notification' && data.username !== username) {
-          const notificationList = document.getElementById('notification-list');
-          const notificationDiv = document.createElement('div');
-          notificationDiv.className = 'notification-item';
-          const now = new Date();
-          const timeStr = now.getHours().toString().padStart(2, '0') + ':' + 
-                          now.getMinutes().toString().padStart(2, '0');
-          notificationDiv.innerHTML = `
-            <p class="notification-text">${data.title}</p>
-            <p class="notification-time">${timeStr}</p>
-            `;
-          notificationList.insertBefore(notificationDiv, notificationList.firstChild);
-
-          const allNotifications = document.querySelectorAll('#notification-list > div');
-          updateNotificationBadge(allNotifications.length);
-
-        }
-
-        if (data.type === 'typing_start') {
-            showTypingIndicator(data.username);
-        }
-
-        if (data.type === 'typing_stop') {
-            removeTypingIndicator(data.username);
-        }
-    };
-
-    // Send Message
-    document.querySelector('#chat-message-submit').onclick = function () {
-        const input = document.querySelector('#chat-message-input');
-        const msg = input.value.trim();
-
-        if (!msg && !selectedImage) return;
-
-        if (selectedImage) {
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const imageData = event.target.result;
-                chatSocket.send(JSON.stringify({
-                    type: 'message',
-                    username: username,
-                    message: msg,
-                    image: imageData
-                }));
-                input.value = '';
-                selectedImage = null;
-                document.getElementById('image-preview').classList.add('hidden');
-                document.getElementById('image-input').value = '';
-                isTyping = false;
-            };
-            reader.readAsDataURL(selectedImage);
-        } else {
-            chatSocket.send(JSON.stringify({
-                type: 'message',
-                username: username,
-                message: msg
-            }));
-            input.value = '';
-            isTyping = false;
-        }
-    };
-
-    // Enter Key to Send
-    document.querySelector('#chat-message-input').addEventListener('keypress', e => {
-        if (e.key === 'Enter') document.querySelector('#chat-message-submit').click();
-    });
-
-    // Sidebar Toggle Logic
-    const leftSidebar = document.getElementById('left-sidebar');
-    const rightSidebar = document.getElementById('right-sidebar');
-    const toggleLeft = document.getElementById('toggle-left');
-    const toggleRight = document.getElementById('toggle-right');
-
-    // Check if mobile
-    const isMobile = window.innerWidth < 768;
-
-    let leftOpen = !isMobile; // Closed on mobile, open on desktop
-    let rightOpen = !isMobile;
-
-    function updateSidebars() {
-        leftSidebar.style.width = leftOpen ? '16rem' : '0';
-        rightSidebar.style.width = rightOpen ? '16rem' : '0';
-        
-        toggleLeft.innerText = leftOpen ? '⮜' : '⮞';
-        toggleRight.innerText = rightOpen ? '⮞' : '⮜';
-    }
-
-    toggleLeft.addEventListener('click', () => {
-        leftOpen = !leftOpen;
-        if (isMobile && leftOpen) {
-            rightOpen = false; // Close other sidebar on mobile
-        }
-        updateSidebars();
-    });
-
-    toggleRight.addEventListener('click', () => {
-        rightOpen = !rightOpen;
-        if (isMobile && rightOpen) {
-            leftOpen = false; // Close other sidebar on mobile
-        }
-        updateSidebars();
-    });
-
-    // Typing Indicators
-    function showTypingIndicator(user) {
-        let indicator = document.getElementById(`typing-${user}`);
-        if (!indicator) {
-            indicator = document.createElement('div');
-            indicator.id = `typing-${user}`;
-            indicator.className = 'text-gray-500 italic text-sm self-start';
-            indicator.style.color = '#6B7280';
-            indicator.style.fontStyle = 'italic';
-            indicator.style.fontSize = '0.875rem';
-            indicator.style.alignSelf = 'flex-start';
-            indicator.textContent = `${user} is typing...`;
-            chatLog.appendChild(indicator);
-            chatLog.scrollTop = chatLog.scrollHeight;
-        }
-    }
-
-    function removeTypingIndicator(user) {
-        const indicator = document.getElementById(`typing-${user}`);
-        if (indicator) {
-            indicator.remove();
-        }
-    }
-
-    const messageInput = document.querySelector('#chat-message-input');
-
-    messageInput.addEventListener('input', () => {
-        const text = messageInput.value.trim();
-
-        if (text && !isTyping) {
-            isTyping = true;
-            chatSocket.send(JSON.stringify({
-                type: 'typing_start',
-                username: username
-            }));
-        }
-
-        if (!text && isTyping) {
-            isTyping = false;
-            chatSocket.send(JSON.stringify({
-                type: 'typing_stop',
-                username: username
-            }));
-        }
-    });
-
-    function updateNotificationUI() {
-        const badge = document.getElementById('notification-badge');
-        badge.textContent = unreadNotifications.length;
-        badge.classList.remove('hidden');
-    }
-
-    const chatMain = document.querySelector('main');
-
-    chatMain.addEventListener('focusin', () => {
-        unreadNotifications = [];
-        const badge = document.getElementById('notification-badge');
-        badge.textContent = '0';
-    });
-
-  {% comment %} async function loadHistory() {
-      chatLog.innerHTML = ''; // clear existing messages
-      let url;
-      {% if thread %}
-          url = "/groups/history/dm/{{ thread.id }}/";
-      {% else %}
-          url = `/groups/history/${roomName}/`;
-      {% endif %}
-      const res = await fetch(url);
-      const data = await res.json();
-      data.messages.forEach(msg => renderMessage(msg));
-  } {% endcomment %}
-
-
-  function renderMessage(msg) {
-    const messageDiv = document.createElement('div');
-    const isSelf = msg.username === username;
-
-    messageDiv.className = `message-bubble ${isSelf ? 'message-self' : 'message-other'}`;
-    
-    // Message text
-    const textSpan = document.createElement('span');
-    textSpan.className = 'message-sender';
-    textSpan.textContent = `${msg.username}: `;
-    messageDiv.appendChild(textSpan);
-    
-    const contentText = document.createTextNode(msg.message || '');
-    messageDiv.appendChild(contentText);
-
-    // Message image
-    if (msg.image_url) {
-        const br = document.createElement('br');
-        const img = document.createElement('img');
-        img.src = msg.image_url;
-        img.className = 'message-image';
-        messageDiv.appendChild(br);
-        messageDiv.appendChild(img);
-    }
-
-    chatLog.appendChild(messageDiv);
-    chatLog.scrollTop = chatLog.scrollHeight;
+  function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== "") {
+          const cookies = document.cookie.split(";");
+          for (let i = 0; i < cookies.length; i++) {
+              const cookie = cookies[i].trim();
+              if (cookie.substring(0, name.length + 1) === (name + "=")) {
+                  cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                  break;
+              }
+          }
+      }
+      return cookieValue;
   }
 
+function renderMessage(msg) {
+    const div = document.createElement("div");
+    div.textContent = msg.username + ": " + msg.content;
+    
+    if (msg.image_url) {
+        const img = document.createElement("img");
+        img.src = msg.image_url;
+        img.style.maxWidth = "200px";
+        img.style.display = "block";
+        div.appendChild(img);
+    }
+
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+  async function loadMessages() {
+    try {
+      console.log("Loading messages for GROUP_ID:", GROUP_ID, "THREAD_ID:", THREAD_ID);
+        const url = `/groups/list_messages/?group_id=${GROUP_ID}&thread_id=${THREAD_ID}`;
+        console.log("Fetching messages from URL:", url);
+
+        const res = await fetch(url, {
+            method: "GET"
+        });
+
+        if (!res.ok) throw new Error(res.statusText);
+        const data = await res.json();
+
+        chatLog.innerHTML = "";
+        console.log("Loaded messages:", data.messages);
+        data.messages.forEach(renderMessage);
+
+    } catch(err) {
+        console.error("Error loading messages:", err);
+    }
+}
 
 
-  window.addEventListener("load", async () => {
-      {% comment %} await loadHistory(); {% endcomment %}
-      chatLog.scrollTop = chatLog.scrollHeight;
-  });
 
-  </script>
+
+// REMOVE IMAGE BUTTON
+removeImageBtn.addEventListener("click", () => {
+    selectedImageFile = null;
+    imagePreview.src = "";
+    previewContainer.style.display = "none";
+    imageInput.value = ""; // clear file input
+});
+
+  async function sendMessage() {
+    const msg = input.value.trim();
+
+    const formData = new FormData();
+    formData.append("content", msg);
+    if (GROUP_ID) formData.append("group_id", GROUP_ID);
+    if (THREAD_ID) formData.append("thread_id", THREAD_ID);
+    if (selectedImageFile) {
+        formData.append("image_file", selectedImageFile);
+    }
+
+    const res2 = await fetch("/groups/send_message/", {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": getCookie("csrftoken")
+        },
+        body: formData,
+    });
+
+    if (res2.ok) {
+        input.value = "";
+        selectedImageFile.value = null;
+        imageInput.value = ""; // clear file input
+        loadMessages();
+        removeImageBtn.click(); // clear preview
+
+    }
+}
+
+
+  sendBtn.addEventListener("click", sendMessage);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(); });
+
+  loadMessages();
+});
+</script>
+
+
 </body>
 </html>
