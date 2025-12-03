@@ -50,6 +50,9 @@
 
      {% csrf_token %}
      <script>
+        let CarOverlay; 
+        let myCurrentRole = 'buyer';
+
         //const openPopup = document.getElementById('openPopup'); 
         const closePopup = document.getElementById('closePopup');
         const shop = document.getElementById('shop');
@@ -120,8 +123,17 @@
 
         let myActiveMarker = null;
         let activeDriverId = null;
+        let activeBuyerId = null;
+
+        let hasAlertedStore = false;
+        let hasAlertedUser = false;
+
+        let fullPathPolyline = null;
+        let carSymbol = null;
+        let storeIcon = null;
 
         function circleIcon(fill, stroke) {
+            if (typeof google === 'undefined') return null;
             return {
                 path: google.maps.SymbolPath.CIRCLE,
                 scale: 7,
@@ -132,19 +144,76 @@
             };
         }
 
+        function getPersonIcon(color) {
+            if (typeof google === 'undefined') return null;
+            const personPath = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z";
+            return {
+                path: personPath,
+                fillColor: color,
+                fillOpacity: 1,
+                strokeColor: '#ffffff',
+                strokeWeight: 1,
+                scale: 1.3,            
+                anchor: new google.maps.Point(12, 12)
+            };
+        }
+
         const liveMarkers = new Map();  
-        let meLiveMarker = null;        
+        let meLiveMarker = null;   
+        
+        function getPinIcon(color) {
+            if (typeof google === 'undefined') return null;
+            return {
+                path: google.maps.SymbolPath.MARKER, 
+                fillColor: color,
+                fillOpacity: 1,
+                strokeColor: '#FFFFFF', 
+                strokeWeight: 1,
+                scale: 1.5, 
+                labelOrigin: new google.maps.Point(0, -25)
+            };
+        }
+
+        function getBearing(startLat, startLng, destLat, destLng) {
+            const startLatRad = startLat * (Math.PI / 180);
+            const startLngRad = startLng * (Math.PI / 180);
+            const destLatRad = destLat * (Math.PI / 180);
+            const destLngRad = destLng * (Math.PI / 180);
+            const y = Math.sin(destLngRad - startLngRad) * Math.cos(destLatRad);
+            const x = Math.cos(startLatRad) * Math.sin(destLatRad) -
+                    Math.sin(startLatRad) * Math.cos(destLatRad) * Math.cos(destLngRad - startLngRad);
+            let brng = Math.atan2(y, x);
+            brng = brng * (180 / Math.PI);
+            return (brng + 360) % 360;
+        }
 
         function ensureLiveMarker(uid, username, role, isMe) {
+            const effectiveRole = isMe ? myCurrentRole : role;
+
             if (isMe && meLiveMarker) return meLiveMarker;
             if (!isMe && liveMarkers.has(uid)) return liveMarkers.get(uid);
 
-            const marker = new google.maps.Marker({
-                map,
-                title: `${username}${role ? ' (' + role + ')' : ''}`,
-                icon: isMe ? circleIcon('#1a73e8', '#0b57d0')  
-                    : circleIcon('#34a853', '#0b8043'), 
+            let marker;
+
+            if (effectiveRole === 'driver') {
+                const initialPos = new google.maps.LatLng(40.7608, -111.8910);
+                marker = new CarOverlay(initialPos, "{% static 'media/SimplePurpleCarTopView.svg' %}", map);
+            } else if (isMe) {
+                marker = new google.maps.Marker({
+                    map,
+                    title: "Me",
+                    icon: getPersonIcon('#4285F4'),
+                    position: { lat: 40.7608, lng: -111.8910 },
+                    zIndex: 9999
                 });
+            } else {
+                marker = new google.maps.Marker({
+                    map,
+                    title: username,
+                    icon: getPinIcon('#EA4335'),
+                    position: { lat: 40.7608, lng: -111.8910 }
+                });
+            }
 
             if (isMe) meLiveMarker = marker; else liveMarkers.set(uid, marker);
             return marker;
@@ -155,17 +224,37 @@
             pageWS = new WebSocket(HUB_URL);
 
             pageWS.onmessage = (evt) => {
-                const data = JSON.parse(evt.data || '{}');
-                if (data.type !== 'loc') return;
+            const data = JSON.parse(evt.data || '{}');
+            if (data.type !== 'loc') return;
 
-                const isMe = data.uid === CURRENT_UID;
-                const m = ensureLiveMarker(data.uid, data.username, data.role, isMe);
-                m.setPosition({ lat: data.lat, lng: data.lng });
+            const isMe = data.uid === CURRENT_UID;
 
-                if (activeDriverId && data.uid === activeDriverId) {
-                    updateRouteFromDriver({ lat: data.lat, lng: data.lng });
+            if (!isMe && data.role !== 'driver') {
+                return;
+            }
+
+            const m = ensureLiveMarker(data.uid, data.username, data.role, isMe);
+            const isCar = (typeof m.update === 'function');
+            const newPosLatLng = new google.maps.LatLng(data.lat, data.lng);
+            const prevPos = m.getPosition ? m.getPosition() : null;
+
+            if (prevPos && (data.role === 'driver' || isMe)) {
+                const heading = getBearing(prevPos.lat(), prevPos.lng(), data.lat, data.lng);
+                if (isCar) {
+                    m.update(newPosLatLng, heading);
+                } else {
+                    m.setPosition(newPosLatLng);
                 }
-            };
+            } else {
+                if (isCar) m.update(newPosLatLng, 0);
+                else m.setPosition(newPosLatLng);
+            }
+
+            if (data.role === 'driver') {
+                updateRouteFromDriver({ lat: data.lat, lng: data.lng });
+                checkGeofences({ lat: data.lat, lng: data.lng });
+            }
+        };
 
             pageWS.onclose = () => {
                 pageWS = null;
@@ -188,12 +277,13 @@
 
         function updateRouteFromDriver(driverPos) {
             if (!directionsService) return;
-            if (!profilePos) return;  
+            if (!profilePos) {
+                console.log("Destination not set. Click a marker first.");
+                return; 
+            }
 
             const now = Date.now();
-            if (now - lastRouteUpdate < 5000) {
-                return;
-            }
+            if (now - lastRouteUpdate < 2000) return; 
             lastRouteUpdate = now;
 
             const req = {
@@ -201,64 +291,63 @@
                 destination: profilePos,
                 travelMode: google.maps.TravelMode.DRIVING
             };
-
+            
             if (activeStorePos) {
                 req.waypoints = [{ location: activeStorePos, stopover: true }];
             }
 
             directionsService.route(req, (result, status) => {
                 if (status !== 'OK') {
-                    console.warn('Directions request failed:', status);
+                    console.warn("Directions request failed (" + status + "). Car might be in the ocean?");
                     return;
                 }
 
                 const route = result.routes[0];
-                const legs = route.legs;
+                
+                if (storeLegPolyline) storeLegPolyline.setMap(null);
+                if (profileLegPolyline) profileLegPolyline.setMap(null);
+                if (directLegPolyline) directLegPolyline.setMap(null);
+                if (fullPathPolyline) fullPathPolyline.setMap(null); 
 
-                if (storeLegPolyline) {
-                    storeLegPolyline.setMap(null);
-                    storeLegPolyline = null;
-                }
-                if (profileLegPolyline) {
-                    profileLegPolyline.setMap(null);
-                    profileLegPolyline = null;
-                }
-                if (directLegPolyline) {
-                    directLegPolyline.setMap(null);
-                    directLegPolyline = null;
-                }
+                const fullPath = [];
+                route.legs.forEach(leg => {
+                    leg.steps.forEach(step => step.path.forEach(p => fullPath.push(p)));
+                });
+                
+                fullPathPolyline = new google.maps.Polyline({
+                    map,
+                    path: fullPath,
+                    strokeColor: '#e5e7eb',
+                    strokeOpacity: 0.8,
+                    strokeWeight: 8 
+                });
 
-                if (legs.length === 2) {
-                    const pathToStore = buildPathFromLeg(legs[0]);
+                if (route.legs.length === 2) {
                     storeLegPolyline = new google.maps.Polyline({
                         map,
-                        path: pathToStore,
-                        strokeColor: '#EE0000',   
-                        strokeOpacity: 1.0,
-                        strokeWeight: 6
+                        path: buildPathFromLeg(route.legs[0]),
+                        strokeColor: '#EE0000', 
+                        strokeWeight: 5,
+                        zIndex: 10 
                     });
-
-                    const pathToProfile = buildPathFromLeg(legs[1]);
                     profileLegPolyline = new google.maps.Polyline({
                         map,
-                        path: pathToProfile,
-                        strokeColor: '#66ccff',   
-                        strokeOpacity: 1.0,
-                        strokeWeight: 6
+                        path: buildPathFromLeg(route.legs[1]),
+                        strokeColor: '#66ccff', 
+                        strokeWeight: 5,
+                        zIndex: 10
                     });
-                } else if (legs.length === 1) {
-                    const pathDirect = buildPathFromLeg(legs[0]);
+                } else {
                     directLegPolyline = new google.maps.Polyline({
                         map,
-                        path: pathDirect,
-                        strokeColor: '#66ccff',  
-                        strokeOpacity: 1.0,
-                        strokeWeight: 6
+                        path: buildPathFromLeg(route.legs[0]),
+                        strokeColor: '#66ccff',
+                        strokeWeight: 5,
+                        zIndex: 10
                     });
                 }
-                map.fitBounds(route.bounds)
             });
-        }      
+        }
 
         function startSharingNow(role='buyer') {
             localStorage.setItem(WANT_KEY, '1');
@@ -266,7 +355,6 @@
 
             if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
             if (pageWatchId !== null) return;
-
             if (!pageWS) subscribeHub();  
 
             function sendPing(lat, lng, acc) {
@@ -278,12 +366,21 @@
             pageWatchId = navigator.geolocation.watchPosition(
                 (pos) => {
                     const { latitude, longitude, accuracy } = pos.coords;
-
                     const driverPos = { lat: latitude, lng: longitude };
                     const me = ensureLiveMarker(CURRENT_UID, 'You', role, true);
-                    me.setPosition(driverPos);
+                    
+                    if (typeof me.update === 'function') {
+                        const latLng = new google.maps.LatLng(latitude, longitude);
+                        me.update(latLng, null); 
+                    } else {
+                        me.setPosition(driverPos);
+                    }
+
                     sendPing(latitude, longitude, accuracy);
-                    updateRouteFromDriver(driverPos);
+                    
+                    if (role === 'driver' || CURRENT_UID === activeDriverId) {
+                        updateRouteFromDriver(driverPos);
+                    }
                 },
                 (err) => {
                     console.error(err);
@@ -293,7 +390,6 @@
                 { enableHighAccuracy: true, maximumAge: 2000, timeout: 8000 }
             );
         }
-        
 
         function stopSharingNow() {
             localStorage.removeItem(WANT_KEY);
@@ -305,7 +401,8 @@
         }
 
         document.getElementById('shareBtn').addEventListener('click', () => {
-            if (localStorage.getItem(WANT_KEY)) stopSharingNow(); else startSharingNow('buyer');
+            if (localStorage.getItem(WANT_KEY)) stopSharingNow(); 
+            else startSharingNow(myCurrentRole);
         });
 
         function afterMapReady() {
@@ -323,31 +420,103 @@
 
 
         function initMap() {
-            // Create a map centered at a specific location
+            const defaultLocation = { lat: 40.7608, lng: -111.8910 };
+            
             map = new google.maps.Map(document.getElementById('map'), {
-                zoom: 17
+                zoom: 17,
+                center: defaultLocation,
             });
-            geocoder = new google.maps.Geocoder();
 
-            geocoder.geocode({ 'address': user_address }, (results, status) => {
-                if (status === 'OK') {
-                    const location = results[0].geometry.location;
-                    map.setCenter(location);
-                } else {
-                    alert('Geocode was not successful for the following reason: ' + status);
+            CarOverlay = class extends google.maps.OverlayView {
+                constructor(position, image, map) {
+                    super();
+                    this.position = position;
+                    this.image = image;
+                    this.map = map;
+                    this.div = null;
+                    this.rotation = 0;
+                    this.setMap(map);
                 }
-            });
 
+                onAdd() {
+                    const div = document.createElement("div");
+                    div.style.position = "absolute";
+                    div.style.border = "none";
+                    div.style.width = "60px";  
+                    div.style.height = "30px";
+                    div.style.transformOrigin = "center"; 
+                    
+                    const img = document.createElement("img");
+                    img.src = this.image;
+                    img.style.width = "100%";
+                    img.style.height = "100%";
+                    img.style.position = "absolute";
+                    
+                    div.appendChild(img);
+                    this.div = div;
+
+                    const panes = this.getPanes();
+                    panes.overlayMouseTarget.appendChild(div);
+                }
+
+                draw() {
+                    const overlayProjection = this.getProjection();
+                    if (!overlayProjection || !this.div) return;
+                    const pos = overlayProjection.fromLatLngToDivPixel(this.position);
+                    const x = pos.x - 30; 
+                    const y = pos.y - 15; 
+
+                    this.div.style.left = x + "px";
+                    this.div.style.top = y + "px";
+                    this.div.style.transform = `rotate(${this.rotation}deg)`;
+                }
+
+                onRemove() {
+                    if (this.div) {
+                        this.div.parentNode.removeChild(this.div);
+                        this.div = null;
+                    }
+                }
+
+                update(newPosition, newHeading) {
+                    this.position = newPosition;
+                    if (newHeading !== null) {
+                        this.rotation = newHeading;
+                    }
+                    this.draw(); 
+                }
+                
+                getPosition() {
+                    return this.position;
+                }
+            };
+
+            storeIcon = {
+                url: "{% static 'media/shop.png' %}",
+                scaledSize: new google.maps.Size(36, 36),
+                anchor: new google.maps.Point(18, 18),
+            };
+            
+            geocoder = new google.maps.Geocoder();
             directionsService = new google.maps.DirectionsService();
             directionsRenderer = new google.maps.DirectionsRenderer({map, suppressMarkers: true});
 
+            if (user_address) {
+                geocoder.geocode({ 'address': user_address }, (results, status) => {
+                    if (status === 'OK') {
+                        map.setCenter(results[0].geometry.location);
+                    }
+                });
+            }
+
             map.addListener("idle", () => {
                 if (fetchTimeout) clearTimeout(fetchTimeout);
-                fetchTimeout = setTimeout(fetchMapData, 500); // wait 0.5s after idle
+                fetchTimeout = setTimeout(fetchMapData, 500); 
             });
             setInterval(fetchMapData, 5000);
             afterMapReady();
         }
+
         let user = "";
 
         function fetchMapData() {
@@ -384,13 +553,9 @@
                 .catch(err => console.error("Error fetching delivery data:", err));
         }
 
-
         function addMarkers(addressGroups) {
             const bounds = map.getBounds();
-            if (!bounds) {
-                console.warn("Map bounds not available yet.");
-                return;
-            }
+            if (!bounds) return;
 
             for (const [address, marker] of Object.entries(markers)) {
                 if (!bounds.contains(marker.getPosition())) {
@@ -399,156 +564,177 @@
                 }
             }
 
+            let viewerIsDriver = false;
+            addressGroups.forEach(group => {
+                if (group.orders.some(o =>
+                    o.driver_id == CURRENT_VIEWER_ID &&
+                    (o.status === 'inprogress' || o.status === 'accepted')
+                )) {
+                    viewerIsDriver = true;
+                }
+            });
+
+            if (viewerIsDriver && myCurrentRole !== 'driver') {
+                updateLocalRole('driver');
+            }
+
             addressGroups.forEach(group => {
                 const address = group.address;
-                if (!address || address.trim().length < 5) {
-                    console.warn("Skipping invalid address:", address);
-                    return;
-                }
+                if (!address || address.trim().length < 5) return;
                 if (markers[address]) return;
+
                 geocoder.geocode({ address }, (results, status) => {
-                    if (status !== 'OK') {
-                        console.error("Geocode failed:", status);
+                    if (status !== 'OK' || !results[0]) return;
+
+                    const location = results[0].geometry.location;
+                    const isMyOrder = group.orders.some(o => o.user_id == CURRENT_UID);
+                    const amIDriver = group.orders.some(o => o.driver_id == CURRENT_VIEWER_ID);
+
+                    if (isMyOrder && amIDriver && !group.is_store) {
                         return;
                     }
 
-                    const location = results[0].geometry.location;
+                    let markerIcon;
+                    let markerZIndex = 1;
+
+                    if (group.is_store) {
+                        markerIcon = storeIcon;
+                        markerZIndex = 200;
+                    } else {
+                        markerIcon = getPinIcon('#EA4335');
+                        markerZIndex = isMyOrder ? 80 : 40;
+                    }
 
                     const marker = new google.maps.Marker({
                         map,
                         position: location,
-                        title: `Orders at ${address}`,
+                        title: group.is_store ? `Store: ${address}` : `Orders at ${address}`,
+                        icon: markerIcon,
+                        zIndex: markerZIndex,
                     });
 
-                    marker.addListener('click', () => {
-                        showPopup(group);
-                        setTimeout(() => shop.click(), 100);
+                    if (!group.is_store) {
+                        marker.addListener('click', () => {
+                            showPopup(group);
+                            setTimeout(() => shop.click(), 100);  
 
-                        profilePos = location;
+                            profilePos = location;
+                            const order = group.orders && group.orders.length > 0 ? group.orders[0] : null;
+                            if (!order) return;
 
-                        const order = group.orders && group.orders.length > 0 ? group.orders[0] : null;
-                        if (!order) {
-                            console.warn('No order data for this marker.');
-                            return;
-                        }
+                            activeDriverId = order.driver_id || null;
+                            activeBuyerId = order.user_id || null;
 
-                        activeDriverId = order.driver_id || null;
+                            const rawLat = order.store_lat;
+                            const rawLng = order.store_lng;
+                            const lat = rawLat !== null && rawLat !== undefined ? parseFloat(rawLat) : NaN;
+                            const lng = rawLng !== null && rawLng !== undefined ? parseFloat(rawLng) : NaN;
 
-                        const rawLat = order.store_lat;
-                        const rawLng = order.store_lng;
-                        const lat = rawLat !== null && rawLat !== undefined ? parseFloat(rawLat) : NaN;
-                        const lng = rawLng !== null && rawLng !== undefined ? parseFloat(rawLng) : NaN;
+                            if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+                                activeStorePos = { lat, lng };
 
-                        console.log('order', order);
-                        console.log('parsed store lat/lng:', lat, lng);
-
-                        if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
-                            activeStorePos = { lat, lng };
-
-                            if (!storeMarker) {
-                                storeMarker = new google.maps.Marker({
-                                    map,
-                                    position: activeStorePos,
-                                    title: order.store_name ? `Store: ${order.store_name}` : 'Store',
-                                    icon: {
-                                        path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-                                        scale: 6,
-                                        fillColor: '#66ccff',
-                                        fillOpacity: 1,
-                                        strokeColor: '#cc9900ff',
-                                        strokeWeight: 2,
-                                    },
-                                });
-                            } else {
-                                storeMarker.setPosition(activeStorePos);
-                                storeMarker.setTitle(order.store_name ? `Store: ${order.store_name}` : 'Store');
-                                storeMarker.setMap(map);
-                            }
-
-                            let originMarker = null;
-                            if (activeDriverId && liveMarkers.has(activeDriverId)) {
-                                originMarker = liveMarkers.get(activeDriverId);
-                            } else if (!activeDriverId && meLiveMarker) {
-                                originMarker = meLiveMarker;
-                            }
-
-                            if (originMarker) {
-                                updateRouteFromDriver(originMarker.getPosition());
-                            } else if (meLiveMarker) {
-                                updateRouteFromDriver(meLiveMarker.getPosition());
-                            }
-                            return;
-                        }
-
-                        if (order.store_address) {
-                            const geocodeRequest = {
-                                address: order.store_address,
-                                bounds: map.getBounds(),
-                                componentRestrictions: { country: 'US' },
-                            };
-
-                            geocoder.geocode(geocodeRequest, (results2, status2) => {
-                                if (status2 !== 'OK' || !results2[0]) {
-                                    console.warn('Store geocode failed:', status2);
-                                    if (meLiveMarker) updateRouteFromDriver(meLiveMarker.getPosition());
-                                    return;
-                                }
-
-                                const storeLoc = results2[0].geometry.location;
-                                activeStorePos = storeLoc;
-
-                                if (!storeMarker) {
-                                    storeMarker = new google.maps.Marker({
-                                        map,
-                                        position: storeLoc,
-                                        title: order.store_name ? `Store: ${order.store_name}` : 'Store',
-                                        icon: {
-                                            path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-                                            scale: 6,
-                                            fillColor: '#66ccff',
-                                            fillOpacity: 1,
-                                            strokeColor: '#cc9900ff',
-                                            strokeWeight: 2,
-                                        },
-                                    });
-                                } else {
-                                    storeMarker.setPosition(storeLoc);
-                                    storeMarker.setTitle(order.store_name ? `Store: ${order.store_name}` : 'Store');
-                                    storeMarker.setMap(map);
-                                }
-
-                                if (meLiveMarker) {
+                                if (meLiveMarker && myCurrentRole === 'driver') {
                                     updateRouteFromDriver(meLiveMarker.getPosition());
                                 }
-                            });
-                        } else {
-                            console.warn('No store info for this order; routing directly to profile.');
-                            activeStorePos = null;
 
-                            if (storeMarker) {
-                                storeMarker.setMap(null);
-                                storeMarker = null;
+                                return;
                             }
 
-                            if (meLiveMarker) {
-                                updateRouteFromDriver(meLiveMarker.getPosition());
+                            if (order.store_address) {
+                                const geocodeRequest = {
+                                    address: order.store_address,
+                                    bounds: map.getBounds(),
+                                    componentRestrictions: { country: 'US' },
+                                };
+                                geocoder.geocode(geocodeRequest, (results2, status2) => {
+                                    if (status2 !== 'OK' || !results2[0]) {
+                                        if (meLiveMarker && myCurrentRole === 'driver') {
+                                            updateRouteFromDriver(meLiveMarker.getPosition());
+                                        }
+                                        return;
+                                    }
+                                    const storeLoc = results2[0].geometry.location;
+                                    activeStorePos = storeLoc;
+                                    updateRouteFromDriver(meLiveMarker ? meLiveMarker.getPosition() : storeLoc);
+                                });
+                            } else {
+                                activeStorePos = null;
+                                if (storeMarker) {
+                                    storeMarker.setMap(null);
+                                    storeMarker = null;
+                                }
+                                if (meLiveMarker && myCurrentRole === 'driver') {
+                                    updateRouteFromDriver(meLiveMarker.getPosition());
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
 
                     markers[address] = marker;
 
                     const hasMyActiveOrder = group.orders.some(o =>
-                        o.status === 'inprogress' &&
+                        (o.status === 'inprogress' || o.status === 'accepted') &&
                         (o.user_id === CURRENT_VIEWER_ID || o.driver_id === CURRENT_VIEWER_ID)
                     );
 
-                    if (hasMyActiveOrder) {
+                    if (hasMyActiveOrder && !group.is_store) {
                         myActiveMarker = marker;
                         google.maps.event.trigger(marker, 'click');
                     }
                 });
             });
+        }
+
+        function updateLocalRole(newRole) {
+            myCurrentRole = newRole;
+
+            if (meLiveMarker) {
+                if (typeof meLiveMarker.setMap === 'function') {
+                    meLiveMarker.setMap(null);
+                } else if (typeof meLiveMarker.onRemove === 'function') {
+                    meLiveMarker.onRemove();
+                }
+                meLiveMarker = null;
+            }
+
+            if (localStorage.getItem(WANT_KEY)) {
+                stopSharingNow();
+                setTimeout(() => startSharingNow(myCurrentRole), 500);
+            }
+        }
+
+        function checkGeofences(driverPos) {
+            const driverLatLng = new google.maps.LatLng(driverPos.lat, driverPos.lng);
+            
+            if (activeStorePos && !hasAlertedStore) {
+                const distStore = google.maps.geometry.spherical.computeDistanceBetween(
+                    driverLatLng, 
+                    activeStorePos
+                );
+                if (distStore < 500) { 
+                    showToast("Driver is arriving at the store");
+                    hasAlertedStore = true;
+                }
+            }
+
+            if (profilePos && !hasAlertedUser) {
+                const distUser = google.maps.geometry.spherical.computeDistanceBetween(
+                    driverLatLng, 
+                    profilePos
+                );
+                if (distUser < 500) { 
+                    showToast("Driver is arriving at your location");
+                    hasAlertedUser = true;
+                }
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.createElement("div");
+            toast.className = "fixed top-20 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded shadow-xl z-50 animate-bounce";
+            toast.innerText = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
         }
 
         let popupJustOpened = false;
@@ -563,14 +749,15 @@
             let actionHtml = '';
 
             if (order.status === 'placed') {
-                const buttonText = isBuyer ? "Take own order" : "Send Request";
+                const buttonText = isBuyer ? 'Take own order' : 'Send Request';
+
                 actionHtml = `
                     <button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-2"
-                            onclick="changeOrderStatus(${order.order_id}, 'pending')">
+                            onclick="createDelivery(${order.order_id}); changeOrderStatus(${order.order_id}, 'pending')">
                         ${buttonText}
                     </button>
-                `;
-            } else if (order.status === 'inprogress') {
+                    `;
+                } else if (order.status === 'inprogress') {
                 const isBuyer  = (order.user_id === CURRENT_VIEWER_ID);
                 const isDriver = (order.driver_id === CURRENT_VIEWER_ID);
 
@@ -766,26 +953,18 @@
         function changeOrderStatus(orderId, newStatus) {
             fetch(`/change_order_status/${orderId}/${newStatus}/`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'  // Include CSRF token for security
-                }
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }
             })
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
-                if (data.success) {
-                    alert('Order status updated successfully!');
-                    createDelivery(orderId);
-                    window.location.reload();
-
-                    
-                } else {
-                    alert('Failed to update order status.');
+                if (data.success) { 
+                    alert('Updated!'); 
+                    if (newStatus === 'inprogress') {
+                        updateLocalRole('driver');
+                    }
+                    window.location.reload(); 
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while updating the order status.');
+                else alert('Failed');
             });
         }
 
@@ -816,7 +995,8 @@
     </script>
 
     <script async defer
-        src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap">
+        {% comment %} src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap"> {% endcomment %}
+        src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places,geometry&callback=initMap">
 
     </script>
 

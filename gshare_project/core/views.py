@@ -411,24 +411,44 @@ def change_order_status(order_id: int, new_status: str) -> bool:
         print(f"Error updating order status: {e}")
         return False
 
+@login_required
 def change_order_status_with_driver(request, order_id, new_status):
     try:
         order = Orders.objects.using('gsharedb').get(id=order_id)
+    except Orders.DoesNotExist:
+        return False
+
+    try:
         order.status = new_status
         order.save(using='gsharedb')
 
+        if new_status == 'pending':
+            return True
+
+        delivery = Deliveries.objects.using('gsharedb').filter(order=order).first()
+
         if new_status == 'inprogress':
-            driver = get_user("email", request.user.email)
-            delivery, _ = Deliveries.objects.using('gsharedb').get_or_create(order=order)
-            delivery.delivery_person = driver
-            delivery.status = 'inprogress'
-            delivery.save(using='gsharedb')
-        elif new_status == 'delivered':
-            delivery, _ = Deliveries.objects.using('gsharedb').get_or_create(order=order)
+            if delivery is None:
+                driver = get_user("email", request.user.email)
+                delivery = Deliveries.objects.using('gsharedb').create(
+                    order=order,
+                    delivery_person=driver,
+                    status='inprogress',
+                    pickup_time=timezone.now() + timedelta(minutes=15),
+                )
+            else:
+                delivery.status = 'inprogress'
+                delivery.save(using='gsharedb')
+
+        elif new_status == 'delivered' and delivery is not None:
             delivery.status = 'delivered'
+            delivery.delivery_time = timezone.now()
             delivery.save(using='gsharedb')
+
         return True
-    except Orders.DoesNotExist:
+
+    except Exception as e:
+        print("change_order_status_with_driver error:", e)
         return False
 
 @login_required
@@ -496,13 +516,6 @@ def Create_delivery(order: Orders, delivery_person: Users):
         return delivery
     except IntegrityError as e:
         print(f"Error creating delivery: {e}")
-        return None
-
-def get_delivery_for_order(order: Orders):
-    try:
-        delivery = Deliveries.objects.using('gsharedb').get(order=order)
-        return delivery
-    except Deliveries.DoesNotExist:
         return None
 
 def delivery_done(delivery: Deliveries):
@@ -613,13 +626,6 @@ def Create_delivery(order: Orders, delivery_person: Users):
         return delivery
     except IntegrityError as e:
         print(f"Error creating delivery: {e}")
-        return None
-
-def get_delivery_for_order(order: Orders):
-    try:
-        delivery = Deliveries.objects.using('gsharedb').get(order=order)
-        return delivery
-    except Deliveries.DoesNotExist:
         return None
 
 def delivery_done(delivery: Deliveries):
@@ -2559,84 +2565,91 @@ def drive_time(user_address, store_address, api_key):
 
     
 def maps_data(request, min_lat, min_lng, max_lat, max_lng):
-    
     min_lat = float(min_lat)
     min_lng = float(min_lng)
     max_lat = float(max_lat)
     max_lng = float(max_lng)
-    
-    # stores = Stores.objects.all()
-    # user_address = user.address
-    
+
     info = {}
-    
+
     viewer = get_user("email", request.user.email)
-    
     oiv = orders_in_viewport(min_lat, min_lng, max_lat, max_lng, viewer=viewer)
-    
+
     for order in oiv:
-        address = order['delivery_address']
+        address = order.get("delivery_address")
         if not address:
             continue
-        
-        user = get_user("id", order['user']['id'])
-        
-        delivery = Deliveries.objects.using('gsharedb').filter(order_id=order['order_id']) \
-            .select_related('delivery_person').first()
+
+        user = get_user("id", order["user"]["id"])
+
+        delivery = (
+            Deliveries.objects.using("gsharedb")
+            .filter(order_id=order["order_id"])
+            .select_related("delivery_person")
+            .first()
+        )
 
         driver_id = delivery.delivery_person.id if delivery and delivery.delivery_person else None
         driver_name = delivery.delivery_person.name if delivery and delivery.delivery_person else None
-        
-        items = get_order_items_by_order_id(order['order_id'])
-                
+
+        items = get_order_items_by_order_id(order["order_id"])
+
         subtotal = 0
         items_with_totals = []
         for item in items:
-            total = float(item[2]) * float(item[5])  # quantity * price
+            total = float(item[2]) * float(item[5])  
             subtotal += total
-            items_with_totals.append({
-                'name': item[4],  # item name
-                'quantity': int(item[2]),
-                'price': float(item[5]),  # item price
-                'total': total,
-            })
+            items_with_totals.append(
+                {
+                    "name": item[4],          
+                    "quantity": int(item[2]),
+                    "price": float(item[5]),  
+                    "total": total,
+                }
+            )
+
         order_data = {
-            'address': order['delivery_address'],
-            'items': items_with_totals,
-            'subtotal': subtotal,
-            'order_id': order['order_id'],
-            'user': user.name,
-            'user_id': user.id,
-            
-            #store info
-            'store_id': order.get('store_id'),
-            'store_name': order.get('store_name', ''),
-            'store_address': order.get('store_address', ''),
-            'store_lat': order.get('store_lat'),
-            'store_lng': order.get('store_lng'),
-            
-            'status': order['status'],        
-            'driver_id': driver_id,           
-            'driver_name': driver_name,
+            "address": order["delivery_address"],
+            "items": items_with_totals,
+            "subtotal": subtotal,
+            "order_id": order["order_id"],
+            "user": user.name,
+            "user_id": user.id,
+            "store_id": order.get("store_id"),
+            "store_name": order.get("store_name", ""),
+            "store_address": order.get("store_address", ""),
+            "store_lat": order.get("store_lat"),
+            "store_lng": order.get("store_lng"),
+            "status": order["status"],
+            "driver_id": driver_id,
+            "driver_name": driver_name,
         }
 
-        # Group by user name (or user.id if you prefer)
         if address not in info:
-            info[address] = []
-        info[address].append(order_data)
+            info[address] = {
+                "address": address,
+                "is_store": False,
+                "orders": [],
+            }
+        info[address]["orders"].append(order_data)
+
+    for order in oiv:
+        store_address = order.get("store_address")
+        if not store_address:
+            continue
+        if store_address not in info:
+            info[store_address] = {
+                "address": store_address,
+                "is_store": True,
+                "orders": [], 
+            }
 
     user_name = get_user("email", request.user.email).name
 
-    print("username:", user_name)
+    grouped_info = list(info.values())
 
-    # Convert to grouped list format for easy JSON use
-    grouped_info = [
-        {'address': addr, 'orders': orders}
-        for addr, orders in info.items()
-    ]
-    
     response = JsonResponse(grouped_info, safe=False)
-    response['X-User-Name'] = str(user_name)
+    response["X-User-Name"] = str(user_name)
     return response
 
 

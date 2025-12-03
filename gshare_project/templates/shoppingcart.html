@@ -726,22 +726,9 @@
             return;
         }
 
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-        fetch(`/create_delivery/${orderId}/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken,
-            },
-            body: JSON.stringify({ driver_id: driverId }),
-        }).catch(err => {
-            console.error('Error creating delivery:', err);
-        });
-
         if (accepted) {
             changeOrderStatus(orderId, 'inprogress');
         } else {
-            changeOrderStatus(orderId, 'placed');
             remove_delivery(orderId);
         }
     }
