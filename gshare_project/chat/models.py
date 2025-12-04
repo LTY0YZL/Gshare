@@ -83,4 +83,14 @@ class TypingState(models.Model):
     def __str__(self):
         target = self.thread or self.group
         return f"{self.user.username} typing in {target}"
+    
+class LastRead(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    group = models.ForeignKey(ChatGroup, null=True, blank=True, on_delete=models.CASCADE)
+    thread = models.ForeignKey(DirectMessageThread, null=True, blank=True, on_delete=models.CASCADE)
+    last_read_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'group', 'thread')
+
 

@@ -9,7 +9,7 @@ from django.contrib.auth.models import User
 from django.views.decorators.http import require_GET
 
 from django.http import JsonResponse
-from .models import Message, ChatGroup, TypingState, DirectMessageThread
+from .models import Message, ChatGroup, TypingState, DirectMessageThread, LastRead
 from core.utils.aws_s3 import presigned_url, upload_image_to_aws
 
 from django.views.decorators.http import require_POST
@@ -57,6 +57,13 @@ def chat_room(request, room_name):
     try:
         room = ChatGroup.objects.get(slug=room_name)
         chat_messages = room.messages.all().order_by('timestamp')
+        
+        # Update LastRead for this user
+        LastRead.objects.update_or_create(
+            user=request.user,
+            group=room,
+            defaults={'last_read_at': timezone.now()}
+        )
         
         # Add presigned URLs
         for msg in chat_messages:
@@ -130,6 +137,14 @@ def join_group(request):
 def direct_message(request, thread_id):
     print("Direct message view called with thread_id:", thread_id)
     thread = DirectMessageThread.objects.filter(id=thread_id, participants=request.user).first()
+    
+        # Update LastRead for this user
+    LastRead.objects.update_or_create(
+        user=request.user,
+        thread=thread,
+        defaults={'last_read_at': timezone.now()}
+    )
+    
     if not thread:
         messages.error(request, "Direct message thread does not exist or you do not have access.")
         return redirect('groups_page')
@@ -427,7 +442,104 @@ def list_messages(request):
             for m in messages
         ]
     })
+    
+@login_required
+def json_notifications(request):
+    user = request.user
 
+    group_unreads = []
+    dm_unreads = []
+
+    # GROUPS
+    for group in user.chat_groups.all():
+        last_read = LastRead.objects.filter(user=user, group=group).first()
+        if last_read:
+            unread = group.messages.filter(
+                timestamp__gt=last_read.last_read_at
+            ).exclude(sender=user).count()
+        else:
+            unread = group.messages.exclude(sender=user).count()
+
+        group_unreads.append({
+            "group_id": group.id,
+            "unread_count": unread
+        })
+
+    # DIRECT MESSAGES
+    for thread in user.direct_message.all():
+        last_read = LastRead.objects.filter(user=user, thread=thread).first()
+        if last_read:
+            unread = thread.messages.filter(
+                timestamp__gt=last_read.last_read_at
+            ).exclude(sender=user).count()
+        else:
+            unread = thread.messages.exclude(sender=user).count()  # FIXED
+
+        dm_unreads.append({
+            "thread_id": thread.id,
+            "unread_count": unread
+        })
+
+
+    return JsonResponse({"groups": group_unreads, "threads": dm_unreads})
+
+    
+
+from django.http import JsonResponse, HttpResponseForbidden
+from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+import json
+
+import json
+
+@login_required
+def edit_message(request, message_id):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=400)
+
+    try:
+        msg = Message.objects.get(id=message_id)
+    except Message.DoesNotExist:
+        return JsonResponse({"error": "Message not found"}, status=404)
+
+    if msg.sender != request.user:
+        return HttpResponseForbidden("You cannot edit this message")
+
+    data = json.loads(request.body)
+    new_content = data.get("content", "").strip()
+
+    if new_content == "" and not msg.image:
+        return JsonResponse({"error": "Message cannot be empty"}, status=400)
+
+    msg.content = new_content
+    msg.save()
+
+    return JsonResponse({
+        "success": True,
+        "message_id": msg.id,
+        "content": msg.content,
+        "image_url": msg.image,
+    })
+
+
+@login_required
+def delete_message(request, message_id):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=400)
+
+    try:
+        msg = Message.objects.get(id=message_id)
+    except Message.DoesNotExist:
+        return JsonResponse({"error": "Message not found"}, status=404)
+
+    if msg.sender != request.user:
+        return HttpResponseForbidden("You cannot delete this message")
+
+    msg.content = "(deleted)"
+    msg.image = None
+    msg.save()
+
+    return JsonResponse({"success": True, "message_id": msg.id})
 
 
 
