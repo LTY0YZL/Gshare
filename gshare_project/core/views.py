@@ -1451,7 +1451,9 @@ def login_view(request):
             messages.success(request, "Welcome back!")
             return redirect(request.GET.get('next', 'home'))
         messages.error(request, "Invalid username or password")
-    return render(request, 'login.html')
+    return render(request, 'login.html', {
+        'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
+    })
 
 def signup_view(request):
     if request.method == 'POST':
@@ -2967,42 +2969,45 @@ def group_data(request):
     
     orders = []
     for group in groups:
-        group_orders = get_orders_in_group(group.group_id)
-        print(f"DEBUG: Orders in group {group.group_id}: {group_orders}")
-        orders.extend(group_orders)
-    print(f"DEBUG: Total orders collected: {orders}")
+        orders = get_orders_in_group( group.group_id)
+        print("order in group:", orders)
+        # if order:
+        #     orders.append(order)
+    # order = get_orders_in_group(profile, 'cart')
+    print("orders:", orders)
     if not orders:
         return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
-    
     order_info = []
-    combined_subtotal = 0
-    combined_items = []
-    
     for order in orders:
         items = get_order_items(order) if order else []
+        subtotal = 0
+        items_with_totals = []
         for item in items:
             total = item[2] * item[5]  # quantity * price
-            combined_subtotal += total
-            combined_items.append({
+            subtotal += total
+            items_with_totals.append({
                 'name': item[4],  # item name
                 'quantity': item[2],
                 'price': item[5],  # item price
                 'total': total,
             })
-    
-    # Calculate combined tax and total
-    combined_tax = Decimal(calculate_tax(combined_subtotal)) / 100
-    combined_grand_total = round(combined_subtotal + combined_tax, 2)
+            
+    tax = Decimal(calculate_tax(subtotal)) / 100
+    grand_total = round(subtotal + tax, 2)
 
     order_summary = {
-        'subtotal': combined_subtotal,
-        'tax': combined_tax,
-        'total': combined_grand_total,
+        'subtotal': subtotal,
+        'tax': tax,
+        'total': grand_total,
     }
+    order_info.append({
+        'id': order.id,
+        'summary': order_summary,
+        'items': items_with_totals,
+    })
 
     return JsonResponse({
-        'items': combined_items,
-        'order': order_summary,
+        'orders': order_info
     })
     
     
