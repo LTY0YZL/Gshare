@@ -457,7 +457,7 @@
                     {% csrf_token %}
 
                     <!-- Hidden file input (triggered by the label on the left) -->
-                    <input type="file" id="profile_picture" name="profile_picture" accept="image/*" onchange="previewAndSubmit(event)">
+                    <input type="file" id="profile_picture" name="profile_picture" accept="image/*" onchange="previewAvatar(event)">
 
                     <!-- Name -->
                     <div class="form-group">
@@ -508,9 +508,9 @@
 
                     <!-- Actions -->
                     <div class="form-actions">
-                        <button type="button" onclick="window.location.reload()" class="cancel-btn">
+                        <!-- <button type="button" onclick="window.location.reload()" class="cancel-btn">
                             Cancel
-                        </button>
+                        </button> -->
                         <button type="submit" name="save_profile" class="save-btn">
                             Save Changes
                         </button>
@@ -526,21 +526,16 @@
     </div>
 
     <script>
-        function previewAndSubmit(e) {
+        function previewAvatar(e) {
             const file = e.target.files && e.target.files[0];
             if (!file) return;
 
-            // Live preview
             const reader = new FileReader();
             reader.onload = function (ev) {
                 const img = document.getElementById('avatarPreview');
                 if (img) img.src = ev.target.result;
             };
             reader.readAsDataURL(file);
-
-            // Auto-submit the right form
-            const form = document.getElementById('profile-form');
-            if (form) form.submit();
         }
     </script>
 </body>

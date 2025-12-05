@@ -25,7 +25,7 @@ def get_active_orders_for_driver(driver_user_id: int):
             """
             SELECT d.order_id, d.status
             FROM deliveries d
-            WHERE d.delivery_person_id = %s
+            WHERE d.delivery_person_id = %s AND d.status IN ('inprogress', 'delivering')
             ORDER BY d.id DESC
             """,
             [driver_user_id],

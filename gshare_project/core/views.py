@@ -26,6 +26,7 @@ import json
 import re
 import requests
 from core.utils.geo import geoLoc
+from core.utils.permissions import user_can_use_scan
 from urllib.parse import urlencode
 from . import kroger_api
 import stripe
@@ -1528,7 +1529,9 @@ def login_view(request):
             messages.success(request, "Welcome back!")
             return redirect(request.GET.get('next', 'home'))
         messages.error(request, "Invalid username or password")
-    return render(request, 'login.html')
+    return render(request, 'login.html', {
+        'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
+    })
 
 def signup_view(request):
     if request.method == 'POST':
@@ -1632,8 +1635,17 @@ def updateProfile(profile, data, files):
     profile.save(using='gsharedb')
     return True
 
+
 @login_required
 def receipt_upload_view(request):
+
+    if not user_can_use_scan(request.user):
+        messages.error(
+            request,
+            "You can only scan receipts when you have at least one active delivery."
+        )
+        return redirect("order_history")
+
     if request.method == "POST":
         uploaded = request.FILES.get("receipt_image")
         if not uploaded:
@@ -1665,7 +1677,7 @@ def receipt_upload_view(request):
             status="pending",
         )
 
-        # FASTEST: do scan synchronously right here (may take a few seconds)
+        #  do scan synchronously right here (may take a few seconds)
         try:
             scan_receipt(receipt.id)
         except Exception as e:
@@ -1820,6 +1832,8 @@ def _apply_receipt_operations(receipt, operations):
 def receipt_match_orders_view(request, rid: int):
     receipt = get_object_or_404(Receipt.objects.using("gsharedb"), pk=rid)
 
+    print("Starting order matching for receipt", receipt.id)
+
     # 1) Load receipt items
     lines = list(
         ReceiptLine.objects.using("gsharedb")
@@ -1840,6 +1854,8 @@ def receipt_match_orders_view(request, rid: int):
 
     driver_user_id = receipt.uploader_id or 0  # or however you identify the driver
 
+    print(f"Driver user ID for receipt {receipt.id} is {driver_user_id}")
+
     candidate_orders = []
 
     # 2) Get active delivery orders for this driver (orders + deliveries)
@@ -1852,18 +1868,19 @@ def receipt_match_orders_view(request, rid: int):
             WHERE d.delivery_person_id = %s
               AND d.status IN ('accepted', 'inprogress', 'delivering')   -- adjust to your statuses
             ORDER BY o.order_date DESC
-            LIMIT 10
             """,
             [driver_user_id],
         )
         order_rows = cur.fetchall()
 
+       
     if not order_rows:
         ReceiptChatMessage.objects.create(
             receipt_id=receipt.id,
             role="assistant",
             content="You don’t seem to have any active delivery orders I can match this receipt to right now.",
         )
+        print("No active delivery orders found for driver", driver_user_id and order_rows)
         return redirect("receipt_detail", rid=receipt.id)
 
     # 3) For each order, pull items via raw SQL (avoids composite-PK ORM issues)
@@ -1895,8 +1912,11 @@ def receipt_match_orders_view(request, rid: int):
             }
         )
 
+    
+
     # 4) Ask Gemini which orders match this receipt
     try:
+        print("Asking Gemini to suggest matching order...")
         inferred_order_id, ai_reply = suggest_matching_order(
             receipt=receipt,
             lines=lines,
@@ -1995,15 +2015,15 @@ def receipt_confirm_delivery_view(request, rid: int):
 
     order_id = receipt.inferred_order_id
 
-    # Update Deliveries table
     try:
         delivery = Deliveries.objects.using("gsharedb").get(order_id=order_id)
         delivery.status = "delivered"
         delivery.delivery_time = timezone.now()
         delivery.save(using="gsharedb")
 
-        # Mark the receipt as done
+        # Mark the receipt as done + clear the suggested order
         receipt.status = "done"
+        receipt.inferred_order_id = None   # hide the button next time
         receipt.save(using="gsharedb")
 
         # Add chat confirmation
