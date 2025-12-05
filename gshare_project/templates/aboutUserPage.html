@@ -29,9 +29,11 @@
                         </div>
                         <div class="user-details">
                             <h1>{{ user.name }}</h1>
+                            {% if user.username %}
                             <div class="username">
                                 <p>@{{ user.username }}</p>
                             </div>
+                            {% endif %}
                             <div class="rating-container">
                                 {% if review_count > 0 %}
                                     <span class="star-filled">{{ stars_text }}</span>

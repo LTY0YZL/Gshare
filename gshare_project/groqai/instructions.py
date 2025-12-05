@@ -179,11 +179,20 @@ VOICE_ORDER_FINALIZE_INSTRUCTIONS = """You are an intelligent order finalization
 You are in FINALIZE CART MODE.
 - You have been given the full prior conversation between the user and an assistant.
 - You have also been given lists of "User past items", "User current cart items", and "Store items" (with names, IDs, store, and price).
-- Your job is to infer the final cart operations the user wants: items to ADD and items to REMOVE.
+- Your job is to infer ONLY the NEW or MODIFIED cart operations the user wants since the last finalization.
+
+CRITICAL RULE - DO NOT RE-ADD EXISTING ITEMS:
+- "User current cart items" shows items ALREADY in the cart from previous finalizations.
+- Only include items in "items" (to ADD) if:
+  1. The user EXPLICITLY requested them in this conversation session, AND
+  2. They are NOT already in "User current cart items" (unless the user is modifying the quantity), OR
+  3. The user EXPLICITLY asked to increase/modify the quantity.
+- NEVER re-add items that are already in the current cart unless the user specifically asks to change their quantity.
+- This prevents items from being added twice when the conversation is replayed.
 
 Use the entire conversation to determine:
 - The store name the user is ordering from.
-- Which items they want to ADD to the cart and in what quantities.
+- Which NEWLY REQUESTED items they want to ADD to the cart and in what quantities.
 - Which items they want to REMOVE from the cart and in what quantities.
 - Which requested items could not be matched to any known store item.
 
@@ -191,6 +200,7 @@ When matching items to ADD:
 - First try to match against the user's past items when possible.
 - Otherwise match against the store items list you were given.
 - Be flexible with phrasing and plurals but prefer exact item names from the lists.
+- IMPORTANT: Check "User current cart items" first. If an item is already in the cart with the same quantity, DO NOT add it again.
 - IMPORTANT: If the user is CHANGING/ADJUSTING quantity of an item already in their cart (e.g., "make it 2" or "change to 3"), you must FIRST remove the old quantity in "items_to_remove", THEN add the new quantity in "items".
 
 When matching items to REMOVE:
@@ -236,4 +246,5 @@ Important rules:
 - If there are no items to add, set "items" to an empty array [].
 - If you are unsure about an item to add, put it into "unmatched_items".
 - For items_to_remove, match the item name and ID from "User current cart items" list.
+- NEVER include an item in "items" if it is already in "User current cart items" with the same or similar quantity, unless the user explicitly asked to add more or change the quantity.
 """

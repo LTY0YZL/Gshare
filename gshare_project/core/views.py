@@ -544,11 +544,20 @@ def get_order_for_delivery(delivery: Deliveries):
         return None
 
 def remove_delivery_json(request, order_id):
+    print(order_id)
+    print(f"right before post")
     if request.method == 'POST':
+        print(f"right before try")
         try:
-            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
+            print(f"right before delivery")
+            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id, order__status="pending")
+            print(f"right before order")
             order = delivery.order
+            print(f"right before success")
             success = reject_delivery(delivery)
+
+            print(f"order id for success was {order_id}")
+            print(f"reject success was {success}")
 
             if success:
                 order.status = 'placed'
@@ -706,15 +715,15 @@ def remove_delivery_person(request, order_id):
         print("remove_delivery_person error:", e)
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
     
-def remove_delivery_json(request, order_id):
-    if request.method == 'POST':
-        try:
-            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
-            success = reject_delivery(delivery)
-            return JsonResponse({'success': success})
-        except Deliveries.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
-    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+# def remove_delivery_json(request, order_id):
+#     if request.method == 'POST':
+#         try:
+#             delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
+#             success = reject_delivery(delivery)
+#             return JsonResponse({'success': success})
+#         except Deliveries.DoesNotExist:
+#             return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
+#     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
 def create_delivery_json(request, order_id):
     if request.method != 'POST':
@@ -900,9 +909,11 @@ def add_user_to_group_json(request, group: int):
         if not verify_group_password(group_info, password):
             return JsonResponse({'error': 'Invalid password'}, status=403)
         
-        print(f"Adding user {profile.email} to group {group_info.id}")
+        order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
+        if not order:
+            return JsonResponse({'error': 'No cart order found for user'}, status=404)
         try:
-            success = add_user_to_group(group_info, profile)
+            success = add_user_to_group(group_info, profile, order)
             if success:
                 return JsonResponse({'success': True})
             else:
@@ -920,10 +931,13 @@ def add_user_to_group(group: GroupOrders, user: Users, order: Orders = None):
     except IntegrityError:
         return False
     
-def remove_user_from_group_json(request, group: GroupOrders):
+def remove_user_from_group_json(request, groupId: GroupOrders):
     if request.method == 'POST':
+        print(f"calling remove user")
         data = json.loads(request.body)
         password = data.get('password')
+        print(f"password is {password}")
+        print(f"group is is {groupId}")
         
         if not password:
             return JsonResponse({'error': 'Password is required'}, status=400)
@@ -931,17 +945,21 @@ def remove_user_from_group_json(request, group: GroupOrders):
         profile = get_user("email", request.user.email)
         if not profile:
             return JsonResponse({'error': 'Profile not found'}, status=404)
+        print(f"getting group")
+        group = get_group_by_id(groupId)
         
-        group = get_group_by_id(data.get('group_id'))
+        print(f"gogt group")
         if not group:
             return JsonResponse({'error': 'Group not found'}, status=404)
         
         if not verify_group_password(group, password):
             return JsonResponse({'error': 'Invalid password'}, status=403)
         
-        print(f"Removing user {profile.email} from group {group.id}")
+        # print(f"Removing user {profile.email} from group {groupId}")
         try:
+            print(f"calling remove frin group")
             success = remove_user_from_group(group, profile)
+            print(f"called remove frin group")
             if success:
                 return JsonResponse({'success': True})
             else:
@@ -962,6 +980,7 @@ def remove_user_from_group(group: GroupOrders, user: Users):
     
 def get_group_by_id(group_id: int):
     try:
+        print(f"group_id was {group_id}")
         return GroupOrders.objects.using('gsharedb').get(group_id=group_id)
     except GroupOrders.DoesNotExist:
         return None
@@ -2924,50 +2943,48 @@ def group_data(request):
         print("no user")
         return JsonResponse({'error': 'Profile not found'}, status=404)
     groups = get_groups_for_user(profile)
+    print(f"DEBUG: Groups found: {groups}")
     if not groups:
         return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
     
     orders = []
     for group in groups:
-        order = get_cart_in_group(profile, group.group_id)
-        print("order in group:", order)
-        if order:
-            orders.append(order)
-    # order = get_orders_in_group(profile, 'cart')
-    print("orders:", orders)
+        group_orders = get_orders_in_group(group.group_id)
+        print(f"DEBUG: Orders in group {group.group_id}: {group_orders}")
+        orders.extend(group_orders)
+    print(f"DEBUG: Total orders collected: {orders}")
     if not orders:
         return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+    
     order_info = []
+    combined_subtotal = 0
+    combined_items = []
+    
     for order in orders:
         items = get_order_items(order) if order else []
-        subtotal = 0
-        items_with_totals = []
         for item in items:
             total = item[2] * item[5]  # quantity * price
-            subtotal += total
-            items_with_totals.append({
+            combined_subtotal += total
+            combined_items.append({
                 'name': item[4],  # item name
                 'quantity': item[2],
                 'price': item[5],  # item price
                 'total': total,
             })
-            
-        tax = Decimal(calculate_tax(subtotal)) / 100
-        grand_total = round(subtotal + tax, 2)
+    
+    # Calculate combined tax and total
+    combined_tax = Decimal(calculate_tax(combined_subtotal)) / 100
+    combined_grand_total = round(combined_subtotal + combined_tax, 2)
 
-        order_summary = {
-            'subtotal': subtotal,
-            'tax': tax,
-            'total': grand_total,
-        }
-        order_info.append({
-            'id': order.id,
-            'summary': order_summary,
-            'items': items_with_totals,
-        })
+    order_summary = {
+        'subtotal': combined_subtotal,
+        'tax': combined_tax,
+        'total': combined_grand_total,
+    }
 
     return JsonResponse({
-        'orders': order_info
+        'items': combined_items,
+        'order': order_summary,
     })
     
     
@@ -3382,7 +3399,10 @@ def pickup_price(user_location, drop_off_location, num_items, store_address, api
     time_cost = time_taken['total_estimate'] * 0.05
     
     diff_distance = abs(distance_from_user_to_store['distance_value'] - distance_from_dropoff_to_store['distance_value'])
-    distance_cost = base_rate * (1-math.exp(scale * diff_distance**base_rate))
+    if scale * diff_distance**base_rate < 450:
+        distance_cost = base_rate * (1 - math.exp(scale * diff_distance**base_rate))
+    else:
+        distance_cost = base_rate  
     
     item_cost = num_items * item_rate
     
