@@ -14,8 +14,8 @@
 /* LEFT SIDEBAR */
 .sidebar-left {
     width: 220px;
-    background: #1e1e1e;
-    color: white;
+    background: #a09f9fff;
+    color: black;
     padding: 15px;
     overflow-y: auto;
 }
@@ -23,7 +23,7 @@
 .section-title {
     font-size: 16px;
     margin-bottom: 10px;
-    color: #bbbbbb;
+    color: black;
 }
 
 .sidebar-list {
@@ -37,11 +37,11 @@
     padding: 8px 10px;
     border-radius: 6px;
     text-decoration: none;
-    color: #eee;
+    color: black;
 }
 
 .sidebar-link:hover {
-    background: #333;
+    background: #dadadaff;
 }
 
 /* MAIN CHAT PANEL */
@@ -140,10 +140,35 @@
 /* RIGHT SIDEBAR */
 .sidebar-right {
     width: 220px;
-    background: #f9f9f9;
+    background: #a09f9fff;
     border-left: 1px solid #ddd;
     padding: 15px;
 }
+
+/* UNREAD NOTIFICATION BADGE */
+.unread-badge {
+    background-color: #10B981; /* green bubble */
+    color: white;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 6px;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    pointer-events: none; /* link still clickable */
+}
+
+/* Make sidebar link items flex so badge sits on the right */
+.sidebar-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 
   </style>
 </head>
@@ -158,16 +183,21 @@
         <h3 class="section-title">Direct Messages</h3>
         <ul class="sidebar-list">
             {% for DM in dm_list %}
-                <li><a href="{% url 'direct_message' DM.id %}" class="sidebar-link">{{ DM.other_user }}</a></li>
-                <span id="unread-thread-{{ dm.id }}"></span>
+                <li>
+                    <a href="{% url 'direct_message' DM.id %}" class="sidebar-link">{{ DM.other_user }}
+                        <span id="unread-thread-{{ dm.id }}"></span>
+                    </a>
+                </li>
             {% endfor %}
         </ul>
 
         <h3 class="section-title">Group Chats</h3>
         <ul class="sidebar-list">
             {% for group in groups %}
-                <li><a href="{% url 'chat_room' group.slug %}" class="sidebar-link">{{ group.name }}</a></li>
-                <span id="unread-group-{{ group.id }}"></span>
+                <li><a href="{% url 'chat_room' group.slug %}" class="sidebar-link">{{ group.name }}
+                    <span id="unread-group-{{ group.id }}"></span>
+                    </a>
+                </li>
             {% endfor %}
         </ul>
     </aside>
