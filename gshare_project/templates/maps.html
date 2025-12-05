@@ -423,7 +423,7 @@
 
             updateRouteFromDriver(origin);
         }
-        
+
         let map;
         let geocoder;
         let markers = {};
@@ -652,7 +652,14 @@
 
                         profilePos = location;
 
-                        const order = group.orders && group.orders.length > 0 ? group.orders[0] : null;
+                        let order = null;
+
+                        if (group.orders && group.orders.length > 0) {
+                            order = group.orders.find(o => o.driver_id == CURRENT_VIEWER_ID)
+                                || group.orders.find(o => o.user_id == CURRENT_VIEWER_ID)
+                                || group.orders[0];
+                        }
+
                         if (!order) return;
 
                         activeDriverId = order.driver_id || null;
