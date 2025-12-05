@@ -1,0 +1,105 @@
+{% if messages %}
+<div id="message-container" style="position: fixed; top: 80px; right: 20px; z-index: 9999; max-width: 400px; width: calc(100% - 40px);">
+    {% for message in messages %}
+    <div class="message-toast message-{{ message.tags }}" 
+         style="margin-bottom: 12px; padding: 14px 16px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 12px; animation: slideIn 0.3s ease-out; cursor: pointer;"
+         onclick="this.style.animation='slideOut 0.3s ease-out'; setTimeout(() => this.remove(), 300);">
+        
+        <span class="message-icon" style="flex-shrink: 0; font-size: 20px; font-weight: bold;">
+            {% if message.tags == 'success' %}✓{% elif message.tags == 'error' %}✕{% elif message.tags == 'warning' %}⚠{% else %}ℹ{% endif %}
+        </span>
+        
+        <div style="flex: 1; min-width: 0;">
+            <p style="margin: 0; font-weight: 500; word-wrap: break-word; font-size: 14px;">{{ message }}</p>
+        </div>
+        
+        <button onclick="this.parentElement.remove(); event.stopPropagation();" 
+                style="flex-shrink: 0; background: none; border: none; cursor: pointer; font-size: 20px; opacity: 0.6; padding: 0; line-height: 1; font-weight: bold;"
+                onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
+            ×
+        </button>
+    </div>
+    {% endfor %}
+</div>
+
+<style>
+    .message-success {
+        background-color: #d1fae5;
+        border-left: 4px solid #10b981;
+        color: #065f46;
+    }
+    .message-success .message-icon {
+        color: #10b981;
+    }
+    
+    .message-error {
+        background-color: #fee2e2;
+        border-left: 4px solid #ef4444;
+        color: #991b1b;
+    }
+    .message-error .message-icon {
+        color: #ef4444;
+    }
+    
+    .message-warning {
+        background-color: #fef3c7;
+        border-left: 4px solid #f59e0b;
+        color: #92400e;
+    }
+    .message-warning .message-icon {
+        color: #f59e0b;
+    }
+    
+    .message-info {
+        background-color: #dbeafe;
+        border-left: 4px solid #3b82f6;
+        color: #1e40af;
+    }
+    .message-info .message-icon {
+        color: #3b82f6;
+    }
+    
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+    
+    @media (max-width: 640px) {
+        #message-container {
+            left: 20px;
+            right: 20px;
+            max-width: none;
+            width: calc(100% - 40px);
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const messages = document.querySelectorAll('.message-toast');
+        messages.forEach(function(msg) {
+            setTimeout(function() {
+                msg.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => msg.remove(), 300);
+            }, 5000);
+        });
+    });
+</script>
+{% endif %}

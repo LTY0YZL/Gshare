@@ -1,66 +1,324 @@
 <!DOCTYPE html>
 {% load static %}
 <html lang="en">
-    {% include 'navbar.html' %}
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Payments</title>
-    </head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payments</title>
+    <style>
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
-    <body style="margin: 0; overflow-x: hidden;">
-        <div name="HoldsEverything" style="min-width: 100vw; display: flex; flex-direction: row; width: 100%; height: calc(100vh - 5rem);">
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
 
-            <!-- Left column - Payments -->
-            <div name="paymentsAll" style="font-weight: bolder; flex: 1; padding: 1rem; display: flex; flex-direction: column; height: 100%;">
-                <div name="PaymentsByOthers" style="margin-bottom: 1.5rem; border: 1px solid lightgray; padding: 1rem; flex-grow: 1; overflow-y: auto;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid darkblue; padding: 6px;">
-                        <p>Payment Status</p>
-                    </div>
-                    {% for member in members_payments %}
-                    <div style="display: flex; align-items: center; padding: 1rem;" name="memberPaymentInfo">
-                        <div style="flex-shrink: 0;">
-                            <span style="font-size: 2.25rem; line-height: 2.5rem;">{{ member.payment_status }}</span>
-                        </div>
-                        <div style="margin-left: 2rem;">
-                            <p style="font-weight: 500; font-size: 1.125rem; line-height: 1.75rem;">{{ member.user_name }}</p>
-                            <p style="color: rgb(75 85 99);">Delivery Preference: {{ member.delivery_pref }}</p>
-                        </div>
-                    </div>
-                    {% endfor %}
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #f8faf9 0%, #f0f4f3 50%, #e8efed 100%);
+            color: #1d1d1f;
+            min-height: 100vh;
+            letter-spacing: -0.01em;
+            overflow-x: hidden;
+        }
+
+        .payments-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 60px 24px 80px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            min-height: calc(100vh - 5rem);
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .payments-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .section-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin: 0 0 24px 0;
+            letter-spacing: -0.02em;
+        }
+
+        .payments-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            padding-bottom: 16px;
+            border-bottom: 2px solid rgba(52, 199, 89, 0.2);
+            margin-bottom: 8px;
+        }
+
+        .card-header-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin: 0;
+            letter-spacing: -0.01em;
+        }
+
+        .member-payment-item {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            background: rgba(52, 199, 89, 0.04);
+            border: 1px solid rgba(52, 199, 89, 0.1);
+            border-radius: 16px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .member-payment-item:hover {
+            background: rgba(52, 199, 89, 0.08);
+            border-color: rgba(52, 199, 89, 0.2);
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.1);
+        }
+
+        .payment-status-badge {
+            min-width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
+            color: white;
+            font-weight: 700;
+            font-size: 1.5rem;
+            border-radius: 14px;
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.2);
+        }
+
+        .member-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .member-name {
+            font-size: 1.063rem;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin: 0;
+        }
+
+        .member-pref {
+            font-size: 0.875rem;
+            color: #6e6e73;
+            margin: 0;
+            font-weight: 500;
+        }
+
+        .carts-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px;
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            border-radius: 14px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .carts-item:hover {
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .cart-user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .cart-user-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(52, 199, 89, 0.2);
+        }
+
+        .cart-user-name {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin: 0;
+        }
+
+        .cart-total {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: #34c759;
+            margin: 0;
+            text-align: right;
+        }
+
+        .confirm-button-wrapper {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            padding-top: 20px;
+            margin-top: auto;
+        }
+
+        .btn-confirm {
+            padding: 14px 40px;
+            background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 1.063rem;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 16px rgba(52, 199, 89, 0.3);
+            font-family: inherit;
+            letter-spacing: -0.01em;
+        }
+
+        .btn-confirm:hover {
+            background: linear-gradient(135deg, #30d158 0%, #28b347 100%);
+            box-shadow: 0 8px 24px rgba(52, 199, 89, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .btn-confirm:active {
+            transform: translateY(0);
+        }
+
+        /* Scrollbar styling */
+        .payments-card::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .payments-card::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+        }
+
+        .payments-card::-webkit-scrollbar-thumb {
+            background: rgba(52, 199, 89, 0.3);
+            border-radius: 10px;
+        }
+
+        .payments-card::-webkit-scrollbar-thumb:hover {
+            background: rgba(52, 199, 89, 0.5);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .payments-container {
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .payments-container {
+                padding: 40px 16px 60px;
+            }
+
+            .payments-card {
+                padding: 24px;
+            }
+
+            .section-title {
+                font-size: 1.5rem;
+            }
+
+            .member-payment-item,
+            .carts-item {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+{% include 'navbar.html' %}
+{% include "components/messages.html" %}
+
+<body>
+    <div class="payments-container">
+        <!-- Left column - Payments -->
+        <div class="payments-section">
+            <h1 class="section-title">Payment Status</h1>
+            <div class="payments-card">
+                <div class="card-header">
+                    <h2 class="card-header-title">Payment Status</h2>
                 </div>
-                <div style="width: 100%; display: flex; justify-content: center; align-items: center; flex-shrink: 0;">
-            
-                    <form action="{% url 'paymentscheckout' orderID %}" method="post">
 
+                {% for member in members_payments %}
+                <div class="member-payment-item">
+                    <div class="payment-status-badge">{{ member.payment_status }}</div>
+                    <div class="member-info">
+                        <p class="member-name">{{ member.user_name }}</p>
+                        <p class="member-pref">{{ member.delivery_pref }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <div class="confirm-button-wrapper">
+                    <form action="{% url 'paymentscheckout' orderID %}" method="post" style="width: 100%;">
                         {% csrf_token %}
-                        <button style="border: 1px solid darkblue; padding: 8px; max-width: 15vw; align-self: center; background-color: #3A97D4; color: aliceblue;">Confirm Payments</button>
+                        <button type="submit" class="btn-confirm">Confirm Payments</button>
                     </form>
                 </div>
             </div>
-            
-            <!-- Right column - Carts -->
-            <div name="rightSide" style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
-                <div name="Carts" style="font-weight: bolder; margin-top: 1rem; flex-grow: 1; border: 1px solid lightgray; padding: 1rem; overflow-y: auto; height: 100%;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid darkblue; padding: 6px;">
-                        <p>Carts' Information</p>
-                    </div>
-
-                    {% for cart in carts_in_group %}
-                    <div name="eachCart" style="display: flex; flex-direction: row; justify-content: space-between; margin: 3px;">
-                        <div name="userInfo" style="display: flex; flex-direction: row; align-items: center; margin: 3px;">
-                            <img name="userIcon" src="{% static 'media/user.png' %}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
-                            <p style="margin-left: 1rem;">{{ cart.user_name }}</p>
-                        </div>
-                        <p>${{ cart.total }}</p>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            
         </div>
-        
-    </body>
+
+        <!-- Right column - Carts -->
+        <div class="payments-section">
+            <h1 class="section-title">Cart Information</h1>
+            <div class="payments-card">
+                <div class="card-header">
+                    <h2 class="card-header-title">Total</h2>
+                </div>
+
+                {% for cart in carts_in_group %}
+                <div class="carts-item">
+                    <div class="cart-user-info">
+                        <img src="{% static 'media/user.png' %}" alt="user" class="cart-user-icon">
+                        <p class="cart-user-name">{{ cart.user_name }}</p>
+                    </div>
+                    <p class="cart-total">${{ cart.total }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</body>
 
 </html>
 </html>

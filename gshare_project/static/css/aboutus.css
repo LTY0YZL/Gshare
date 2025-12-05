@@ -1,98 +1,203 @@
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
 body {
     margin: 0;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background-color: #FFFFFF;
-    color: #1F2937;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #f8faf9 0%, #f0f4f3 50%, #e8efed 100%);
+    color: #1d1d1f;
+    min-height: 100vh;
+    letter-spacing: -0.01em;
 }
 
 .about-container {
     max-width: 1200px;
-    margin: 24px auto;
-    padding: 0 16px;
+    margin: 0 auto;
+    padding: 60px 24px 80px;
+    animation: fadeInUp 0.6s ease-out;
 }
 
 .tabsList {
     display: flex;
     justify-content: center;
-    gap: 0.5rem;
-    background-color: #F3F4F6;
-    border-radius: 999px;
-    padding: 0.5rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    margin-bottom: 32px;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 16px;
+    padding: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    margin-bottom: 48px;
     flex-wrap: wrap;
+    animation: scaleIn 0.5s ease-out 0.1s backwards;
 }
 
 .tabButton {
     background-color: transparent;
-    color: #6B7280;
-    padding: 0.5rem 1.25rem;
+    color: #6e6e73;
+    padding: 12px 28px;
     font-weight: 600;
-    font-size: 0.95rem;
-    border-radius: 999px;
+    font-size: 1rem;
+    border-radius: 12px;
     border: none;
     cursor: pointer;
-    transition: all 0.2s ease;
-    font-family: 'Inter', sans-serif;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: inherit;
+    letter-spacing: -0.01em;
 }
 
 .tabButton:hover {
-    background-color: #E5E7EB;
-    color: #1F2937;
+    background-color: rgba(0, 0, 0, 0.04);
+    color: #1d1d1f;
+    transform: translateY(-1px);
 }
 
 .tabButton.active {
-    background-color: #10B981;
-    color: #FFFFFF;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 16px rgba(52, 199, 89, 0.3);
+    transform: translateY(-1px);
 }
 
 .tab-content {
-    background-color: #FFFFFF;
-    border: 1px solid #E5E7EB;
-    border-radius: 8px;
-    padding: 24px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    margin-bottom: 24px;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 20px;
+    padding: 40px 48px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+    margin-bottom: 32px;
+    animation: fadeInUp 0.6s ease-out 0.2s backwards;
+    line-height: 1.6;
 }
 
 .page-title {
-    font-size: 2rem;
-    font-weight: 800;
+    font-size: 2.5rem;
+    font-weight: 700;
     text-align: center;
-    margin-bottom: 16px;
-    color: #1F2937;
-    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    margin-bottom: 24px;
+    color: #1d1d1f;
+    font-family: inherit;
+    letter-spacing: -0.03em;
 }
 
 .section-title {
-    font-size: 1.5rem;
-    font-weight: 700;
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    margin-top: 32px;
+    color: #1d1d1f;
+    font-family: inherit;
+    letter-spacing: -0.02em;
+}
+
+.text-lg {
+    font-size: 1.125rem;
+    line-height: 1.7;
+    color: #1d1d1f;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.mb-4 {
     margin-bottom: 16px;
-    color: #1F2937;
-    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+}
+
+.mb-6 {
+    margin-bottom: 24px;
+}
+
+.mt-2 {
+    margin-top: 8px;
+}
+
+.mt-6 {
+    margin-top: 24px;
+}
+
+p {
+    font-size: 1.063rem;
+    color: #1d1d1f;
+    line-height: 1.7;
+    margin-bottom: 16px;
+}
+
+p strong {
+    font-weight: 600;
+    color: #1d1d1f;
 }
 
 .team-member-card {
     display: flex;
-    align-items: center;
-    gap: 16px;
-    background-color: #FFFFFF;
-    border: 1px solid #E5E7EB;
-    border-radius: 8px;
-    padding: 16px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-    margin-bottom: 16px;
+    align-items: flex-start;
+    gap: 24px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 20px;
+    padding: 32px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04), 0 1px 4px rgba(0, 0, 0, 0.02);
+    margin-bottom: 24px;
     flex-wrap: wrap;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: fadeInUp 0.5s ease-out backwards;
+}
+
+.team-member-card:nth-child(2) { animation-delay: 0.1s; }
+.team-member-card:nth-child(3) { animation-delay: 0.2s; }
+.team-member-card:nth-child(4) { animation-delay: 0.3s; }
+.team-member-card:nth-child(5) { animation-delay: 0.4s; }
+
+.team-member-card:hover {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+    transform: translateY(-4px);
+    border-color: rgba(52, 199, 89, 0.2);
 }
 
 .team-member-pic {
-    width: 96px;
-    height: 96px;
+    width: 120px;
+    height: 120px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid #E5E7EB;
+    border: 3px solid rgba(52, 199, 89, 0.2);
     flex-shrink: 0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.team-member-card:hover .team-member-pic {
+    border-color: rgba(52, 199, 89, 0.4);
+    transform: scale(1.05);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 .team-member-details {
@@ -101,23 +206,32 @@ body {
 }
 
 .team-member-name {
-    font-size: 1.125rem;
+    font-size: 1.5rem;
     font-weight: 600;
-    margin: 0 0 8px 0;
-    color: #1F2937;
+    margin: 0 0 12px 0;
+    color: #1d1d1f;
+    letter-spacing: -0.02em;
 }
 
 .team-member-bio {
-    font-size: 0.95rem;
-    color: #374151;
-    line-height: 1.5;
+    font-size: 1.063rem;
+    color: #1d1d1f;
+    line-height: 1.7;
     overflow-wrap: break-word;
+    margin-bottom: 12px;
 }
 
 .team-member-contact {
-    font-size: 0.9rem;
-    color: #6B7280;
-    margin-top: 8px;
+    font-size: 1rem;
+    color: #6e6e73;
+    margin-top: 16px;
+    font-weight: 500;
+}
+
+video {
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    margin-top: 24px;
 }
 
 .hidden {
@@ -126,27 +240,46 @@ body {
 
 /* Responsive Design */
 @media (max-width: 768px) {
+    .about-container {
+        padding: 40px 16px 60px;
+    }
+
     .tabsList {
         flex-direction: column;
         align-items: stretch;
+        border-radius: 14px;
+        padding: 6px;
     }
 
     .tabButton {
         width: 100%;
         text-align: center;
+        padding: 14px 20px;
+    }
+
+    .tab-content {
+        padding: 28px 24px;
+        border-radius: 16px;
     }
 
     .team-member-card {
         flex-direction: column;
         text-align: center;
+        align-items: center;
+        padding: 24px;
+        border-radius: 16px;
     }
 
     .team-member-pic {
-        width: 80px;
-        height: 80px;
+        width: 100px;
+        height: 100px;
     }
 
     .page-title {
-        font-size: 1.75rem;
+        font-size: 2rem;
+    }
+
+    .section-title {
+        font-size: 1.5rem;
     }
 }

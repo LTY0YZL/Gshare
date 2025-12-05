@@ -545,11 +545,20 @@ def get_order_for_delivery(delivery: Deliveries):
         return None
 
 def remove_delivery_json(request, order_id):
+    print(order_id)
+    print(f"right before post")
     if request.method == 'POST':
+        print(f"right before try")
         try:
-            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
+            print(f"right before delivery")
+            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id, order__status="pending")
+            print(f"right before order")
             order = delivery.order
+            print(f"right before success")
             success = reject_delivery(delivery)
+
+            print(f"order id for success was {order_id}")
+            print(f"reject success was {success}")
 
             if success:
                 order.status = 'placed'
@@ -707,15 +716,15 @@ def remove_delivery_person(request, order_id):
         print("remove_delivery_person error:", e)
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
     
-def remove_delivery_json(request, order_id):
-    if request.method == 'POST':
-        try:
-            delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
-            success = reject_delivery(delivery)
-            return JsonResponse({'success': success})
-        except Deliveries.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
-    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+# def remove_delivery_json(request, order_id):
+#     if request.method == 'POST':
+#         try:
+#             delivery = Deliveries.objects.using('gsharedb').get(order__id=order_id)
+#             success = reject_delivery(delivery)
+#             return JsonResponse({'success': success})
+#         except Deliveries.DoesNotExist:
+#             return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
+#     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
 def create_delivery_json(request, order_id):
     if request.method != 'POST':
@@ -901,12 +910,9 @@ def add_user_to_group_json(request, group: int):
         if not verify_group_password(group_info, password):
             return JsonResponse({'error': 'Invalid password'}, status=403)
         
-        print(f"Adding user {profile.email} to group {group_info.id}")
-
         order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
         if not order:
             return JsonResponse({'error': 'No cart order found for user'}, status=404)
-
         try:
             success = add_user_to_group(group_info, profile, order)
             if success:
@@ -926,10 +932,13 @@ def add_user_to_group(group: GroupOrders, user: Users, order: Orders = None):
     except IntegrityError:
         return False
     
-def remove_user_from_group_json(request, group: GroupOrders):
+def remove_user_from_group_json(request, groupId: GroupOrders):
     if request.method == 'POST':
+        print(f"calling remove user")
         data = json.loads(request.body)
         password = data.get('password')
+        print(f"password is {password}")
+        print(f"group is is {groupId}")
         
         if not password:
             return JsonResponse({'error': 'Password is required'}, status=400)
@@ -937,17 +946,21 @@ def remove_user_from_group_json(request, group: GroupOrders):
         profile = get_user("email", request.user.email)
         if not profile:
             return JsonResponse({'error': 'Profile not found'}, status=404)
+        print(f"getting group")
+        group = get_group_by_id(groupId)
         
-        group = get_group_by_id(data.get('group_id'))
+        print(f"gogt group")
         if not group:
             return JsonResponse({'error': 'Group not found'}, status=404)
         
         if not verify_group_password(group, password):
             return JsonResponse({'error': 'Invalid password'}, status=403)
         
-        print(f"Removing user {profile.email} from group {group.id}")
+        # print(f"Removing user {profile.email} from group {groupId}")
         try:
+            print(f"calling remove frin group")
             success = remove_user_from_group(group, profile)
+            print(f"called remove frin group")
             if success:
                 return JsonResponse({'success': True})
             else:
@@ -968,6 +981,7 @@ def remove_user_from_group(group: GroupOrders, user: Users):
     
 def get_group_by_id(group_id: int):
     try:
+        print(f"group_id was {group_id}")
         return GroupOrders.objects.using('gsharedb').get(group_id=group_id)
     except GroupOrders.DoesNotExist:
         return None
@@ -1434,6 +1448,7 @@ def login_view(request):
         if user is not None:
             login(request, user)
             request.session.save()
+            messages.success(request, "Welcome back!")
             return redirect(request.GET.get('next', 'home'))
         messages.error(request, "Invalid username or password")
     return render(request, 'login.html')
@@ -1475,6 +1490,7 @@ def signup_view(request):
 
         # Login and redirect
         auth_login(request, auth_user)
+        messages.success(request, "Account created successfully!")
         return redirect('home')
     
     return render(request, 'login.html')
@@ -2945,50 +2961,48 @@ def group_data(request):
         print("no user")
         return JsonResponse({'error': 'Profile not found'}, status=404)
     groups = get_groups_for_user(profile)
+    print(f"DEBUG: Groups found: {groups}")
     if not groups:
         return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
     
     orders = []
     for group in groups:
-        order = get_cart_in_group(profile, group.group_id)
-        print("order in group:", order)
-        if order:
-            orders.append(order)
-    # order = get_orders_in_group(profile, 'cart')
-    print("orders:", orders)
+        group_orders = get_orders_in_group(group.group_id)
+        print(f"DEBUG: Orders in group {group.group_id}: {group_orders}")
+        orders.extend(group_orders)
+    print(f"DEBUG: Total orders collected: {orders}")
     if not orders:
         return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
+    
     order_info = []
+    combined_subtotal = 0
+    combined_items = []
+    
     for order in orders:
         items = get_order_items(order) if order else []
-        subtotal = 0
-        items_with_totals = []
         for item in items:
             total = item[2] * item[5]  # quantity * price
-            subtotal += total
-            items_with_totals.append({
+            combined_subtotal += total
+            combined_items.append({
                 'name': item[4],  # item name
                 'quantity': item[2],
                 'price': item[5],  # item price
                 'total': total,
             })
-            
-        tax = Decimal(calculate_tax(subtotal)) / 100
-        grand_total = round(subtotal + tax, 2)
+    
+    # Calculate combined tax and total
+    combined_tax = Decimal(calculate_tax(combined_subtotal)) / 100
+    combined_grand_total = round(combined_subtotal + combined_tax, 2)
 
-        order_summary = {
-            'subtotal': subtotal,
-            'tax': tax,
-            'total': grand_total,
-        }
-        order_info.append({
-            'id': order.id,
-            'summary': order_summary,
-            'items': items_with_totals,
-        })
+    order_summary = {
+        'subtotal': combined_subtotal,
+        'tax': combined_tax,
+        'total': combined_grand_total,
+    }
 
     return JsonResponse({
-        'orders': order_info
+        'items': combined_items,
+        'order': order_summary,
     })
     
     
@@ -3215,7 +3229,7 @@ def payments(request, order_id):
             })
         
         for member in members:
-            delivery_pref = f"Delivered to {member.user.address}" 
+            delivery_pref = f"Deliver to {member.user.address}" 
             payment_status = "⏳" 
             if member.order:
                 if member.order.status == 'cart':
@@ -3245,7 +3259,7 @@ def payments(request, order_id):
                 'user_name': user_name,
                 'total': total,
             })
-        delivery_pref = f"Delivered to {user.address}" 
+        delivery_pref = f"Deliver to {user.address}" 
         payment_status = "⏳" 
         if order:
             if order.status == 'cart':
@@ -3278,6 +3292,11 @@ def paymentsCheckout(request, order_id):
     orders = []
     order = get_object_or_404(Orders.objects.using('gsharedb'), pk=order_id)
     delivery = get_delivery_for_order(order)
+    
+    if not delivery:
+        messages.error(request, "No delivery found for this order.")
+        return redirect('payments', order_id=order.id)
+    
     dperson = delivery.delivery_person
     userAddress = dperson.address
 
@@ -3371,7 +3390,6 @@ def paymentsCheckout(request, order_id):
         return redirect(checkoutSession.url)
     except stripe.error.StripeError as e:
         messages.error(request, f"Payment error: {e.user_message}")
-        messages.error(request, f"Payment error: {e.user_message}")
         return redirect('payments', order_id=order.id)
     except Exception as e:
         print(f"A serious error occurred: {e}. We have been notified.")
@@ -3399,7 +3417,10 @@ def pickup_price(user_location, drop_off_location, num_items, store_address, api
     time_cost = time_taken['total_estimate'] * 0.05
     
     diff_distance = abs(distance_from_user_to_store['distance_value'] - distance_from_dropoff_to_store['distance_value'])
-    distance_cost = base_rate * (1-math.exp(scale * diff_distance**base_rate))
+    if scale * diff_distance**base_rate < 450:
+        distance_cost = base_rate * (1 - math.exp(scale * diff_distance**base_rate))
+    else:
+        distance_cost = base_rate  
     
     item_cost = num_items * item_rate
     
@@ -3457,7 +3478,6 @@ def getUserProfile(request, userID):
 
 @login_required
 def create_recurring_cart(request):
-    messages.info(request, " ")
     return redirect('recurring_carts')
 
 @login_required
@@ -3619,75 +3639,198 @@ def getItemNamesForUser(user, statuses = ['delivered']):
     return namesAndId
 
 
+def get_user_cart_items(profile):
+    if not profile:
+        return []
+    
+    order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
+    if not order:
+        return []
+    
+    cart_items = []
+    with connections['gsharedb'].cursor() as cur:
+        cur.execute("""
+            SELECT i.name, i.id, oi.quantity, oi.price, s.name
+            FROM order_items oi
+            JOIN items i ON oi.item_id = i.id
+            JOIN stores s ON i.store_id = s.id
+            WHERE oi.order_id = %s
+            ORDER BY i.name
+        """, [order.id])
+        
+        for row in cur.fetchall():
+            cart_items.append((row[0], row[1], row[2], row[3], row[4]))
+    
+    return cart_items
+
+
+def _parseCartEntry(entry):
+    """Parse and validate a cart entry, returning (item_id, quantity) or None."""
+    if not isinstance(entry, dict):
+        return None
+    
+    item_id = entry.get("ID") or entry.get("id")
+    quantity = entry.get("quantity") or 1
+    
+    try:
+        quantity = int(quantity)
+    except (TypeError, ValueError):
+        quantity = 1
+    
+    if not item_id or quantity <= 0:
+        return None
+    
+    return (item_id, quantity)
+
+
+def _getOrCreateCartOrder(profile, item_store=None):
+    """Get existing cart order or create new one if needed."""
+    order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
+    
+    if not order and item_store:
+        order = Orders.objects.using('gsharedb').create(
+            user=profile,
+            status='cart',
+            order_date=timezone.now(),
+            store=item_store,
+            total_amount=0,
+            delivery_address=profile.address,
+        )
+    
+    return order
+
+
+def _addItemToCart(cursor, order_id, item_id, quantity, price):
+    """Add or update item quantity in cart."""
+    cursor.execute(
+        """
+        INSERT INTO order_items (order_id, item_id, quantity, price)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            quantity = quantity + VALUES(quantity)
+        """,
+        [order_id, item_id, quantity, str(price or 0)],
+    )
+
+
+def _removeItemFromCart(cursor, order_id, item_id, quantity):
+    """Remove or reduce item quantity from cart. Returns True if operation succeeded."""
+    cursor.execute("""
+        SELECT quantity FROM order_items
+        WHERE order_id=%s AND item_id=%s
+        LIMIT 1
+    """, [order_id, item_id])
+    
+    row = cursor.fetchone()
+    if not row:
+        return False
+    
+    current_qty = row[0]
+    
+    if current_qty > quantity:
+        cursor.execute("""
+            UPDATE order_items 
+            SET quantity = quantity - %s 
+            WHERE order_id=%s AND item_id=%s
+        """, [quantity, order_id, item_id])
+    else:
+        cursor.execute("""
+            DELETE FROM order_items 
+            WHERE order_id=%s AND item_id=%s
+        """, [order_id, item_id])
+    
+    return True
+
+
+def _recalculateOrderTotal(cursor, order):
+    """Recalculate and update order total."""
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(quantity * price), 0)
+        FROM order_items
+        WHERE order_id = %s
+        """,
+        [order.id],
+    )
+    total = cursor.fetchone()[0] or 0
+    
+    order.total_amount = total
+    order.order_date = timezone.now()
+    order.save(using='gsharedb')
+    
+    return total
+
+
 def apply_voice_cart_items(profile, cart):
     if not profile:
         return {"success": False, "error": "Profile not found"}
 
     items = cart.get("items") or []
-    if not isinstance(items, list) or not items:
+    items_to_remove = cart.get("items_to_remove") or []
+    
+    if not isinstance(items, list):
+        items = []
+    if not isinstance(items_to_remove, list):
+        items_to_remove = []
+    
+    if len(items) == 0 and len(items_to_remove) == 0:
         return {"success": False, "error": "Sorry, I have not been able deduce any items from your requests so far."}
 
     order = None
-    total = 0
+    added_count = 0
+    removed_count = 0
 
     with transaction.atomic(using='gsharedb'):
         with connections['gsharedb'].cursor() as cur:
+            # Process items to ADD
             for entry in items:
-                if not isinstance(entry, dict):
+                parsed = _parseCartEntry(entry)
+                if not parsed:
                     continue
-                item_id = entry.get("ID") or entry.get("id")
-                quantity = entry.get("quantity") or 1
-                try:
-                    quantity = int(quantity)
-                except (TypeError, ValueError):
-                    quantity = 1
-                if not item_id or quantity <= 0:
-                    continue
+                
+                item_id, quantity = parsed
+                
                 try:
                     item = Items.objects.using('gsharedb').get(id=item_id)
                 except Items.DoesNotExist:
                     continue
 
                 if order is None:
-                    order = Orders.objects.using('gsharedb').filter(user=profile, status='cart').first()
+                    order = _getOrCreateCartOrder(profile, item.store)
+                
+                _addItemToCart(cur, order.id, item.id, quantity, item.price)
+                added_count += 1
+            
+            # Process items to REMOVE
+            for entry in items_to_remove:
+                parsed = _parseCartEntry(entry)
+                if not parsed:
+                    continue
+                
+                item_id, quantity = parsed
+                
+                if order is None:
+                    order = _getOrCreateCartOrder(profile)
                     if not order:
-                        order = Orders.objects.using('gsharedb').create(
-                            user=profile,
-                            status='cart',
-                            order_date=timezone.now(),
-                            store=item.store,
-                            total_amount=0,
-                            delivery_address=profile.address,
-                        )
+                        continue
+                
+                if _removeItemFromCart(cur, order.id, item_id, quantity):
+                    removed_count += 1
 
-                cur.execute(
-                    """
-                    INSERT INTO order_items (order_id, item_id, quantity, price)
-                    VALUES (%s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                        quantity = quantity + VALUES(quantity)
-                    """,
-                    [order.id, item.id, quantity, str(item.price or 0)],
-                )
+            # Recalculate order total if we have an order
+            if order is not None:
+                _recalculateOrderTotal(cur, order)
+            else:
+                if added_count == 0 and removed_count == 0:
+                    return {"success": False, "error": "No valid items to add or remove"}
+                return {"success": True, "order_id": None, "added_count": 0, "removed_count": 0}
 
-            if order is None:
-                return {"success": False, "error": "No valid items to add"}
-
-            cur.execute(
-                """
-                SELECT COALESCE(SUM(quantity * price), 0)
-                FROM order_items
-                WHERE order_id = %s
-                """,
-                [order.id],
-            )
-            total = cur.fetchone()[0] or 0
-
-    order.total_amount = total
-    order.order_date = timezone.now()
-    order.save(using='gsharedb')
-
-    return {"success": True, "order_id": order.id}
+    return {
+        "success": True, 
+        "order_id": order.id,
+        "added_count": added_count,
+        "removed_count": removed_count
+    }
 
 
 @login_required
@@ -3707,12 +3850,19 @@ def voice_order_chat(request):
 
     user = get_user("email", request.user.email)
     userPastItems = getItemNamesForUser(user, ["delivered"])
+    userCartItems = get_user_cart_items(user)
     allItems = getAllItemsFromDatabase()
     context_lines = []
     if userPastItems:
         context_lines.append("User past items (name and ID):")
         for name, item_id in userPastItems:
             context_lines.append(f"- {name} (ID: {item_id})")
+    if userCartItems:
+        context_lines.append("")
+        context_lines.append("User current cart items (name, quantity, price, store, ID):")
+        for name, item_id, quantity, price, store_name in userCartItems:
+            price_display = str(price) if price is not None else ""
+            context_lines.append(f"- {name} | qty: {quantity} | {store_name} | price: {price_display} | ID: {item_id}")
     if allItems:
         context_lines.append("")
         context_lines.append("Store items (name, store, price, ID):")
@@ -3724,7 +3874,7 @@ def voice_order_chat(request):
     if mode == "finalize":
         final_messages = []
         if context_lines:
-            context_text = "Use these item lists to match items by name to IDs, stores, and prices when constructing your JSON cart. Always copy the item names exactly as written when you fill in the JSON." + context_suffix
+            context_text = "Use these item lists to match items by name to IDs, stores, and prices when constructing your JSON cart. Always copy the item names exactly as written when you fill in the JSON. For items to ADD, match against 'User past items' or 'Store items'. For items to REMOVE, match against 'User current cart items' (these are items already in the cart)." + context_suffix
             final_messages.append({"role": "system", "content": context_text})
         convo_lines = []
         for m in messages:
@@ -3785,7 +3935,7 @@ def voice_order_chat(request):
         )
 
     if context_lines:
-        context_text = "Use the following item lists when referring to items. Always copy the item name exactly as written when you write 'Selected option' or 'Other options'." + context_suffix
+        context_text = "Use the following item lists when referring to items. 'User current cart items' shows what's already in their cart with quantities. Always copy the item name exactly as written when you write 'Selected option', 'Other options', or 'Removing'. IMPORTANT: IDs are for internal matching only - NEVER show IDs to users in your responses. Only show users: item name, quantity, store, and price." + context_suffix
         messages.insert(0, {"role": "system", "content": context_text})
     resp = call_groq(
         messages=messages,

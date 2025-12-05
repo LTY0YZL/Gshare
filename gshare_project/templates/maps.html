@@ -10,6 +10,7 @@
     </style>
 </head>
 {% include "navbar.html" %}
+{% include "components/messages.html" %}
 <body class="bg-[#D8D8D8] h-screen">
     
 
@@ -224,37 +225,37 @@
             pageWS = new WebSocket(HUB_URL);
 
             pageWS.onmessage = (evt) => {
-            const data = JSON.parse(evt.data || '{}');
-            if (data.type !== 'loc') return;
+                const data = JSON.parse(evt.data || '{}');
+                if (data.type !== 'loc') return;
 
-            const isMe = data.uid === CURRENT_UID;
+                const isMe = data.uid === CURRENT_UID;
 
-            if (!isMe && data.role !== 'driver') {
-                return;
-            }
-
-            const m = ensureLiveMarker(data.uid, data.username, data.role, isMe);
-            const isCar = (typeof m.update === 'function');
-            const newPosLatLng = new google.maps.LatLng(data.lat, data.lng);
-            const prevPos = m.getPosition ? m.getPosition() : null;
-
-            if (prevPos && (data.role === 'driver' || isMe)) {
-                const heading = getBearing(prevPos.lat(), prevPos.lng(), data.lat, data.lng);
-                if (isCar) {
-                    m.update(newPosLatLng, heading);
-                } else {
-                    m.setPosition(newPosLatLng);
+                if (!isMe && data.role !== 'driver') {
+                    return;
                 }
-            } else {
-                if (isCar) m.update(newPosLatLng, 0);
-                else m.setPosition(newPosLatLng);
-            }
 
-            if (data.role === 'driver') {
-                updateRouteFromDriver({ lat: data.lat, lng: data.lng });
-                checkGeofences({ lat: data.lat, lng: data.lng });
-            }
-        };
+                const m = ensureLiveMarker(data.uid, data.username, data.role, isMe);
+                const isCar = (typeof m.update === 'function');
+                const newPosLatLng = new google.maps.LatLng(data.lat, data.lng);
+                const prevPos = m.getPosition ? m.getPosition() : null;
+
+                if (prevPos && (data.role === 'driver' || isMe)) {
+                    const heading = getBearing(prevPos.lat(), prevPos.lng(), data.lat, data.lng);
+                    if (isCar) {
+                        m.update(newPosLatLng, heading);
+                    } else {
+                        m.setPosition(newPosLatLng);
+                    }
+                } else {
+                    if (isCar) m.update(newPosLatLng, 0);
+                    else m.setPosition(newPosLatLng);
+                }
+
+                if (data.role === 'driver') {
+                    updateRouteFromDriver({ lat: data.lat, lng: data.lng });
+                    checkGeofences({ lat: data.lat, lng: data.lng });
+                }
+            };
 
             pageWS.onclose = () => {
                 pageWS = null;
@@ -410,6 +411,19 @@
             setShareBtn(!!localStorage.getItem(WANT_KEY));  
         }
 
+        function drawInitialRoute() {
+            if (!activeStorePos || !profilePos) return;
+
+            let origin;
+            if (meLiveMarker && typeof meLiveMarker.getPosition === 'function') {
+                origin = meLiveMarker.getPosition();
+            } else {
+                origin = activeStorePos;
+            }
+
+            updateRouteFromDriver(origin);
+        }
+
         let map;
         let geocoder;
         let markers = {};
@@ -553,6 +567,24 @@
                 .catch(err => console.error("Error fetching delivery data:", err));
         }
 
+        function updateStoreMarker(order, storePos) {
+            if (!storePos || !storeIcon) return;
+
+            if (storeMarker) {
+                storeMarker.setPosition(storePos);
+                storeMarker.setIcon(storeIcon);
+                return;
+            }
+
+            storeMarker = new google.maps.Marker({
+                map,
+                position: storePos,
+                icon: storeIcon,
+                title: order && order.store_name ? `Store: ${order.store_name}` : 'Store',
+                zIndex: 200,
+            });
+        }
+
         function addMarkers(addressGroups) {
             const bounds = map.getBounds();
             if (!bounds) return;
@@ -615,59 +647,64 @@
 
                     if (!group.is_store) {
                         marker.addListener('click', () => {
-                            showPopup(group);
-                            setTimeout(() => shop.click(), 100);  
+                        showPopup(group);
+                        setTimeout(() => shop.click(), 100);
 
-                            profilePos = location;
-                            const order = group.orders && group.orders.length > 0 ? group.orders[0] : null;
-                            if (!order) return;
+                        profilePos = location;
 
-                            activeDriverId = order.driver_id || null;
-                            activeBuyerId = order.user_id || null;
+                        let order = null;
 
-                            const rawLat = order.store_lat;
-                            const rawLng = order.store_lng;
-                            const lat = rawLat !== null && rawLat !== undefined ? parseFloat(rawLat) : NaN;
-                            const lng = rawLng !== null && rawLng !== undefined ? parseFloat(rawLng) : NaN;
+                        if (group.orders && group.orders.length > 0) {
+                            order = group.orders.find(o => o.driver_id == CURRENT_VIEWER_ID)
+                                || group.orders.find(o => o.user_id == CURRENT_VIEWER_ID)
+                                || group.orders[0];
+                        }
 
-                            if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
-                                activeStorePos = { lat, lng };
+                        if (!order) return;
 
-                                if (meLiveMarker && myCurrentRole === 'driver') {
-                                    updateRouteFromDriver(meLiveMarker.getPosition());
-                                }
+                        activeDriverId = order.driver_id || null;
+                        activeBuyerId  = order.user_id  || null;
 
-                                return;
-                            }
+                        const rawLat = order.store_lat;
+                        const rawLng = order.store_lng;
+                        const lat = rawLat !== null && rawLat !== undefined ? parseFloat(rawLat) : NaN;
+                        const lng = rawLng !== null && rawLng !== undefined ? parseFloat(rawLng) : NaN;
 
-                            if (order.store_address) {
-                                const geocodeRequest = {
-                                    address: order.store_address,
-                                    bounds: map.getBounds(),
-                                    componentRestrictions: { country: 'US' },
-                                };
-                                geocoder.geocode(geocodeRequest, (results2, status2) => {
-                                    if (status2 !== 'OK' || !results2[0]) {
-                                        if (meLiveMarker && myCurrentRole === 'driver') {
-                                            updateRouteFromDriver(meLiveMarker.getPosition());
-                                        }
-                                        return;
+                        if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+                            activeStorePos = { lat, lng };
+                            drawInitialRoute();
+                            return;
+                        }
+
+                        if (order.store_address) {
+                            const geocodeRequest = {
+                                address: order.store_address,
+                                bounds: map.getBounds(),
+                                componentRestrictions: { country: 'US' },
+                            };
+                            geocoder.geocode(geocodeRequest, (results2, status2) => {
+                                if (status2 !== 'OK' || !results2[0]) {
+                                    if (myCurrentRole === 'driver' && meLiveMarker) {
+                                        updateRouteFromDriver(meLiveMarker.getPosition());
                                     }
-                                    const storeLoc = results2[0].geometry.location;
-                                    activeStorePos = storeLoc;
-                                    updateRouteFromDriver(meLiveMarker ? meLiveMarker.getPosition() : storeLoc);
-                                });
-                            } else {
-                                activeStorePos = null;
-                                if (storeMarker) {
-                                    storeMarker.setMap(null);
-                                    storeMarker = null;
+                                    return;
                                 }
-                                if (meLiveMarker && myCurrentRole === 'driver') {
-                                    updateRouteFromDriver(meLiveMarker.getPosition());
-                                }
+                                const storeLoc = results2[0].geometry.location;
+                                activeStorePos = storeLoc;
+
+                                drawInitialRoute();
+                            });
+                        } else {
+                            activeStorePos = null;
+                            if (storeMarker) {
+                                storeMarker.setMap(null);
+                                storeMarker = null;
                             }
-                        });
+                            if (myCurrentRole === 'driver' && meLiveMarker) {
+                                updateRouteFromDriver(meLiveMarker.getPosition());
+                            }
+                        }
+                    });
                     }
 
                     markers[address] = marker;

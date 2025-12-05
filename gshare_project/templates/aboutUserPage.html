@@ -9,17 +9,9 @@
     <script src="{% static 'js/aboutUserPage.js' %}"></script>
 </head>
 {% include "navbar.html" %}
+{% include "components/messages.html" %}
 
 <body>
-    {% if messages %}
-    <div class="messages-container">
-        {% for message in messages %}
-        <div class="alert alert-info" role="alert">
-            <p>{{ message }}</p>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
 
     <div class="profile-container">
         <div class="profile-layout">
@@ -37,9 +29,11 @@
                         </div>
                         <div class="user-details">
                             <h1>{{ user.name }}</h1>
+                            {% if user.username %}
                             <div class="username">
                                 <p>@{{ user.username }}</p>
                             </div>
+                            {% endif %}
                             <div class="rating-container">
                                 {% if review_count > 0 %}
                                     <span class="star-filled">{{ stars_text }}</span>
@@ -62,25 +56,7 @@
                     </div>
 
                     <!-- Account Info -->
-                    <div class="info-group">
-                        <label for="name" class="info-label">Name</label>
-                        <input type="text" disabled id="name" name="name" value="{{ user.name|default:'' }}" class="info-input">
-                    </div>
-                    
-                    <div class="info-group">
-                        <label for="email" class="info-label">Email</label>
-                        <input type="email" disabled id="email" name="email" value="{{ user.email }}" class="info-input">
-                    </div>
-                    
-                    <div class="info-group">
-                        <label for="phone" class="info-label">Phone Number</label>
-                        <input type="tel" disabled id="phone" name="phone" value="{{ user.phone|default:'' }}" class="info-input">
-                    </div>
-                    
-                    <div class="info-group">
-                        <label for="address" class="info-label">Delivery Address</label>
-                        <input type="text" disabled id="address" name="address" value="{{ user.address|default:'' }}" class="info-input">
-                    </div>
+                    <!-- Removed sensitive info (Email, Phone, Address) and redundant Name field for privacy -->
                     
                     <div class="info-group">
                         <label for="description" class="info-label">About User:</label>

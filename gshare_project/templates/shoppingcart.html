@@ -8,13 +8,37 @@
     <title>Stores_cart</title>
     {% tailwind_css %}
     <link rel="stylesheet" href="{% static 'css/shoppingcart.css' %}?v={% now 'U' %}">
+    <style>
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+    </style>
 </head>
 {% include "navbar.html" %}
+{% include "components/messages.html" %}
 <body>
     {% csrf_token %}
     <div class="tabsList">
         <button class="tabButton active" onclick="display('cart', this)">Cart</button>
-        <button class="tabButton" onclick="display('group', this)">Group Cart</button>
+        <!-- <button class="tabButton" onclick="display('group', this)">Group Cart</button> -->
         <button class="tabButton" onclick="display('placed', this)">Orders Placed</button>
         <button class="tabButton" onclick="display('inprogress', this)">Orders In Progress</button>
         <button class="tabButton" onclick="display('pending', this)">Order Requests</button>
@@ -65,15 +89,15 @@
                 
                 <button class="btn-primary" onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Publish Order</button>
                 
-                <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
+                <!-- <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
                     <input type="text" id="group_password" name="group_password" placeholder="Enter group password" class="input-field">
                     <button class="btn-secondary" style="width:100%" onclick="createGroup({{ id|default:'null' }})">Create Group For my Cart</button>
-                </div>
+                </div> -->
 
-                <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
+                <!-- <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
                     <p style="margin-bottom: 12px; font-weight: 600;">Join an existing group</p>
                     <button class="btn-secondary" style="width:100%" onclick="openPopup()">Join Group Order</button>
-                </div>
+                </div> -->
             </div>
         </div>
 
@@ -653,15 +677,9 @@
                         
                         <button class="btn-primary" onclick="changeOrderStatus(${data.id || 'null'}, 'placed')">Publish Order</button>
                         
-                        <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
-                            <input type="text" id="group_password" placeholder="Enter group password" class="input-field">
-                            <button class="btn-secondary" style="width:100%" onclick="createGroup({{ id|default:'null' }})">Create Group For my Cart</button>
-                        </div>
+                        
 
-                        <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
-                            <p style="margin-bottom: 12px; font-weight: 600;">Join an existing group</p>
-                            <button class="btn-secondary" style="width:100%" onclick="openPopup()">Join Group Order</button>
-                        </div>
+                        
                     </div>
                 </div>
 
@@ -694,7 +712,7 @@
     function changeOrderStatus(orderId, newStatus) {
         console.log(orderId);
         if(!orderId) {
-            alert('Invalid order.');
+            showToast('Invalid order.', 'error');
             return;
         }
         fetch(`/change_order_status/${orderId}/${newStatus}/`, {
@@ -707,22 +725,29 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Order status updated successfully!');
+                // Show specific message based on status change
+                if (newStatus === 'placed') {
+                    showToast('Order published successfully!', 'success');
+                } else if (newStatus === 'inprogress') {
+                    showToast('Delivery accepted!', 'success');
+                } else {
+                    showToast('Order status updated successfully!', 'success');
+                }
                 location.reload();
                 // Optionally, you can refresh the page or update the UI to reflect the change
             } else {
-                alert('Failed to update order status.');
+                showToast('Failed to update order status.', 'error');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('An error occurred while updating the order status.');
+            showToast('An error occurred while updating the order status.', 'error');
         });
     }
 
     function updateDelivery(orderId, driverId, accepted) {
         if (!orderId) {
-            alert('Invalid order.');
+            showToast('Invalid order.', 'error');
             return;
         }
 
@@ -879,6 +904,52 @@
 
     }
 
+    function showToast(message, type = 'success') {
+        const colors = {
+            success: { bg: '#d1fae5', border: '#10b981', text: '#065f46' },
+            error: { bg: '#fee2e2', border: '#ef4444', text: '#991b1b' },
+            warning: { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
+            info: { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' }
+        };
+        const color = colors[type] || colors.info;
+
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.style.cssText = 'position: fixed; top: 80px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            background-color: ${color.bg};
+            border-left: 4px solid ${color.border};
+            color: ${color.text};
+            padding: 12px 20px;
+            border-radius: 4px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-width: 250px;
+            max-width: 400px;
+            cursor: pointer;
+            animation: slideIn 0.3s ease-out;
+        `;
+        toast.textContent = message;
+
+        toast.onclick = () => {
+            toast.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => toast.remove(), 300);
+        };
+
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 5000);
+    }
 
     function removeItem(itemId, quantity) {
         console.log("remove item?");
@@ -902,14 +973,17 @@
         .then(data => {
             if (data.success) {
                 console.log("removed item");
+                showToast('Item removed from cart', 'success');
                 display('cart');
                 window.location.reload();
             } else {
                 console.error(data.error);
+                showToast(data.error || 'Failed to remove item', 'error');
             }
         })
         .catch(err => {
-            console.error('Error removing item', err)
+            console.error('Error removing item', err);
+            showToast('Error removing item from cart', 'error');
         });
     }
 
@@ -937,13 +1011,16 @@
         .then(data => {
             if (data.success) {
                 console.log("updated item quantity");
+                showToast('Cart quantity updated', 'success');
                 display('cart');
             } else {
                 console.error(data.error);
+                showToast(data.error || 'Failed to update quantity', 'error');
             }
         })
         .catch(err => {
-            console.error('Error updating item quantity', err)
+            console.error('Error updating item quantity', err);
+            showToast('Error updating quantity', 'error');
         });
     }
 </script>
