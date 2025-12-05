@@ -61,6 +61,7 @@ class Orders(models.Model):
     status = models.CharField(max_length=50, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     delivery_address = models.CharField(max_length=255, null=True, blank=True)
+    group_master_order = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, db_column='group_master_order_id', related_name='group_child_orders')
     
     class Meta:
         managed = False
@@ -120,6 +121,7 @@ class GroupOrders(models.Model):
     group_id = models.AutoField(primary_key=True)
     description = models.TextField()
     password_hash = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, null=True, blank=True)
 
     members = models.ManyToManyField(
         'Users',

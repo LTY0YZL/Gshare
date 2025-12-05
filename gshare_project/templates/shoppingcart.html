@@ -181,72 +181,165 @@
             return response.json();
         })
         .then(data => {
-            console.log('group items response:', data);
+            console.log("group items response:", data);
             const tab = document.getElementById("tab-group");
-            
-            // Handle new response structure: {items: [...], order: {...}}
-            const items = Array.isArray(data.items) ? data.items : [];
-            const orderSummary = data.order || {};
-            const subtotal = Number(orderSummary.subtotal) || 0;
-            const tax = Number(orderSummary.tax) || 0;
-            const total = Number(orderSummary.total) || 0;
 
-            if (items.length === 0) {
-                tab.innerHTML = `<p class='empty-state'>You have no group orders.</p>`;
+            const groups = Array.isArray(data.groups) ? data.groups : [];
+
+            if (!groups.length) {
+                tab.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-12">
+                        <p class="empty-state mb-2">You’re not in any active group orders.</p>
+                        <p class="text-sm text-gray-500">
+                            Join a group using a code or create a new one from your cart.
+                        </p>
+                    </div>
+                `;
                 return;
             }
 
-            let html = `<div class="cart-grid">`;
+            let html = "";
 
-            // Left column — Items
-            html += `<div class="items-column">`;
-            items.forEach(item => {
-                const qty = Number(item.quantity) || 0;
-                const price = Number(item.price) || 0;
-                const totalItem = Number(item.total) || (qty * price);
+            groups.forEach((group, groupIndex) => {
+                const groupId = group.group_id;
+                const description = group.group_description || `Group #${groupId}`;
+                const isOwner = !!group.is_group_owner;
+                const orders = Array.isArray(group.orders) ? group.orders : [];
+                const summary = group.summary || {};
+                const subtotal = Number(summary.subtotal) || 0;
+                const tax = Number(summary.tax) || 0;
+                const total = Number(summary.total) || 0;
+                const creatorId = data.group_owner_id || null;
+
                 html += `
-                <div class="item-card">
-                    <div class="item-header">
-                        <h2 class="item-title">${item.name}</h2>
+                <section class="mb-8 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                    <!-- Group header -->
+                    <div class="px-5 py-4 flex items-center justify-between bg-gray-50 border-b border-gray-200">
+                        <div>
+                            <p class="text-xs font-semibold tracking-[0.16em] text-gray-500 uppercase mb-1">
+                                Group ${groupIndex + 1}
+                            </p>
+                            <h2 class="text-base sm:text-lg font-semibold text-gray-900">
+                                ${description}
+                            </h2>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold
+                                ${isOwner ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}">
+                                ${isOwner ? "You are the owner" : "Member"}
+                            </span>
+                        </div>
                     </div>
-                    <div class="item-details">
-                        <div class="item-row">
-                            <span class="item-label">Quantity:</span>
-                            <span class="item-value">${qty}</span>
+
+                    <!-- Group body -->
+                    <div class="cart-grid px-5 pb-5 pt-4">
+                        <div class="items-column">
+                `;
+
+                // Per-member cards
+                orders.forEach((order, index) => {
+                    const buyerName = order.buyer_name || "Unknown user";
+                    const buyerInitial = buyerName.trim().charAt(0).toUpperCase() || "?";
+                    const items = Array.isArray(order.items) ? order.items : [];
+                    const roleLabel = index === 0 ? "Group Creator" : "Group Member";
+
+                    html += `
+                        <div class="item-card mb-4 rounded-xl border border-gray-200 shadow-[0_4px_12px_rgba(15,23,42,0.06)]">
+                            <div class="item-header flex items-center justify-between border-b border-gray-200 pb-3 mb-3 px-4 pt-3">
+                                <div>
+                                    <p class="text-[0.68rem] font-semibold tracking-[0.18em] text-${
+                                        index === 0 ? "green-700" : "gray-500"
+                                    } uppercase mb-1">
+                                        ${roleLabel}
+                                    </p>
+                                    <h3 class="item-title text-lg font-semibold text-gray-900">
+                                        ${buyerName}
+                                    </h3>
+                                </div>
+                                <div class="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-700 text-sm font-bold">
+                                    ${buyerInitial}
+                                </div>
+                            </div>
+                            <div class="item-details divide-y divide-gray-100 px-4 pb-3">
+                    `;
+
+                    items.forEach(item => {
+                        const qty = Number(item.quantity) || 0;
+                        const price = Number(item.price) || 0;
+                        const totalItem = Number(item.total) || (qty * price);
+
+                        html += `
+                                <div class="item-row py-3 flex items-start justify-between">
+                                    <div class="flex-1 pr-4">
+                                        <p class="font-medium text-gray-900 leading-snug">
+                                            ${item.name}
+                                        </p>
+                                        <p class="text-sm text-gray-500 mt-1">
+                                            ${qty} × $${price.toFixed(2)}
+                                        </p>
+                                    </div>
+                                    <div class="text-right min-w-[4.5rem]">
+                                        <p class="font-semibold text-gray-900">
+                                            $${totalItem.toFixed(2)}
+                                        </p>
+                                    </div>
+                                </div>
+                        `;
+                    });
+
+                    html += `
+                            </div>
                         </div>
-                        <div class="item-row">
-                            <span class="item-label">Price:</span>
-                            <span class="item-value">$${price.toFixed(2)}</span>
-                        </div>
-                        <div class="item-row">
-                            <span class="item-label">Total:</span>
-                            <span class="item-value">$${totalItem.toFixed(2)}</span>
-                        </div>
-                    </div>
-                </div>`;
+                    `;
+                });
+
+                html += `
+                        </div> <!-- /items-column -->
+
+                        <!-- Summary column -->
+                        <div class="summary-column">
+                            <div class="summary-card rounded-xl border border-gray-200 bg-gray-50/60 shadow-sm">
+                                <h3 class="summary-title mb-3 text-lg font-semibold text-gray-900">
+                                    Group Order Summary
+                                </h3>
+                                <div class="summary-row"><span>Subtotal:</span><span>$${subtotal.toFixed(2)}</span></div>
+                                <div class="summary-row"><span>Tax:</span><span>$${tax.toFixed(2)}</span></div>
+                                <div class="summary-total mt-2"><span>Total:</span><span>$${total.toFixed(2)}</span></div>
+                `;
+
+                // Only owner of that group sees publish button
+                if (isOwner && orders.length > 0) {
+                    html += `
+                                <div class="mt-5 space-y-3">
+                                    <button
+                                        class="btn-danger w-full"
+                                        onclick="publishGroupOrder(${groupId})">
+                                        Publish Group Order
+                                    </button>
+                    `;
+                } else {
+                    html += `
+                                <div class="mt-5 space-y-3">
+                                    <p class="text-xs text-gray-500">
+                                        Waiting for the group owner to publish this order.
+                                    </p>
+                    `;
+                }
+
+                html += `
+                                    <button class="btn-outline w-full" onclick="openPopup('group')">
+                                        Leave Group Order
+                                    </button>
+                                </div>
+                            </div>
+                        </div> <!-- /summary-column -->
+                    </div> <!-- /cart-grid -->
+                </section>
+                `;
             });
-            html += `</div>`;
 
-            // Right column — Summary + Popup trigger
+            // Popup (reuse your existing modal)
             html += `
-            <div class="summary-column">
-                <div class="summary-card">
-                    <h2 class="summary-title">Group Order Summary</h2>
-                    <div class="summary-row"><span>Subtotal:</span><span>$${subtotal.toFixed(2)}</span></div>
-                    <div class="summary-row"><span>Tax:</span><span>$${tax.toFixed(2)}</span></div>
-                    <div class="summary-total"><span>Total:</span><span>$${total.toFixed(2)}</span></div>
-                    
-                    <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
-                        <button class="btn-danger" style="width:100%" onclick="openPopup('group')">Leave Group Order</button>
-                    </div>
-                </div>
-            </div>`;
-            
-            html += `</div>`; // end cart-grid
-
-            // Add popup modal once
-            html += `
-            <!-- Popup Modal -->
             <div id="popupModal" class="modal-overlay hidden">
                 <div class="modal-content">
                     <h2 class="modal-title">Leave Group</h2>
@@ -265,16 +358,62 @@
                         </div>
                     </form>
                 </div>
-            </div>`;
+            </div>
+            `;
 
             tab.innerHTML = html;
         })
         .catch(err => {
-            console.error('Error retrieving group cart:', err);
+            console.error("Error retrieving group cart:", err);
             const tab = document.getElementById("tab-group");
             tab.innerHTML = `<p class="empty-state">Error loading group orders.</p>`;
         });
 }
+
+    function getCSRFToken() {
+        const name = "csrftoken";
+        const cookies = document.cookie ? document.cookie.split(";") : [];
+        for (let c of cookies) {
+            c = c.trim();
+            if (c.startsWith(name + "=")) {
+                return decodeURIComponent(c.slice(name.length + 1));
+            }
+        }
+        return "";
+    }
+
+    async function publishGroupOrder(groupId) {
+        if (!groupId) return;
+
+        console.log("Publishing group order for group:", groupId);
+
+        try {
+            const res = await fetch(`/groups/${groupId}/publish/`, {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": getCSRFToken(),
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({}),
+            });
+
+            if (!res.ok) {
+                const text = await res.text();
+                console.error("Publish failed:", res.status, text);
+                alert("Failed to publish group order.");
+                return;
+            }
+
+            const data = await res.json();
+            console.log("Group published:", data);
+
+            // Reload groups; published one will disappear
+            displayGroupCart();
+        } catch (err) {
+            console.error("Error publishing group:", err);
+            alert("There was an error publishing your group order.");
+        }
+    }
 
 
 

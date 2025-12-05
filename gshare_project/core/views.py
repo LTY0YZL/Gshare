@@ -18,7 +18,7 @@ from django.conf import settings
 from django.db import IntegrityError 
 from django.db.models import Q
 from django.db.models import Avg, Count
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.db import connection
 from django.core.files.storage import default_storage
 from core.utils.simple_gemini import scan_receipt, chat_about_receipt, suggest_matching_order
@@ -411,6 +411,26 @@ def change_order_status(order_id: int, new_status: str) -> bool:
         print(f"Error updating order status: {e}")
         return False
 
+def update_child_order_statuses(order: Orders, new_status: str):
+    """
+    Update the status of all child orders of a group master order.
+    - If `order` IS a child → finds its master, updates siblings.
+    - If `order` IS the master → updates all children.
+    """
+    # If child → move to master
+    if order.group_master_order_id:
+        master = order.group_master_order
+    else:
+        master = order
+
+    # Get all children
+    children = master.group_child_orders.all()
+
+    # Update every child
+    for child in children:
+        child.status = new_status
+        child.save(using="gsharedb")
+
 @login_required
 def change_order_status_with_driver(request, order_id, new_status):
     try:
@@ -450,6 +470,28 @@ def change_order_status_with_driver(request, order_id, new_status):
     except Exception as e:
         print("change_order_status_with_driver error:", e)
         return False
+    
+def get_group_family(order: Orders):
+    """
+    Given any order, return (master, children_list).
+
+    - If order is a child (group_master_order_id set) → master = that parent.
+    - If order is the master → master = order.
+    - children_list = all Orders that belong to this master.
+    """
+    if order.group_master_order_id:
+        master = order.group_master_order
+    else:
+        master = order
+
+    children = list(master.group_child_orders.all())
+    return master, children
+
+def get_app_user_from_request(request) -> Users | None:
+    email = getattr(request.user, "email", None)
+    if not email:
+        return None
+    return get_user("email", email)
 
 @login_required
 def confirm_delivery_json(request, order_id):
@@ -504,6 +546,26 @@ def change_status_pending_json(request, order_id):
         success = update_status_order_pending(order_id)
         return JsonResponse({'success': success})
     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+def set_group_children_inprogress_except_owner(group: GroupOrders, owner: Users):
+    """
+    When the group owner publishes the group, mark all *other* members'
+    orders as 'inprogress', but leave the owner's own order alone.
+    """
+    # all orders in this group
+    group_orders = list(get_orders_in_group(group.group_id))
+
+    # ids of orders that belong to the owner
+    owner_order_ids = {o.id for o in group_orders if o.user_id == owner.id}
+
+    # all other orders in the group
+    child_ids = [o.id for o in group_orders if o.id not in owner_order_ids]
+
+    if not child_ids:
+        return
+
+    Orders.objects.using("gsharedb").filter(id__in=child_ids).update(status="inprogress")
+
 
 def Create_delivery(order: Orders, delivery_person: Users):
     try:
@@ -851,6 +913,9 @@ def create_group_order_json(request, order_id: int):
         try:
             group = create_group_order(profile, [order_id], raw_password)
             print("created group")
+            order.status = 'grouped'
+            order.save(using='gsharedb')
+
             return JsonResponse({'success': True, 'group_id': group.group_id})
         except Exception as e:
             print(f"Error creating group order: {e}")
@@ -872,7 +937,7 @@ def create_group_order(user: Users, order_ids: list[int], raw_password: str):
         raise ValueError("order_ids list cannot be empty")
 
     with transaction.atomic(using='gsharedb'):
-        group = GroupOrders.objects.using('gsharedb').create(description="Group Order", password_hash="")
+        group = GroupOrders.objects.using('gsharedb').create(description="Group Order", password_hash="", status ="open")
         print(f"Created group order with ID: {group.group_id}")
         set_group_password(group, raw_password)
         for oid in order_ids:
@@ -915,6 +980,8 @@ def add_user_to_group_json(request, group: int):
         try:
             success = add_user_to_group(group_info, profile, order)
             if success:
+                order.status = 'grouped'
+                order.save(using='gsharedb')
                 return JsonResponse({'success': True})
             else:
                 return JsonResponse({'error': 'User already in group'}, status=400)
@@ -990,6 +1057,17 @@ def get_group_members(group: GroupOrders):
 
 def get_groups_for_user(user: Users):
     return GroupMembers.objects.using('gsharedb').filter(user=user).distinct()
+
+def get_groups_for_user_and_open(user: Users):
+    """
+    Return all open GroupOrders this user is in.
+    """
+    return (
+        GroupOrders.objects.using("gsharedb")
+        .filter(members=user, status="open")  # 'members' is your M2M field
+        .distinct()
+    )
+
 
 def get_cart_in_group(user: Users, group: GroupOrders):
     membership = GroupMembers.objects.using('gsharedb').filter(user=user, group=group).first()
@@ -2934,59 +3012,213 @@ def inprogress_data(request):
         'deliveries': my_deliveries
     })
     
-    
 def group_data(request):
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Unauthorized'}, status=401)
+
     profile = get_user("email", request.user.email)
     if not profile:
-        print("no user")
         return JsonResponse({'error': 'Profile not found'}, status=404)
-    groups = get_groups_for_user(profile)
-    print(f"DEBUG: Groups found: {groups}")
-    if not groups:
-        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
-    
-    orders = []
-    for group in groups:
-        group_orders = get_orders_in_group(group.group_id)
-        print(f"DEBUG: Orders in group {group.group_id}: {group_orders}")
-        orders.extend(group_orders)
-    print(f"DEBUG: Total orders collected: {orders}")
-    if not orders:
-        return JsonResponse({'items': [], 'order': {'subtotal': 0, 'tax': 0, 'total': 0}, 'id': None})
-    
-    order_info = []
-    combined_subtotal = 0
-    combined_items = []
-    
-    for order in orders:
-        items = get_order_items(order) if order else []
-        for item in items:
-            total = item[2] * item[5]  # quantity * price
-            combined_subtotal += total
-            combined_items.append({
-                'name': item[4],  # item name
-                'quantity': item[2],
-                'price': item[5],  # item price
-                'total': total,
-            })
-    
-    # Calculate combined tax and total
-    combined_tax = Decimal(calculate_tax(combined_subtotal)) / 100
-    combined_grand_total = round(combined_subtotal + combined_tax, 2)
 
-    order_summary = {
-        'subtotal': combined_subtotal,
-        'tax': combined_tax,
-        'total': combined_grand_total,
-    }
+    # Get all groups user is in
+    groups = get_groups_for_user_and_open(profile)
+
+    # ⭐ ONLY return groups where status == "open"
+    groups = [g for g in groups if getattr(g, "status", "open") == "open"]
+    print("open groups:", )
+
+    # If no open groups → return empty
+    if not groups:
+        return JsonResponse({"groups": []})
+
+    groups_payload = []
+
+    for g in groups:
+        group_id = g.group_id
+
+        # ✔ Real creator = FIRST GroupMembers row
+        creator_user_id = (
+            GroupMembers.objects.using("gsharedb")
+            .filter(group_id=group_id)
+            .order_by("id")
+            .values_list("user_id", flat=True)
+            .first()
+        )
+
+        orders = get_orders_in_group(group_id)
+        if not orders:
+            continue
+
+        # ✔ Sort so creator's order is first (UI depends on this)
+        if creator_user_id is not None:
+            orders = sorted(
+                orders,
+                key=lambda o: 0 if o.user_id == creator_user_id else 1
+            )
+
+        combined_subtotal = Decimal("0.00")
+        orders_payload = []
+
+        # Build each order
+        for order in orders:
+            items_list = []
+            items = get_order_items(order)
+
+            for item in items:
+                quantity = Decimal(item[2])
+                price = Decimal(item[5])
+                total = quantity * price
+                combined_subtotal += total
+
+                items_list.append({
+                    "name": item[4],
+                    "quantity": int(quantity),
+                    "price": float(price),
+                    "total": float(total),
+                })
+
+            orders_payload.append({
+                "order_id": order.id,
+                "buyer_name": order.user.name,
+                "buyer_id": order.user.id,
+                "items": items_list,
+            })
+
+        combined_tax = Decimal(calculate_tax(combined_subtotal)) / Decimal("100")
+        combined_total = combined_subtotal + combined_tax
+
+        order_summary = {
+            "subtotal": float(combined_subtotal),
+            "tax": float(combined_tax),
+            "total": float(combined_total.quantize(Decimal("0.01"))),
+        }
+
+        is_group_owner = (creator_user_id == profile.id)
+
+        groups_payload.append({
+            "group_id": group_id,
+            "group_description": getattr(g, "description", ""),
+            "status": "open",
+            "orders": orders_payload,
+            "order": order_summary,
+            "is_group_owner": is_group_owner,
+        })
+
+        print("groups_payload:", groups_payload)
+
+    return JsonResponse({"groups": groups_payload})
+
+@require_POST
+@login_required
+def publish_group_order(request, group_id: int):
+    """
+    Create a master 'group order' for the group owner, with all items
+    from each member's order combined. Master -> status='placed'.
+    Child orders -> status='placedGroup', group_master_order=master.
+    Uses raw SQL for order_items because table has composite PK and no id.
+    """
+    app_user = get_app_user_from_request(request)
+    if not app_user:
+        return HttpResponseBadRequest("No app user for this account")
+
+    group = GroupOrders.objects.using("gsharedb").filter(group_id=group_id).first()
+    if not group:
+        return HttpResponseBadRequest("Group not found")
+
+    memberships = (
+        GroupMembers.objects.using("gsharedb")
+        .select_related("user", "order", "order__store")
+        .filter(group=group, order__isnull=False)
+    )
+    if not memberships.exists():
+        return HttpResponseBadRequest("No orders in this group to publish")
+
+    # Owner = first membership row
+    owner_membership = memberships.order_by("id").first()
+    owner_user = owner_membership.user
+
+    # Only owner can publish
+    if app_user.id != owner_user.id:
+        return HttpResponseForbidden("Only the group owner can publish")
+
+    # Assume all orders in group are same store; use first one
+    base_order = owner_membership.order
+    store = base_order.store
+    delivery_address = owner_user.address
+
+    with transaction.atomic(using="gsharedb"):
+        # 1) Create master order
+        master_order = Orders.objects.using("gsharedb").create(
+            user=owner_user,
+            store=store,
+            order_date=timezone.now(),
+            status="placed",
+            total_amount=Decimal("0.00"),
+            delivery_address=delivery_address,
+        )
+
+        # 2) Aggregate items across all child orders using your raw helper
+        #    aggregate: item_id -> {quantity, price}
+        aggregate = {}
+
+        for m in memberships:
+            child_order = m.order
+            # your helper returns tuples; indexes must match your existing code
+            # e.g. (order_id, item_id, quantity, ..., name, price, ...)
+            items = get_order_items_by_order_id(child_order.id)
+
+            for row in items:
+                item_id = row[1]          # item_id
+                quantity = int(row[2])    # quantity
+                price = Decimal(row[5])   # price
+
+                if item_id not in aggregate:
+                    aggregate[item_id] = {
+                        "quantity": 0,
+                        "price": price,
+                    }
+                aggregate[item_id]["quantity"] += quantity
+
+        # 3) Insert into order_items with raw SQL (no id column)
+        total_amount = Decimal("0.00")
+        with connections["gsharedb"].cursor() as cur:
+            for item_id, data in aggregate.items():
+                qty = data["quantity"]
+                price = data["price"]
+
+                cur.execute(
+                    """
+                    INSERT INTO order_items (order_id, item_id, quantity, price)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    [master_order.id, item_id, qty, price],
+                )
+
+                total_amount += price * Decimal(qty)
+
+        # 4) Update master order total
+        master_order.total_amount = total_amount
+        master_order.save(using="gsharedb")
+
+        # 5) Update child orders: status + link to master (group_master_order_id)
+        for m in memberships:
+            child_order = m.order
+            if m.user.id != owner_user.id:
+                child_order.status = "inprogress"
+            else:
+                child_order.status = "placedGroup"
+            child_order.group_master_order = master_order  # FK on orders table
+            child_order.save(using="gsharedb")
+
+        group.status = "published"
+        group.save(using="gsharedb")
 
     return JsonResponse({
-        'items': combined_items,
-        'order': order_summary,
+        "ok": True,
+        "master_order_id": master_order.id,
+        "group_id": group_id,
     })
-    
+
     
 def cart_data(request):
     if not request.user.is_authenticated:
@@ -3590,7 +3822,7 @@ def delete_cart(request, cart_id):
     return redirect('scheduled_orders')
 
 def payment_success(request, order_id):
-    change_order_status(order_id, "delivered") 
+    change_order_status(request, order_id, "delivered") 
     return redirect("order_history")
 
 @login_required

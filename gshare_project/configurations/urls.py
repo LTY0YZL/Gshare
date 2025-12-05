@@ -93,6 +93,8 @@ urlpatterns = [
     
     path('groups/<slug:slug>/map/', views.group_map, name='group_map'),
     path('groups/<slug:slug>/join/', views.join_group, name='join_group'),
+    path("groups/<int:group_id>/publish/", views.publish_group_order, name="publish_group_order"),
+
     
     # delivery confirmation
     path('orders/<int:order_id>/confirm_delivery/', views.confirm_delivery_json, name='confirm_delivery'),
