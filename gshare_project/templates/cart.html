@@ -13,6 +13,7 @@
 </head>
 {% include "navbar.html" %}
 <body class="Stores_desgin">
+    {% include "components/messages.html" %}
 
     <div class="cart-page">
         <div class="cart-filters-row">
@@ -213,6 +214,28 @@
 {% csrf_token %}
 </body>
 <style>
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+
     body {
         margin: 0;
         font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -403,6 +426,44 @@
 </style>
 <script>
     const csrf_token = "{{ csrf_token }}";
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('message-container') || (() => {
+            const div = document.createElement('div');
+            div.id = 'message-container';
+            div.style.cssText = 'position:fixed;top:80px;right:20px;z-index:9999;max-width:400px;width:calc(100% - 40px)';
+            document.body.appendChild(div);
+            return div;
+        })();
+
+        const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+        const colors = {
+            success: { bg: '#d1fae5', border: '#10b981', text: '#065f46' },
+            error: { bg: '#fee2e2', border: '#ef4444', text: '#991b1b' },
+            warning: { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
+            info: { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' }
+        };
+        const color = colors[type] || colors.info;
+
+        const toast = document.createElement('div');
+        toast.style.cssText = `margin-bottom:12px;padding:14px 16px;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);display:flex;align-items:center;gap:12px;animation:slideIn 0.3s ease-out;cursor:pointer;background-color:${color.bg};border-left:4px solid ${color.border};color:${color.text}`;
+        toast.innerHTML = `<span style="flex-shrink:0;font-size:20px;font-weight:bold;color:${color.border}">${icons[type]}</span><div style="flex:1;min-width:0"><p style="margin:0;font-weight:500;word-wrap:break-word;font-size:14px">${message}</p></div><button style="flex-shrink:0;background:none;border:none;cursor:pointer;font-size:20px;opacity:0.6;padding:0;line-height:1;font-weight:bold" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">×</button>`;
+        
+        toast.onclick = (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                toast.remove();
+            } else {
+                toast.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => toast.remove(), 300);
+            }
+        };
+
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => toast.remove(), 300);
+        }, 5000);
+    }
+
     function handleItemClick(event, element, item_id) {
         if (event.target.closest('input[name="item_quantity"]')) {
             return;
@@ -410,6 +471,10 @@
 
         const qtyInput = element.querySelector('input[name="item_quantity"]');
         const qty = qtyInput ? parseInt(qtyInput.value) : 1;
+        const itemName = element.querySelector('.text-lg.font-bold')?.textContent || 'Item';
+
+        // Show instant feedback
+        showToast(`Adding ${itemName}...`, 'info');
 
         fetch(`/cart/add/${item_id}/${qty}/`, {
             method: 'POST',
@@ -420,9 +485,16 @@
         })
         .then(response => response.json())
         .then(data => {
-            console.log("Added to cart:", data);
+            if (data.success) {
+                showToast(data.message || `Added ${itemName} to your cart`, 'success');
+            } else {
+                showToast(data.message || 'Failed to add item to cart', 'error');
+            }
         })
-        .catch(error => console.error("Error:", error));
+        .catch(error => {
+            console.error("Error:", error);
+            showToast('Failed to add item to cart', 'error');
+        });
     }
 
     document.querySelectorAll('.item-card').forEach(card => {

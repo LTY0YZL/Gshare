@@ -136,7 +136,7 @@ window.finalizeVoiceOrderCart = function() {
     return;
   }
 
-  voiceMessages.push({ role: 'assistant', content: 'Adding these items to your cart...' });
+  voiceMessages.push({ role: 'assistant', content: 'Processing your cart changes...' });
   renderVoiceChat();
   saveVoiceMessages();
 
@@ -159,15 +159,28 @@ window.finalizeVoiceOrderCart = function() {
         return;
       }
 
-      // const pretty = JSON.stringify(data.cart, null, 2);
-      // voiceMessages.push({ role: 'assistant', content: 'Final cart JSON:\n' + pretty });
+      // Build success message based on what operations were performed
+      const cart = data.cart || {};
+      const itemsAdded = (cart.items || []).length;
+      const itemsRemoved = (cart.items_to_remove || []).length;
+      const addedCount = data.added_count || 0;
+      const removedCount = data.removed_count || 0;
 
-      if (data.order_id) {
-        voiceMessages.push({
-          role: 'assistant',
-          content: 'I added these items to your <a href="/shoppingcart/" style="color:#2563eb; text-decoration:underline;">cart</a>.'
-        });
+      let successMsg = '';
+      if (addedCount > 0 && removedCount > 0) {
+        successMsg = `I added ${addedCount} item${addedCount !== 1 ? 's' : ''} and removed ${removedCount} item${removedCount !== 1 ? 's' : ''} from your <a href="/shoppingcart/" style="color:#2563eb; text-decoration:underline;">cart</a>.`;
+      } else if (addedCount > 0) {
+        successMsg = `I added ${addedCount} item${addedCount !== 1 ? 's' : ''} to your <a href="/shoppingcart/" style="color:#2563eb; text-decoration:underline;">cart</a>.`;
+      } else if (removedCount > 0) {
+        successMsg = `I removed ${removedCount} item${removedCount !== 1 ? 's' : ''} from your <a href="/shoppingcart/" style="color:#2563eb; text-decoration:underline;">cart</a>.`;
+      } else {
+        successMsg = 'Your <a href="/shoppingcart/" style="color:#2563eb; text-decoration:underline;">cart</a> has been updated.';
       }
+
+      voiceMessages.push({
+        role: 'assistant',
+        content: successMsg
+      });
     })
     .catch(err => {
       console.error('Finalize error:', err);
