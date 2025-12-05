@@ -183,75 +183,66 @@
         .then(data => {
             console.log('group items response:', data);
             const tab = document.getElementById("tab-group");
-            const orders = Array.isArray(data) ? data : (Array.isArray(data.orders) ? data.orders : []);
+            
+            // Handle new response structure: {items: [...], order: {...}}
+            const items = Array.isArray(data.items) ? data.items : [];
+            const orderSummary = data.order || {};
+            const subtotal = Number(orderSummary.subtotal) || 0;
+            const tax = Number(orderSummary.tax) || 0;
+            const total = Number(orderSummary.total) || 0;
 
-            if (orders.length === 0) {
+            if (items.length === 0) {
                 tab.innerHTML = `<p class='empty-state'>You have no group orders.</p>`;
                 return;
             }
 
-            let html = '';
+            let html = `<div class="cart-grid">`;
 
-            orders.forEach(order => {
-                const items = Array.isArray(order.items) ? order.items : [];
-                const summary = order.summary || {};
-                const subtotal = Number(summary.subtotal) || 0;
-                const tax = Number(summary.tax) || 0;
-                const total = Number(summary.total) || 0;
-                const orderId = order.id || 'null';
-
-                html += `<div class="cart-grid">`;
-
-                // Left column — Items
-                html += `<div class="items-column">`;
-                if (items.length === 0) {
-                    html += `<p class="empty-state">No items for this group order.</p>`;
-                } else {
-                    items.forEach(item => {
-                        const qty = Number(item.quantity) || 0;
-                        const price = Number(item.price) || 0;
-                        const totalItem = Number(item.total) || (qty * price);
-                        html += `
-                        <div class="item-card">
-                            <div class="item-header">
-                                <h2 class="item-title">${item.name}</h2>
-                            </div>
-                            <div class="item-details">
-                                <div class="item-row">
-                                    <span class="item-label">Quantity:</span>
-                                    <span class="item-value">${qty}</span>
-                                </div>
-                                <div class="item-row">
-                                    <span class="item-label">Price:</span>
-                                    <span class="item-value">$${price.toFixed(2)}</span>
-                                </div>
-                                <div class="item-row">
-                                    <span class="item-label">Total:</span>
-                                    <span class="item-value">$${totalItem.toFixed(2)}</span>
-                                </div>
-                            </div>
-                        </div>`;
-                    });
-                }
-                html += `</div>`;
-
-                // Right column — Summary + Popup trigger
+            // Left column — Items
+            html += `<div class="items-column">`;
+            items.forEach(item => {
+                const qty = Number(item.quantity) || 0;
+                const price = Number(item.price) || 0;
+                const totalItem = Number(item.total) || (qty * price);
                 html += `
-                <div class="summary-column">
-                    <div class="summary-card">
-                        <h2 class="summary-title">Group Order Summary</h2>
-                        <div class="summary-row"><span>Subtotal:</span><span>$${subtotal.toFixed(2)}</span></div>
-                        <div class="summary-row"><span>Tax:</span><span>$${tax.toFixed(2)}</span></div>
-                        <div class="summary-total"><span>Total:</span><span>$${total.toFixed(2)}</span></div>
-                        
-                        <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
-                            <button class="btn-danger" style="width:100%" onclick="openPopup('group')">Leave Group Order</button>
+                <div class="item-card">
+                    <div class="item-header">
+                        <h2 class="item-title">${item.name}</h2>
+                    </div>
+                    <div class="item-details">
+                        <div class="item-row">
+                            <span class="item-label">Quantity:</span>
+                            <span class="item-value">${qty}</span>
+                        </div>
+                        <div class="item-row">
+                            <span class="item-label">Price:</span>
+                            <span class="item-value">$${price.toFixed(2)}</span>
+                        </div>
+                        <div class="item-row">
+                            <span class="item-label">Total:</span>
+                            <span class="item-value">$${totalItem.toFixed(2)}</span>
                         </div>
                     </div>
                 </div>`;
-                
-                html += `</div>`; // end cart-grid
             });
+            html += `</div>`;
+
+            // Right column — Summary + Popup trigger
+            html += `
+            <div class="summary-column">
+                <div class="summary-card">
+                    <h2 class="summary-title">Group Order Summary</h2>
+                    <div class="summary-row"><span>Subtotal:</span><span>$${subtotal.toFixed(2)}</span></div>
+                    <div class="summary-row"><span>Tax:</span><span>$${tax.toFixed(2)}</span></div>
+                    <div class="summary-total"><span>Total:</span><span>$${total.toFixed(2)}</span></div>
+                    
+                    <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
+                        <button class="btn-danger" style="width:100%" onclick="openPopup('group')">Leave Group Order</button>
+                    </div>
+                </div>
+            </div>`;
+            
+            html += `</div>`; // end cart-grid
 
             // Add popup modal once
             html += `
@@ -786,6 +777,7 @@
     }
 
     function remove_delivery(orderId) {
+        console.log("called remove dlvry");
         fetch(`/remove_delivery_person/${orderId}/`, {
             method: 'POST',
             headers: {
@@ -892,6 +884,8 @@
         console.log("Field 2:", Password);
 
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        const url = `/shoppingcart/remove_user_from_group/${groupId}/`;
 
         fetch(url, {
             method: 'POST',
