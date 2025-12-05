@@ -38,7 +38,7 @@
     {% csrf_token %}
     <div class="tabsList">
         <button class="tabButton active" onclick="display('cart', this)">Cart</button>
-        <!-- <button class="tabButton" onclick="display('group', this)">Group Cart</button> -->
+        <button class="tabButton" onclick="display('group', this)">Group Cart</button>
         <button class="tabButton" onclick="display('placed', this)">Orders Placed</button>
         <button class="tabButton" onclick="display('inprogress', this)">Orders In Progress</button>
         <button class="tabButton" onclick="display('pending', this)">Order Requests</button>
@@ -89,15 +89,15 @@
                 
                 <button class="btn-primary" onclick="changeOrderStatus({{ id|default:'null' }}, 'placed')">Publish Order</button>
                 
-                <!-- <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
+                <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
                     <input type="text" id="group_password" name="group_password" placeholder="Enter group password" class="input-field">
                     <button class="btn-secondary" style="width:100%" onclick="createGroup({{ id|default:'null' }})">Create Group For my Cart</button>
-                </div> -->
+                </div> 
 
-                <!-- <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
+                <div style="margin-top: 24px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
                     <p style="margin-bottom: 12px; font-weight: 600;">Join an existing group</p>
                     <button class="btn-secondary" style="width:100%" onclick="openPopup()">Join Group Order</button>
-                </div> -->
+                </div>
             </div>
         </div>
 
