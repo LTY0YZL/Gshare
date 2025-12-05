@@ -5,10 +5,280 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scheduled Orders</title>
-    <link rel="stylesheet" href="{% static 'css/scheduled_orders.css' %}?v={% now 'U' %}">
+    <style>
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #f8faf9 0%, #f0f4f3 50%, #e8efed 100%);
+            color: #1d1d1f;
+            min-height: 100vh;
+            letter-spacing: -0.01em;
+        }
+
+        .main-container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 60px 24px 80px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .page-title {
+            font-size: 2.4rem;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin: 0 0 28px 0;
+            letter-spacing: -0.02em;
+            text-align: center;
+        }
+
+        .form-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+
+        .btn-primary {
+            padding: 12px 28px;
+            background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 16px rgba(52, 199, 89, 0.3);
+            letter-spacing: -0.01em;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #30d158 0%, #28b347 100%);
+            box-shadow: 0 8px 24px rgba(52, 199, 89, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .cart-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+            margin-bottom: 20px;
+            animation: fadeInUp 0.5s ease-out backwards;
+        }
+
+        .cart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .cart-header h4 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: #1d1d1f;
+        }
+
+        .form-inline {
+            display: inline-block;
+            margin-left: 8px;
+        }
+
+        .btn-toggle {
+            padding: 8px 16px;
+            border-radius: 12px;
+            border: 2px solid rgba(52, 199, 89, 0.25);
+            background: rgba(52, 199, 89, 0.08);
+            color: #1d1d1f;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-toggle.enabled {
+            background: rgba(52, 199, 89, 0.12);
+            border-color: rgba(52, 199, 89, 0.35);
+            color: #1d1d1f;
+        }
+
+        .btn-toggle.disabled {
+            background: rgba(0, 0, 0, 0.04);
+            border-color: rgba(0, 0, 0, 0.08);
+            color: #6e6e73;
+        }
+
+        .btn-toggle:hover {
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .btn-delete {
+            padding: 8px 14px;
+            border-radius: 12px;
+            border: 2px solid rgba(239, 68, 68, 0.25);
+            background: rgba(239, 68, 68, 0.08);
+            color: #b91c1c;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-delete:hover {
+            background: rgba(239, 68, 68, 0.15);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .update-form {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .label-date {
+            font-weight: 700;
+            color: #1d1d1f;
+            margin-right: 8px;
+        }
+
+        .auto-order-date {
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 2px solid rgba(0, 0, 0, 0.08);
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .auto-order-date:focus {
+            outline: none;
+            border-color: #34c759;
+            box-shadow: 0 0 0 4px rgba(52, 199, 89, 0.1);
+        }
+
+        .items-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(52, 199, 89, 0.03);
+            border: 1px solid rgba(52, 199, 89, 0.08);
+            border-radius: 14px;
+        }
+
+        .item-row {
+            display: grid;
+            grid-template-columns: 1fr auto auto auto;
+            gap: 12px;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .item-row:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+            transform: translateY(-2px);
+        }
+
+        .item-name {
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+
+        .item-price {
+            font-weight: 700;
+            color: #34c759;
+        }
+
+        .qty-input {
+            width: 80px;
+            padding: 10px 12px;
+            border: 2px solid rgba(0, 0, 0, 0.08);
+            border-radius: 12px;
+            font-size: 1rem;
+            text-align: center;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .qty-input:focus {
+            outline: none;
+            border-color: #34c759;
+            box-shadow: 0 0 0 4px rgba(52, 199, 89, 0.1);
+        }
+
+        .save-container {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #6e6e73;
+            font-weight: 500;
+            padding: 60px 20px;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .cart-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .item-row {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .main-container {
+                padding: 40px 16px 60px;
+            }
+
+            .page-title {
+                font-size: 2rem;
+            }
+
+            .item-row {
+                grid-template-columns: 1fr;
+            }
+
+            .save-container {
+                justify-content: center;
+            }
+        }
+    </style>
 </head>
 <body>
     {% include 'navbar.html' %}
+    {% include "components/messages.html" %}
     
     <div class="main-container">
         <h1 class="page-title">Scheduled Orders</h1>
@@ -23,7 +293,7 @@
         {% for cart in carts %}
         <div class="cart-card">
             <div class="cart-header">
-                <h4>Recurring Cart of Order #{{ cart.id }} - {{ cart.status|title }}</h4>
+                <h4>{{ cart.name }} - {{ cart.status|title }}</h4>
                 <div>
                     <form method="post" action="{% url 'toggle_cart_status' cart.id %}" class="form-inline">
                         {% csrf_token %}
@@ -40,16 +310,20 @@
             
             <form method="post" action="{% url 'updateScheduledOrders' cart.id %}" class="update-form">
                 {% csrf_token %}
-                <label class="label-date">This Order is Scheduled For: </label><input class="auto-order-date" type="date" name="next_order_date" value="{{ cart.next_order_date|date:'Y-m-d' }}" />
+                <div>
+                    <label class="label-date">This Order is Scheduled For:</label>
+                    <input class="auto-order-date" type="date" name="next_order_date" value="{{ cart.next_order_date|date:'Y-m-d' }}" />
+                </div>
                 <div class="items-container">
                     {% for item in cart.items.all %}
                         <div class="item-row">
                             <span class="item-name">{{ item.item.name }}</span>
                             <span class="item-price">${{ item.item.price }} each</span>
-                            <label>Qty: </label><input type="number" name="quantity_{{ item.id }}" value="{{ item.quantity }}" class="qty-input" />
+                            <label style="color:#6e6e73; font-weight:600;">Qty:</label>
+                            <input type="number" name="quantity_{{ item.id }}" value="{{ item.quantity }}" class="qty-input" />
                         </div>
                     {% empty %}
-                        <p>No items in this cart.</p>
+                        <p class="empty-state">No items in this cart.</p>
                     {% endfor %}
                 </div>
                 <div class="save-container">
@@ -58,7 +332,9 @@
             </form>
         </div>
         {% empty %}
-        <p style="text-align: center; color: #6B7280;">No recurring carts yet. Create one to get started!</p>
+        <div class="cart-card">
+            <p class="empty-state">No recurring carts yet. Create one to get started!</p>
+        </div>
         {% endfor %}
     </div>
 </body>

@@ -5,10 +5,247 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Orders</title>
-    <link rel="stylesheet" href="{% static 'css/ordershistory.css' %}?v={% now 'U' %}">
+    <style>
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #f8faf9 0%, #f0f4f3 50%, #e8efed 100%);
+            color: #1d1d1f;
+            min-height: 100vh;
+            letter-spacing: -0.01em;
+        }
+
+        .orders-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 60px 24px 80px;
+            animation: fadeInUp 0.6s ease-out;
+            text-align: center;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin: 0 0 32px 0;
+            letter-spacing: -0.02em;
+            text-align: center;
+        }
+
+        .actions-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .primary-button {
+            padding: 12px 28px;
+            background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
+            color: white;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 16px rgba(52, 199, 89, 0.3);
+            font-family: inherit;
+            text-decoration: none;
+            display: inline-block;
+            letter-spacing: -0.01em;
+        }
+
+        .primary-button:hover {
+            background: linear-gradient(135deg, #30d158 0%, #28b347 100%);
+            box-shadow: 0 8px 24px rgba(52, 199, 89, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .order-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+            margin-bottom: 20px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: fadeInUp 0.6s ease-out backwards;
+        }
+
+        .order-card:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .order-card:nth-child(3) {
+            animation-delay: 0.2s;
+        }
+
+        .order-card:nth-child(n+4) {
+            animation-delay: 0.3s;
+        }
+
+        .order-card:hover {
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.06);
+            transform: translateY(-4px);
+        }
+
+        .order-header {
+            background: linear-gradient(135deg, rgba(52, 199, 89, 0.08) 0%, rgba(52, 199, 89, 0.04) 100%);
+            border-bottom: 1px solid rgba(52, 199, 89, 0.1);
+            padding: 24px;
+        }
+
+        .order-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin: 0;
+            letter-spacing: -0.01em;
+        }
+
+        .order-body {
+            padding: 24px;
+        }
+
+        .items-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .order-item {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 20px;
+            align-items: center;
+            padding: 16px;
+            background: rgba(52, 199, 89, 0.03);
+            border: 1px solid rgba(52, 199, 89, 0.08);
+            border-radius: 12px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .order-item:hover {
+            background: rgba(52, 199, 89, 0.06);
+            border-color: rgba(52, 199, 89, 0.15);
+        }
+
+        .item-name {
+            font-weight: 600;
+            font-size: 1.063rem;
+            color: #1d1d1f;
+        }
+
+        .item-price {
+            font-weight: 700;
+            font-size: 1.125rem;
+            color: #34c759;
+            text-align: right;
+        }
+
+        .item-qty {
+            font-size: 0.938rem;
+            color: #6e6e73;
+            font-weight: 500;
+            text-align: right;
+        }
+
+        .order-footer {
+            padding: 24px;
+            border-top: 1px solid rgba(0, 0, 0, 0.06);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .secondary-button {
+            padding: 10px 24px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid rgba(52, 199, 89, 0.3);
+            color: #34c759;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 0.938rem;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            text-decoration: none;
+            display: inline-block;
+            letter-spacing: -0.01em;
+        }
+
+        .secondary-button:hover {
+            background: rgba(52, 199, 89, 0.1);
+            border-color: #34c759;
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.2);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6e6e73;
+        }
+
+        .empty-state-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .orders-container {
+                padding: 40px 16px 60px;
+            }
+
+            .page-title {
+                font-size: 2rem;
+            }
+
+            .order-item {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .item-price,
+            .item-qty {
+                text-align: left;
+            }
+
+            .order-footer {
+                flex-direction: column;
+            }
+
+            .secondary-button {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
 </head>
 <body>
     {% include 'navbar.html' %}
+    {% include "components/messages.html" %}
     
     <div class="orders-container">
         <h1 class="page-title">My Orders</h1>
@@ -20,15 +257,15 @@
         </div>
         
         {% for order, items in orders_with_items %}
-        <div name="eachOrder" class="order-card">
-            <div name="orderHeader" class="order-header">
+        <div class="order-card">
+            <div class="order-header">
                 <h4 class="order-title">Order from {{ order.store.name }} - {{ order.order_date|date:"M d, Y" }}</h4>
             </div>
             
             <div class="order-body">
-                <div name="itemsContainer" class="items-list">
+                <div class="items-list">
                     {% for order_item in items %}
-                        <div name="eachItem" class="order-item">
+                        <div class="order-item">
                             <span class="item-name">{{ order_item.name }}</span>
                             <span class="item-price">${{ order_item.price }}</span>
                             <span class="item-qty">Qty: {{ order_item.quantity }}</span>
@@ -37,14 +274,19 @@
                 </div>
             </div>
 
-            <div name="orderFooter" class="order-footer">
-                {% comment %} {% if order.status == 'completed' %} {% endcomment %}
-                    <a href="{% url 'create_recurring_from_order' order.id %}" class="secondary-button">
-                        Make Recurring
-                    </a>
-                {% comment %} {% endif %} {% endcomment %}
+            <div class="order-footer">
+                <a href="{% url 'create_recurring_from_order' order.id %}" class="secondary-button">
+                    Make Recurring
+                </a>
             </div>
 
+        </div>
+        {% empty %}
+        <div class="order-card">
+            <div class="empty-state">
+                <p class="empty-state-title">No Orders Yet</p>
+                <p>Your order history will appear here once you complete your first order.</p>
+            </div>
         </div>
         {% endfor %}
     </div>
