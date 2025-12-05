@@ -3842,7 +3842,7 @@ def delete_cart(request, cart_id):
     return redirect('scheduled_orders')
 
 def payment_success(request, order_id):
-    change_order_status(request, order_id, "delivered") 
+    change_order_status(order_id, "delivered") 
     return redirect("order_history")
 
 @login_required
