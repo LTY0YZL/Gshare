@@ -120,9 +120,9 @@ Run the project on the local server for testing. Using "python manage.py runserv
 
 ## Authors and acknowledgment
 Creator
-    Abdul Mansoor
-    Yang Hong
-    Jason Davies
+    Abdul Mansoor,
+    Yang Hong,
+    Jason Davies,
     Anand Palukuri
 
 ## License
