@@ -59,6 +59,7 @@ class Message(models.Model):
 class Notification(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
     message = models.TextField()
+    message_obj = models.ForeignKey(Message, null=True, blank=True, on_delete=models.CASCADE)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -66,5 +67,30 @@ class Notification(models.Model):
         return f'Notification for {self.user.username}: {self.message}'
         
 
+
+from django.utils import timezone
+
+class TypingState(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    thread = models.ForeignKey(DirectMessageThread, null=True, blank=True, on_delete=models.CASCADE)
+    group = models.ForeignKey(ChatGroup, null=True, blank=True, on_delete=models.CASCADE)
+    is_typing = models.BooleanField(default=False)
+    last_update = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ('user', 'thread', 'group')
+
+    def __str__(self):
+        target = self.thread or self.group
+        return f"{self.user.username} typing in {target}"
+    
+class LastRead(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    group = models.ForeignKey(ChatGroup, null=True, blank=True, on_delete=models.CASCADE)
+    thread = models.ForeignKey(DirectMessageThread, null=True, blank=True, on_delete=models.CASCADE)
+    last_read_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'group', 'thread')
 
 
