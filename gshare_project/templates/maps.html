@@ -189,16 +189,22 @@
         }
 
         function ensureLiveMarker(uid, username, role, isMe) {
-            const effectiveRole = isMe ? myCurrentRole : role;
+            const isDriverForThisView = isMe
+                ? (myCurrentRole === 'driver')
+                : (uid === activeDriverId);
 
             if (isMe && meLiveMarker) return meLiveMarker;
             if (!isMe && liveMarkers.has(uid)) return liveMarkers.get(uid);
 
             let marker;
 
-            if (effectiveRole === 'driver') {
+            if (isDriverForThisView) {
                 const initialPos = new google.maps.LatLng(40.7608, -111.8910);
-                marker = new CarOverlay(initialPos, "{% static 'media/SimplePurpleCarTopView.svg' %}", map);
+                marker = new CarOverlay(
+                    initialPos,
+                    "{% static 'media/SimplePurpleCarTopView.svg' %}",
+                    map
+                );
             } else if (isMe) {
                 marker = new google.maps.Marker({
                     map,
@@ -216,7 +222,12 @@
                 });
             }
 
-            if (isMe) meLiveMarker = marker; else liveMarkers.set(uid, marker);
+            if (isMe) {
+                meLiveMarker = marker;
+            } else {
+                liveMarkers.set(uid, marker);
+            }
+
             return marker;
         }
 
